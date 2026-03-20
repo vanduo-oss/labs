@@ -1,0 +1,28 @@
+{
+  "name": "@vanduo-oss/labs-vd-hex",
+  "version": "0.1.0",
+  "description": "vd-hex — experimental VdHexGrid canvas hex toolkit (ES modules)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vanduo-oss/labs.git"
+  },
+  "keywords": [
+    "vanduo",
+    "hex-grid",
+    "canvas",
+    "game-dev"
+  ],
+  "exports": {
+    ".": "./hex-grid.js",
+    "./hex-grid.js": "./hex-grid.js",
+    "./utils/hex-math.js": "./utils/hex-math.js"
+  },
+  "files": [
+    "hex-grid.js",
+    "utils/hex-math.js",
+    "README.md",
+    "LICENSE"
+  ]
+}
