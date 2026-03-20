@@ -1,6 +1,6 @@
 {
   "name": "@vanduo-oss/labs-vd-hex",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "vd-hex — experimental VdHexGrid canvas hex toolkit (ES modules)",
   "type": "module",
   "license": "MIT",
