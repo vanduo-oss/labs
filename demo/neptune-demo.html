@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neptune Hybrid Search — Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.css">
+  <style>
+    .demo-root {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+    .demo-header {
+      padding: 3rem 1.5rem 1.5rem;
+      text-align: center;
+    }
+    .demo-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--color-primary);
+    }
+    .demo-header p {
+      color: var(--text-muted);
+      max-width: 480px;
+      margin: 0 auto 1.5rem;
+    }
+    .demo-theme-toggle {
+      display: inline-flex;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      transition: background 0.15s ease;
+    }
+    .demo-theme-toggle:hover {
+      background: var(--bg-tertiary);
+    }
+    .demo-search-wrap {
+      padding: 0 1.5rem 2rem;
+      max-width: min(56rem, 100%);
+      margin: 0 auto;
+      width: 100%;
+    }
+    .demo-debug {
+      max-width: min(56rem, 100%);
+      margin: 2.5rem auto 0;
+      padding: 0 1.5rem 3rem;
+      width: 100%;
+    }
+    .demo-debug h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+    .demo-debug pre {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 320px;
+      color: var(--text-primary);
+    }
+    .demo-footer {
+      margin-top: auto;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-root">
+    <header class="demo-header">
+      <h1>🔱 Neptune Hybrid Search</h1>
+      <p>
+        Instant fuzzy search + semantic AI search over Vanduo Docs.
+        <br>Try: <strong>"glass card"</strong>, <strong>"how to theme"</strong>, or <strong>"button sizes"</strong>
+      </p>
+      <button class="demo-theme-toggle" id="theme-toggle" type="button">
+        <i class="ph ph-moon" id="theme-icon"></i>
+        <span id="theme-label">Dark</span>
+      </button>
+    </header>
+
+    <div class="demo-search-wrap">
+      <div id="search-mount"></div>
+    </div>
+
+    <div class="demo-debug">
+      <h3>Debug Output (last search)</h3>
+      <pre id="debug-output">Type a query and press Enter to see raw results…</pre>
+    </div>
+
+    <footer class="demo-footer">
+      Neptune Hybrid Search &mdash; Experimental Labs Component for Vanduo
+    </footer>
+  </div>
+
+  <script type="module">
+    import { NeptuneSearch, NeptuneSearchUI } from '../neptune-search.js';
+
+    // ── Theme Toggle ──────────────────────────────────────────────────
+    const html = document.documentElement;
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const themeLabel = document.getElementById('theme-label');
+
+    function updateThemeUI() {
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      themeIcon.className = isDark ? 'ph ph-moon' : 'ph ph-sun';
+      themeLabel.textContent = isDark ? 'Dark' : 'Light';
+    }
+
+    themeToggle.addEventListener('click', () => {
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      updateThemeUI();
+    });
+
+    // ── Search Setup ──────────────────────────────────────────────────
+    const debugOutput = document.getElementById('debug-output');
+
+    const search = new NeptuneSearch({
+      indexUrl: '../data/search-index.json',
+      vectorsUrl: '../data/vectors.json',
+    });
+
+    const ui = new NeptuneSearchUI({
+      container: document.getElementById('search-mount'),
+      search,
+      placeholder: 'Search docs…',
+      onResultClick: (result) => {
+        // Log to debug panel
+        debugOutput.textContent = JSON.stringify({
+          timestamp: new Date().toISOString(),
+          selected: {
+            id: result.doc.id,
+            title: result.doc.title,
+            score: result.score,
+            source: result.source,
+            route: result.doc.route,
+          },
+        }, null, 2);
+
+        // Open in new tab
+        window.open(`https://vanduo.dev/#${result.doc.route}`, '_blank', 'noopener,noreferrer');
+      },
+    });
+
+    ui.mount();
+
+    // Also log full search results to debug panel
+    const originalSearch = search.search.bind(search);
+    search.search = async function (...args) {
+      const result = await originalSearch(...args);
+      debugOutput.textContent = JSON.stringify({
+        timestamp: new Date().toISOString(),
+        query: result.query,
+        mode: result.mode,
+        fuzzyCount: result.fuzzy.length,
+        semanticCount: result.semantic.length,
+        merged: result.merged.map(r => ({
+          id: r.doc.id,
+          title: r.doc.title,
+          score: r.score,
+          source: r.source,
+        })),
+      }, null, 2);
+      return result;
+    };
+  </script>
+</body>
+</html>

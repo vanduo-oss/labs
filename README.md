@@ -1,19 +1,21 @@
-# vd-hex (VdHexGrid)
+# Vanduo Labs
 
-Experimental **interactive hex-grid** toolkit for the browser: canvas rendering, pan/zoom, hex selection, terrain helpers, and optional grid rotation. Shipped as **ES modules** with zero npm dependencies.
+Experimental components for the Vanduo ecosystem. Shipped as **ES modules** with zero runtime npm dependencies.
 
-This repository is the **standalone source** for vd-hex: all modules, same layout as integrated in the Vanduo docs site.
+---
 
-## Layout
+## vd-hex (VdHexGrid)
+
+Interactive **hex-grid** toolkit for the browser: canvas rendering, pan/zoom, hex selection, terrain helpers, and optional grid rotation.
+
+### Files
 
 | File | Role |
 |------|------|
 | [`hex-grid.js`](./hex-grid.js) | `VdHexGrid` class — canvas grid, events, pan/zoom, terrain API |
 | [`utils/hex-math.js`](./utils/hex-math.js) | Axial coordinates, pixel mapping, corners, neighbors, terrain metadata |
 
-## Usage
-
-Serve files over HTTP (ESM `import` does not work from `file://` in most browsers), or bundle with your tool of choice.
+### Usage
 
 ```javascript
 import { VdHexGrid } from './hex-grid.js';
@@ -32,18 +34,75 @@ grid.on('select', (hex) => {
 });
 ```
 
-## Live demo and docs
+---
 
-- **Interactive demo:** [Vanduo — Labs (vd-hex)](https://vanduo.dev/#labs) — scroll to **vd-hex Component**.
+## vd-neptune-search (Neptune Hybrid Search)
+
+In-browser **hybrid search** over Vanduo Docs — instant fuzzy search via Fuse.js + semantic vector search via Transformers.js. Zero external LLM API calls.
+
+See full documentation: [NEPTUNE-SEARCH.md](./NEPTUNE-SEARCH.md)
+
+### Search Quality (Tuned)
+
+- Benchmark quality (Apr 2026): **MRR 0.9938**, **Top-1 98.8% (80/81)**, **Top-3 100%**, **Top-5 100%**
+- Runtime defaults: `fuseThreshold=0.45`, `semanticThreshold=0.30`, `keywords` weight `2.5`
+- Hybrid merge: score-sorted interleave across semantic + fuzzy results (deduped by doc ID)
+- Embeddings are generated from: `title + category + keywords + headings + bodyText` (512-char cap)
+- Repro benchmark tools: `utils/neptune-benchmark.mjs` + `utils/benchmark-queries.json`
+
+### Quick Start
+
+```javascript
+import { NeptuneSearch, NeptuneSearchUI } from './neptune-search.js';
+
+const search = new NeptuneSearch();
+const ui = new NeptuneSearchUI({
+  container: document.getElementById('search-mount'),
+  search,
+  onResultClick: (result) => {
+    window.location.hash = result.doc.route;
+  },
+});
+
+ui.mount();
+```
+
+### Regenerating the index
+
+```bash
+pnpm index   # runs node utils/neptune-indexer.mjs
+```
+
+### Demo
+
+From this `labs/` directory (repository root for the static server), run:
+
+```bash
+pnpm run demo:serve
+```
+
+Then open:
+
+- `http://localhost:3000/` for the standalone **Vanduo Labs** page (navbar + hero + `vd-hex` + `vd-neptune-search`)
+- `http://localhost:3000/demo/neptune-demo` (or `/demo/neptune-demo.html`) for the focused Neptune demo page
+
+Serving only `demo/` breaks module and data URLs (`../neptune-search.js` and `../data/*` must resolve under the same origin).
+
+---
 
 ## Keeping in sync
 
-The canonical copy used by the documentation build lives under the Vanduo docs tree (`docs/js/`). When you change vd-hex, update **either** this repo **or** docs first, then copy the two files so both stay aligned:
+The canonical copies live under the Vanduo **framework** repository (`framework/js/`). When you change a Labs component, edit the framework file first, then copy so both stay aligned:
 
 ```bash
-# Example: from the monorepo root, after editing docs/js
-cp docs/js/hex-grid.js labs/hex-grid.js
-cp docs/js/utils/hex-math.js labs/utils/hex-math.js
+# Example: from the monorepo root, after editing framework/js
+cp framework/js/components/vd-hex.js labs/hex-grid.js
+cp framework/js/utils/hex-math.js labs/utils/hex-math.js
+
+# vd-neptune-search: module + generated corpus (regenerate with pnpm index when docs change)
+cp docs/js/neptune-search.js labs/neptune-search.js
+cp docs/js/data/search-index.json labs/data/search-index.json
+cp docs/js/data/vectors.json labs/data/vectors.json
 ```
 
 ## License
