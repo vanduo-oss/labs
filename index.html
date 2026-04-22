@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Vanduo Labs - Experimental components and demos.">
+  <title>Vanduo Labs</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/icons/phosphor/regular/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Dots&display=swap" rel="stylesheet">
+
+  <style>
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--bg-primary);
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse 80vw 65vh at 78% 7%, rgba(var(--vd-color-primary-rgb), 0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 65vw 55vh at 12% 22%, rgba(var(--vd-color-info-rgb), 0.14) 0%, transparent 55%);
+      background-attachment: fixed;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    [data-theme="dark"] body {
+      background:
+        radial-gradient(ellipse 80vw 65vh at 78% 7%, rgba(var(--vd-color-primary-rgb), 0.32) 0%, transparent 55%),
+        radial-gradient(ellipse 65vw 55vh at 12% 22%, rgba(var(--vd-color-info-rgb), 0.26) 0%, transparent 50%);
+      background-attachment: fixed;
+      background-color: var(--bg-primary);
+    }
+
+    .vd-navbar-brand-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .vd-navbar-brand-wrap .navbar-brand-title,
+    .vd-navbar-brand-wrap > a,
+    .hero-title {
+      font-family: "Zen Dots", sans-serif;
+      text-transform: lowercase;
+    }
+
+    .navbar-brand-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35em;
+      max-width: 100%;
+      min-width: 0;
+      text-decoration: none;
+      color: var(--color-primary);
+    }
+
+    .navbar-atom-icon {
+      flex-shrink: 0;
+      transform: translateY(-0.05em);
+    }
+
+    .navbar-brand-title-text {
+      min-width: 0;
+    }
+
+    .vd-navbar-container {
+      flex-wrap: nowrap;
+      min-width: 0;
+    }
+
+    .vd-navbar-brand {
+      margin-bottom: 0;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .vd-navbar-brand-wrap {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .navbar-actions-always {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-left: auto;
+      margin-right: 0.75rem;
+      order: 98;
+      flex-shrink: 0;
+    }
+
+    .dark-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--card-border-radius);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 1rem;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+
+    .dark-mode-toggle:hover {
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+      background: var(--color-primary-alpha-10);
+    }
+
+    .vd-navbar-toggle {
+      order: 99;
+      flex-shrink: 0;
+    }
+
+    .hero-title-brand {
+      font-weight: bold;
+    }
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      padding-top: 9.5rem;
+      padding-bottom: 5rem;
+    }
+
+    .hero .hero-wiki-link {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(var(--vd-color-primary-rgb), 0.35);
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .hero .hero-wiki-link:hover {
+      border-bottom-color: var(--color-primary);
+    }
+
+    .hero .hero-wiki-cite {
+      display: inline;
+      margin-left: 0.2em;
+      white-space: nowrap;
+      opacity: 0.9;
+    }
+
+    .hero .hero-wiki-cite a {
+      color: var(--text-secondary);
+      text-decoration: underline;
+      text-decoration-color: rgba(var(--vd-color-primary-rgb), 0.35);
+      text-underline-offset: 0.18em;
+      font-weight: 400;
+    }
+
+    .hero .hero-wiki-cite a:hover {
+      color: var(--color-primary);
+      text-decoration-color: var(--color-primary);
+    }
+
+    .labs-main {
+      padding-bottom: 4rem;
+    }
+
+    .labs-section {
+      scroll-margin-top: 5.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .labs-about-card {
+      max-width: 52rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .labs-about-card .vd-card-body {
+      padding: clamp(1.75rem, 5vw, 3rem) clamp(1.25rem, 4vw, 2.75rem);
+    }
+
+    .labs-about-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--vd-color-primary);
+      margin: 0 auto 1.25rem;
+      width: fit-content;
+    }
+
+    .labs-about-title {
+      color: var(--color-primary);
+      text-align: center;
+      font-size: clamp(1.35rem, 3.5vw, 1.75rem);
+      line-height: 1.25;
+      font-weight: 700;
+      margin: 0 auto 1.25rem;
+      max-width: 36rem;
+      letter-spacing: -0.02em;
+    }
+
+    .labs-about-lede {
+      font-size: 1.0625rem;
+      line-height: 1.75;
+      color: var(--text-secondary);
+      max-width: 40rem;
+      margin: 0 auto 2rem;
+      text-align: center;
+    }
+
+    .labs-about-grid {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 0.25rem;
+    }
+
+    @media (min-width: 640px) {
+      .labs-about-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+    }
+
+    .labs-about-tile {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      padding: clamp(1.25rem, 3.5vw, 1.75rem) clamp(1.35rem, 3.5vw, 1.85rem);
+    }
+
+    .labs-about-tile h3 {
+      color: var(--color-primary);
+      font-size: 1.05rem;
+      margin: 0 0 0.65rem;
+      line-height: 1.3;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+    }
+
+    .labs-about-tile h3 i {
+      flex-shrink: 0;
+      margin-top: 0.12em;
+    }
+
+    .labs-about-tile p {
+      margin: 0;
+      line-height: 1.65;
+      font-size: 0.975rem;
+    }
+
+    .labs-about-cta {
+      text-align: center;
+      margin-top: 2.5rem;
+      padding-top: 0.25rem;
+    }
+
+    .labs-about-cta .vd-btn {
+      margin-bottom: 0;
+    }
+
+    .labs-about-cta-note {
+      display: block;
+      margin-top: 1.125rem;
+      line-height: 1.55;
+      max-width: 28rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    #hex-demo-container {
+      position: relative;
+      width: 100%;
+      height: 420px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    #hex-demo {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    .canvas-toolbar {
+      position: absolute;
+      top: 0.625rem;
+      right: 0.625rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 2;
+    }
+
+    .canvas-toolbar .vd-btn {
+      padding: 0.35rem 0.6rem;
+      min-width: auto;
+    }
+
+    #hex-info-card {
+      display: none;
+    }
+
+    .labs-demo-card-grid {
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: 1fr;
+      max-width: 56rem;
+      margin: 0 auto 2.5rem;
+    }
+
+    @media (min-width: 640px) {
+      .labs-demo-card-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+    }
+
+    .labs-demo-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+      margin: 0;
+      padding: clamp(1.5rem, 4vw, 2rem) clamp(1.25rem, 3vw, 1.75rem);
+      box-sizing: border-box;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .labs-demo-card:hover {
+      border-color: rgba(var(--vd-color-primary-rgb), 0.45);
+      background: var(--bg-tertiary);
+    }
+
+    .labs-demo-card:focus {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .labs-demo-card.is-selected {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 1px rgba(var(--vd-color-primary-rgb), 0.35);
+    }
+
+    .labs-demo-card-icon {
+      width: 3rem;
+      height: 3rem;
+      margin-bottom: 1rem;
+      color: var(--color-primary);
+    }
+
+    .labs-demo-card-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .labs-demo-card-title {
+      font-size: clamp(1.25rem, 3vw, 1.5rem);
+      font-weight: 700;
+      margin: 0 0 0.65rem;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .labs-demo-card-desc {
+      margin: 0 0 1rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      max-width: 28rem;
+    }
+
+    .labs-demo-card-source {
+      margin: 0 0 1rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .labs-demo-card-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(var(--vd-color-primary-rgb), 0.2);
+      color: var(--color-primary);
+      border: 1px solid rgba(var(--vd-color-primary-rgb), 0.35);
+    }
+
+    .labs-demos-detail {
+      max-width: 56rem;
+      margin: 0 auto;
+    }
+
+    .labs-demos-detail[hidden] {
+      display: none !important;
+    }
+
+    .labs-demos-detail-header {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1.5rem;
+      color: var(--color-primary);
+    }
+
+    .labs-demos-detail-header h2 {
+      margin: 0;
+      font-size: clamp(1.35rem, 3.5vw, 1.65rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .labs-demos-detail-header .labs-demo-card-icon {
+      width: 2.25rem;
+      height: 2.25rem;
+      margin-bottom: 0;
+    }
+
+    .labs-detail-stack-section {
+      margin-bottom: 2rem;
+    }
+
+    .labs-detail-stack-section h3 {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+    }
+
+    .labs-demo-panel-inner[hidden],
+    .labs-demo-empty[hidden] {
+      display: none !important;
+    }
+
+    .labs-demo-empty {
+      text-align: center;
+      padding: 2.5rem 1.25rem;
+      color: var(--text-secondary);
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-lg);
+      background: var(--bg-secondary);
+    }
+
+    #labs-doc-panel.labs-doc-loading {
+      min-height: 6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .labs-doc-error {
+      color: var(--vd-color-danger, #f87171);
+      font-size: 0.9rem;
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+    }
+
+    #labs-demos-disclaimer-modal.vd-modal-xl .vd-modal-dialog {
+      width: min(56rem, calc(100vw - 2.5rem));
+      max-width: min(56rem, calc(100vw - 2.5rem));
+    }
+
+    #labs-demos-disclaimer-modal .vd-modal-body {
+      max-height: min(72vh, 38rem);
+      overflow-y: auto;
+    }
+
+    #labs-demos-disclaimer-modal .vd-modal-body p {
+      margin: 0 0 0.75rem;
+      line-height: 1.55;
+    }
+
+    #labs-demos-disclaimer-modal .vd-modal-body ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.25rem;
+      line-height: 1.55;
+    }
+
+    #labs-demos-disclaimer-modal .vd-modal-body li {
+      margin-bottom: 0.35rem;
+    }
+
+    .labs-md-prose {
+      line-height: 1.65;
+      color: var(--text-primary);
+    }
+
+    .labs-md-prose h1,
+    .labs-md-prose h2,
+    .labs-md-prose h3,
+    .labs-md-prose h4 {
+      margin: 1.25em 0 0.5em;
+      color: var(--color-primary);
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .labs-md-prose h1 { font-size: 1.5rem; }
+    .labs-md-prose h2 { font-size: 1.25rem; }
+    .labs-md-prose h3 { font-size: 1.1rem; }
+
+    .labs-md-prose p {
+      margin: 0.75em 0;
+    }
+
+    .labs-md-prose pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .labs-md-prose code {
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 0.88em;
+    }
+
+    .labs-md-prose pre code {
+      font-size: inherit;
+    }
+
+    .labs-md-prose ul,
+    .labs-md-prose ol {
+      margin: 0.75em 0;
+      padding-left: 1.35em;
+    }
+
+    .labs-md-prose table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin: 1rem 0;
+    }
+
+    .labs-md-prose th,
+    .labs-md-prose td {
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+    }
+
+    .labs-md-prose th {
+      background: var(--bg-secondary);
+    }
+
+    .labs-view {
+      display: block;
+    }
+
+    main[data-labs-route="home"] .labs-view:not(.labs-view-home),
+    main[data-labs-route="about"] .labs-view:not(.labs-view-about),
+    main[data-labs-route="demos"] .labs-view:not(.labs-view-demos) {
+      display: none;
+    }
+
+    main[data-labs-route="about"] .labs-view-about {
+      min-height: calc(100vh - 5rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 1.5rem clamp(1rem, 4vw, 2rem) 3rem;
+    }
+
+    main[data-labs-route="about"] .labs-view-about .labs-main {
+      width: 100%;
+      max-width: 56rem;
+      margin-left: auto;
+      margin-right: auto;
+      padding-bottom: 0;
+    }
+
+    main[data-labs-route="about"] .labs-view-about .labs-section {
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 600px) {
+      .hero-title {
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+
+      .hero-title svg {
+        transform: none !important;
+        margin-right: 0 !important;
+        margin-bottom: 0.25em;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <nav class="vd-navbar vd-navbar-fixed vd-navbar-glass vd-glass-contrast">
+    <div class="vd-navbar-container">
+      <div class="vd-navbar-brand">
+        <div class="vd-navbar-brand-wrap">
+          <a href="#home" class="navbar-brand-title" aria-label="Vanduo Labs home">
+            <svg class="navbar-atom-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1.35em" height="1.35em" aria-hidden="true">
+              <g fill="none" stroke="var(--vd-color-primary)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+                <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                <g transform="rotate(60 50 50)">
+                  <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                </g>
+                <g transform="rotate(-60 50 50)">
+                  <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                </g>
+              </g>
+              <circle cx="50" cy="50" r="10" fill="rgba(var(--vd-color-primary-rgb), 0.18)" stroke="var(--vd-color-primary)" stroke-width="3"></circle>
+              <circle cx="50" cy="50" r="5.5" fill="var(--vd-color-primary)"></circle>
+            </svg>
+            <span class="navbar-brand-title-text"><span class="hero-title-brand">vanduo</span>&nbsp;<span class="vd-text-muted">labs</span></span>
+          </a>
+        </div>
+      </div>
+      <div class="navbar-actions-always">
+        <button class="dark-mode-toggle" id="dark-mode-toggle" data-toggle="theme" aria-label="Toggle dark mode">
+          <i class="ph ph-moon"></i>
+        </button>
+      </div>
+      <button class="vd-navbar-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+      <div class="vd-navbar-menu">
+        <ul class="vd-navbar-nav">
+          <li><a href="#home" class="vd-nav-link active">Home</a></li>
+          <li><a href="#about" class="vd-nav-link">About</a></li>
+          <li><a href="#demos" class="vd-nav-link">Demos</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main data-labs-route="home" style="padding-top: 80px;">
+    <div class="labs-view labs-view-home" data-labs-panel="home">
+    <section class="hero">
+      <h2 class="hero-title" style="color: var(--color-primary); display: flex; align-items: center; justify-content: center;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="2.2em" height="2.2em" style="margin-right: 0.2em; flex-shrink: 0; transform: translateY(-0.05em);">
+          <style>
+            .hero-atom-orbit {
+              fill: none;
+              stroke: var(--vd-color-primary);
+              stroke-width: 6;
+              stroke-linecap: round;
+              stroke-linejoin: round;
+              opacity: 0.9;
+            }
+            .hero-atom-core {
+              fill: var(--vd-color-primary);
+            }
+            .hero-atom-core-ring {
+              fill: rgba(var(--vd-color-primary-rgb), 0.18);
+              stroke: var(--vd-color-primary);
+              stroke-width: 3;
+            }
+            .hero-atom-spin {
+              transform-origin: 50px 50px;
+              animation: hero-atom-spin 12s linear infinite;
+            }
+            .hero-atom-spin-reverse {
+              transform-origin: 50px 50px;
+              animation: hero-atom-spin-reverse 9s linear infinite;
+            }
+            @keyframes hero-atom-spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            @keyframes hero-atom-spin-reverse {
+              from { transform: rotate(360deg); }
+              to { transform: rotate(0deg); }
+            }
+          </style>
+          <g class="hero-atom-spin">
+            <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
+          </g>
+          <g transform="rotate(60 50 50)">
+            <g class="hero-atom-spin-reverse">
+              <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
+            </g>
+          </g>
+          <g transform="rotate(-60 50 50)">
+            <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
+          </g>
+          <circle class="hero-atom-core-ring" cx="50" cy="50" r="10"></circle>
+          <circle class="hero-atom-core" cx="50" cy="50" r="5.5"></circle>
+        </svg>
+        <span class="hero-title-brand">vanduo</span>&nbsp;<span class="vd-text-muted">labs</span>
+      </h2>
+      <p class="vd-text-lg vd-text-muted">
+        We are not yet building
+        <a
+          href="https://en.wikipedia.org/wiki/GLaDOS"
+          class="hero-wiki-link"
+          rel="noopener noreferrer"
+          title="GLaDOS — Wikipedia (article)">GLaDOS</a>,
+        but we might soon…
+        <span class="vd-text-sm hero-wiki-cite">
+          (<a href="https://en.wikipedia.org/wiki/GLaDOS" rel="noopener noreferrer">Wikipedia</a>)
+        </span>
+      </p>
+    </section>
+    </div>
+
+    <div class="labs-view labs-view-about" data-labs-panel="about">
+    <div class="vd-container-responsive labs-main">
+      <section id="labs-about" class="labs-section">
+        <div class="vd-card vd-card-glow vd-glass labs-about-card">
+          <div class="vd-card-body">
+            <p class="labs-about-pill"><i class="ph ph-flask" aria-hidden="true"></i> Experimental by design</p>
+            <h2 class="labs-about-title">
+              A small playground for curious builds
+            </h2>
+            <p class="labs-about-lede">
+              Vanduo Labs is where we ship ideas before they are polished—interactive demos, odd widgets, and
+              half-serious prototypes that might graduate into the framework, or might just make us smile.
+              Nothing here is guaranteed stable; that is the point.
+            </p>
+            <div class="labs-about-grid">
+              <div class="labs-about-tile">
+                <h3>
+                  <i class="ph ph-test-tube" aria-hidden="true"></i>
+                  <span>Try things</span>
+                </h3>
+                <p class="vd-text-muted">
+                  Grids, search, and UI experiments invite you to click, drag, and break assumptions safely.
+                  If something misbehaves, we have learned something useful.
+                </p>
+              </div>
+              <div class="labs-about-tile">
+                <h3>
+                  <i class="ph ph-sparkle" aria-hidden="true"></i>
+                  <span>Fun is a feature</span>
+                </h3>
+                <p class="vd-text-muted">
+                  We keep the tone light on purpose: exploration should feel inviting, not like reading a spec sheet.
+                  The GLaDOS jokes are optional; the curiosity is not.
+                </p>
+              </div>
+            </div>
+            <div class="labs-about-cta">
+              <a href="#demos" class="vd-btn vd-btn-outline">Open live demos</a>
+              <span class="labs-about-cta-note vd-text-sm vd-text-muted">Hex grids, hybrid search, and whatever we wire up next.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    </div>
+
+    <div class="labs-view labs-view-demos" data-labs-panel="demos">
+    <div class="vd-container-responsive labs-main">
+      <section id="labs-demos" class="labs-section" aria-label="Component demos">
+        <div class="labs-demo-card-grid" role="list">
+          <button type="button" class="labs-demo-card" id="labs-card-hex" data-demo-slug="hex" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-hex-desc">
+            <span class="labs-demo-card-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                <path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/>
+              </svg>
+            </span>
+            <span class="labs-demo-card-title">vd-hex</span>
+            <span class="labs-demo-card-desc" id="labs-card-hex-desc">Experimental interactive hex-grid toolkit for visualization and game prototypes</span>
+            <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
+            <span class="labs-demo-card-badge">Experimental</span>
+          </button>
+          <button type="button" class="labs-demo-card" id="labs-card-neptune" data-demo-slug="neptune" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-neptune-desc">
+            <span class="labs-demo-card-icon" aria-hidden="true"><i class="ph ph-magnifying-glass" style="font-size: 3rem;"></i></span>
+            <span class="labs-demo-card-title">vd-neptune-search</span>
+            <span class="labs-demo-card-desc" id="labs-card-neptune-desc">In-browser hybrid fuzzy + semantic search for documentation—no server required</span>
+            <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
+            <span class="labs-demo-card-badge">Experimental</span>
+          </button>
+        </div>
+
+        <p id="labs-demos-live-region" class="sr-only" role="status" aria-live="polite"></p>
+
+        <div class="labs-demo-empty" id="labs-demo-empty">
+          Choose a component above to open its live demo and documentation.
+        </div>
+
+        <div class="labs-demos-detail vd-card vd-card-glow vd-glass" id="labs-demos-detail" role="region" aria-labelledby="labs-demos-detail-title" hidden>
+          <div class="vd-card-body">
+            <div class="labs-demos-detail-header" id="labs-demos-detail-header">
+              <span class="labs-demo-card-icon" id="labs-demos-detail-icon" aria-hidden="true"></span>
+              <h2 id="labs-demos-detail-title">Component</h2>
+            </div>
+
+            <div class="labs-detail-stack-section">
+              <h3 id="labs-demo-heading">Demo</h3>
+              <div id="labs-demo-panel">
+                <div class="labs-demo-panel-inner" id="labs-demo-hex" hidden>
+                  <div id="hex-demo-container" class="vd-mb-4">
+                    <canvas id="hex-demo"></canvas>
+                    <div class="canvas-toolbar">
+                      <button type="button" id="hex-zoom-out" class="vd-btn vd-btn-outline" title="Zoom out">
+                        <i class="ph ph-minus"></i>
+                      </button>
+                      <button type="button" id="hex-zoom-in" class="vd-btn vd-btn-outline" title="Zoom in">
+                        <i class="ph ph-plus"></i>
+                      </button>
+                      <button type="button" id="hex-reset-view" class="vd-btn vd-btn-outline" title="Reset view">
+                        <i class="ph ph-arrows-counter-clockwise"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="vd-row">
+                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
+                      <label class="vd-form-label" for="hex-size-slider">Hex size</label>
+                      <input type="range" id="hex-size-slider" class="vd-range" min="10" max="50" value="30" style="width: 100%;">
+                      <span id="hex-size-value" class="vd-text-sm vd-text-muted">30px</span>
+                    </div>
+                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
+                      <label class="vd-form-label" for="hex-width-slider">Grid width</label>
+                      <input type="range" id="hex-width-slider" class="vd-range" min="5" max="30" value="15" style="width: 100%;">
+                      <span id="hex-width-value" class="vd-text-sm vd-text-muted">15</span>
+                    </div>
+                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
+                      <label class="vd-form-label" for="hex-height-slider">Grid height</label>
+                      <input type="range" id="hex-height-slider" class="vd-range" min="5" max="20" value="10" style="width: 100%;">
+                      <span id="hex-height-value" class="vd-text-sm vd-text-muted">10</span>
+                    </div>
+                  </div>
+
+                  <div class="vd-mt-3">
+                    <button type="button" id="hex-reset-btn" class="vd-btn vd-btn-outline">
+                      <i class="ph ph-arrows-counter-clockwise"></i> Reset grid
+                    </button>
+                    <button type="button" id="hex-fill-btn" class="vd-btn vd-btn-outline">
+                      <i class="ph ph-paint-bucket"></i> Fill random
+                    </button>
+                  </div>
+
+                  <div class="vd-card vd-mt-4" id="hex-info-card">
+                    <div class="vd-card-body">
+                      <h4 class="vd-mb-3"><i class="ph ph-cursor-click"></i> Selected hex</h4>
+                      <div class="vd-row">
+                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Coordinates:</span> <strong id="hex-coords">-</strong></div>
+                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Pixel:</span> <strong id="hex-pixel">-</strong></div>
+                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Adjacent:</span> <strong id="hex-adjacent">-</strong></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="labs-demo-panel-inner" id="labs-demo-neptune" hidden>
+                  <div id="search-mount"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="labs-detail-stack-section" aria-labelledby="labs-doc-heading">
+              <h3 id="labs-doc-heading">Documentation</h3>
+              <div id="labs-doc-panel"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    </div>
+  </main>
+
+  <div
+    class="vd-modal vd-modal-xl"
+    id="labs-demos-disclaimer-modal"
+    data-backdrop="static"
+    data-keyboard="false"
+    aria-labelledby="labs-demos-disclaimer-title">
+    <div class="vd-modal-dialog">
+      <div class="vd-modal-content">
+        <div class="vd-modal-header">
+          <h5 class="vd-modal-title" id="labs-demos-disclaimer-title">Experimental demos</h5>
+        </div>
+        <div class="vd-modal-body">
+          <p>
+            Vanduo Labs hosts prototypes and demos that are <strong>not</strong> polished products. By continuing, you acknowledge the following:
+          </p>
+          <ul>
+            <li>Everything here is <strong>experimental</strong> and may change, break, or disappear without notice.</li>
+            <li>Demos are provided <strong>as-is</strong>, for exploration only—not as production guidance or a stable API surface.</li>
+            <li>There is <strong>no warranty</strong> of any kind (including fitness for a particular purpose).</li>
+            <li>You use Labs demos <strong>at your own risk</strong>; we are not liable for any loss or damage arising from use.</li>
+          </ul>
+        </div>
+        <div class="vd-modal-footer">
+          <button type="button" class="vd-btn vd-btn-primary" id="labs-demos-disclaimer-accept">
+            I understand and agree
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.js"></script>
+  <script type="module">
+    import { VdHexGrid } from "./hex-grid.js";
+    import { NeptuneSearch, NeptuneSearchUI } from "./neptune-search.js";
+    import { labsMarkdownToHtml } from "./labs-md-to-html.js";
+
+    if (window.ThemeCustomizer) {
+      Object.assign(window.ThemeCustomizer.DEFAULTS, {
+        PRIMARY_LIGHT: "sky",
+        PRIMARY_DARK: "sky",
+        NEUTRAL: "neutral",
+        RADIUS: "0.25",
+        FONT: "jetbrains-mono"
+      });
+    }
+
+    if (window.Vanduo && typeof window.Vanduo.init === "function") {
+      window.Vanduo.init();
+    }
+
+    const DEMO_SLUGS = new Set(["hex", "neptune"]);
+    const DOC_FETCH = {
+      hex: new URL("./doc/vd-hex.html", import.meta.url).toString(),
+      neptune: new URL("./NEPTUNE-SEARCH.md", import.meta.url).toString()
+    };
+
+    const HEX_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/></svg>`;
+
+    const mainEl = document.querySelector("main");
+    const navLinks = Array.from(document.querySelectorAll(".vd-navbar-nav .vd-nav-link"));
+    const ROUTES = ["home", "about", "demos"];
+    const panelEls = Array.from(document.querySelectorAll("[data-labs-panel]"));
+    const demoCards = Array.from(document.querySelectorAll(".labs-demo-card"));
+    const detailEl = document.getElementById("labs-demos-detail");
+    const detailTitleEl = document.getElementById("labs-demos-detail-title");
+    const detailIconEl = document.getElementById("labs-demos-detail-icon");
+    const emptyEl = document.getElementById("labs-demo-empty");
+    const demoHexPanel = document.getElementById("labs-demo-hex");
+    const demoNeptunePanel = document.getElementById("labs-demo-neptune");
+    const docPanel = document.getElementById("labs-doc-panel");
+    const liveRegion = document.getElementById("labs-demos-live-region");
+
+    let lastTopLevelRoute = "home";
+    const docHtmlCache = { hex: null, neptune: null };
+    let docLoadSeq = 0;
+    const LABS_DEMOS_DISCLAIMER_KEY = "vanduo-labs-demos-disclaimer-v1";
+
+    function closeDemosDisclaimerIfOpen() {
+      const modal = document.getElementById("labs-demos-disclaimer-modal");
+      if (!modal || !modal.classList.contains("is-open")) return;
+      const modals = window.Vanduo && window.Vanduo.getComponent("modals");
+      if (modals && typeof modals.close === "function") modals.close(modal);
+    }
+
+    function maybeOpenDemosDisclaimer() {
+      try {
+        if (localStorage.getItem(LABS_DEMOS_DISCLAIMER_KEY) === "1") return;
+      } catch (_e) {}
+      const modal = document.getElementById("labs-demos-disclaimer-modal");
+      const modals = window.Vanduo && window.Vanduo.getComponent("modals");
+      if (!modal || !modals || typeof modals.open !== "function") return;
+      requestAnimationFrame(() => modals.open(modal));
+    }
+
+    function parseLabsHash() {
+      const raw = (location.hash || "#home").replace(/^#/, "").toLowerCase();
+      const segments = raw.split("/").map((s) => s.trim()).filter(Boolean);
+      let route = segments[0] || "home";
+      if (route === "demos") {
+        let demoSlug = segments.length > 1 ? segments[1] : null;
+        if (demoSlug && !DEMO_SLUGS.has(demoSlug)) demoSlug = null;
+        return { route, demoSlug };
+      }
+      if (!ROUTES.includes(route)) route = "home";
+      return { route, demoSlug: null };
+    }
+
+    function applyLabsRoute(route, gridRef, demoSlug) {
+      if (route !== "demos") {
+        closeDemosDisclaimerIfOpen();
+      }
+
+      const routeChanged = lastTopLevelRoute !== route;
+      lastTopLevelRoute = route;
+
+      mainEl.dataset.labsRoute = route;
+      navLinks.forEach((link) => {
+        const href = link.getAttribute("href");
+        const isDemosLink = href === "#demos";
+        const active = href === "#" + route || (isDemosLink && route === "demos");
+        link.classList.toggle("active", active);
+      });
+      panelEls.forEach((el) => {
+        const on = el.dataset.labsPanel === route;
+        el.setAttribute("aria-hidden", on ? "false" : "true");
+        if ("inert" in el) el.inert = !on;
+      });
+
+      if (routeChanged) window.scrollTo(0, 0);
+
+      if (route === "demos") {
+        syncDemosSelection(demoSlug, gridRef);
+        maybeOpenDemosDisclaimer();
+      } else {
+        syncDemosSelection(null, gridRef);
+      }
+    }
+
+    function resizeHexGrid(gridRef) {
+      if (!gridRef) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          gridRef.setDimensions(gridRef.width, gridRef.height);
+        });
+      });
+    }
+
+    function stripVdHexDocSection(section) {
+      const q = (sel) => section.querySelector(sel);
+      const removeHost = (node) => {
+        if (!node) return;
+        const card = node.closest(".vd-card");
+        if (card) card.remove();
+        else node.remove();
+      };
+      removeHost(q("#hex-demo-container"));
+      removeHost(q("#hex-size-slider"));
+      const info = q("#hex-info-card");
+      if (info) info.remove();
+    }
+
+    async function fetchHexDocumentationHtml() {
+      if (docHtmlCache.hex) return docHtmlCache.hex;
+      const res = await fetch(DOC_FETCH.hex, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Could not load vd-hex documentation (" + res.status + ")");
+      const text = await res.text();
+      const parser = new DOMParser();
+      const parsed = parser.parseFromString(text, "text/html");
+      const section = parsed.querySelector("section#vd-hex") || parsed.body.querySelector("section");
+      if (!section) throw new Error("vd-hex documentation has no section");
+      stripVdHexDocSection(section);
+      docHtmlCache.hex = section.innerHTML;
+      return docHtmlCache.hex;
+    }
+
+    async function fetchNeptuneDocumentationHtml() {
+      if (docHtmlCache.neptune) return docHtmlCache.neptune;
+      const res = await fetch(DOC_FETCH.neptune, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Could not load Neptune documentation (" + res.status + ")");
+      const md = await res.text();
+      docHtmlCache.neptune = labsMarkdownToHtml(md);
+      return docHtmlCache.neptune;
+    }
+
+    async function loadDocumentationForSlug(slug) {
+      const seq = ++docLoadSeq;
+      docPanel.classList.add("labs-doc-loading");
+      docPanel.textContent = "Loading documentation…";
+      try {
+        let html;
+        if (slug === "hex") html = await fetchHexDocumentationHtml();
+        else if (slug === "neptune") html = await fetchNeptuneDocumentationHtml();
+        else return;
+
+        if (seq !== docLoadSeq) return;
+
+        docPanel.classList.remove("labs-doc-loading");
+        docPanel.innerHTML = "";
+        const wrap = document.createElement("div");
+        wrap.className = slug === "neptune" ? "labs-md-prose" : "labs-doc-html";
+        wrap.innerHTML = html;
+        docPanel.appendChild(wrap);
+
+        if (window.Vanduo && typeof window.Vanduo.reinit === "function") {
+          window.Vanduo.reinit("codeSnippet");
+        }
+      } catch (err) {
+        if (seq !== docLoadSeq) return;
+        docPanel.classList.remove("labs-doc-loading");
+        docPanel.innerHTML = "<p class=\"labs-doc-error\" role=\"alert\">" +
+          "Documentation could not be loaded. Check that <code>doc/vd-hex.html</code> or " +
+          "<code>NEPTUNE-SEARCH.md</code> is present, serve this folder over HTTP (not file://), " +
+          "then refresh. See the browser network tab for details.</p>";
+        console.warn("[labs]", err);
+      }
+    }
+
+    function syncDemosSelection(demoSlug, gridRef) {
+      demoCards.forEach((btn) => {
+        const slug = btn.dataset.demoSlug;
+        const on = slug === demoSlug;
+        btn.classList.toggle("is-selected", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+
+      if (!demoSlug) {
+        detailEl.hidden = true;
+        emptyEl.hidden = false;
+        demoHexPanel.hidden = true;
+        demoNeptunePanel.hidden = true;
+        liveRegion.textContent = "";
+        return;
+      }
+
+      emptyEl.hidden = true;
+      detailEl.hidden = false;
+
+      if (demoSlug === "hex") {
+        detailTitleEl.textContent = "vd-hex";
+        detailIconEl.innerHTML = HEX_ICON_SVG;
+        demoHexPanel.hidden = false;
+        demoNeptunePanel.hidden = true;
+        resizeHexGrid(gridRef);
+      } else {
+        detailTitleEl.textContent = "vd-neptune-search";
+        detailIconEl.innerHTML = "<i class=\"ph ph-magnifying-glass\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
+        demoHexPanel.hidden = true;
+        demoNeptunePanel.hidden = false;
+      }
+
+      const label = demoSlug === "hex" ? "vd-hex" : "vd-neptune-search";
+      liveRegion.textContent = label + " demo and documentation opened.";
+
+      loadDocumentationForSlug(demoSlug);
+
+      requestAnimationFrame(() => {
+        detailEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+
+    function syncLabsRouteFromHash(gridRef) {
+      let { route, demoSlug } = parseLabsHash();
+      if (!location.hash) {
+        history.replaceState(null, "", "#home");
+        route = "home";
+        demoSlug = null;
+      }
+      applyLabsRoute(route, gridRef, demoSlug);
+    }
+
+    const grid = new VdHexGrid({
+      element: document.getElementById("hex-demo-container"),
+      canvas: document.getElementById("hex-demo"),
+      size: 30,
+      width: 15,
+      height: 10
+    });
+
+    const sizeSlider = document.getElementById("hex-size-slider");
+    const widthSlider = document.getElementById("hex-width-slider");
+    const heightSlider = document.getElementById("hex-height-slider");
+    const sizeValue = document.getElementById("hex-size-value");
+    const widthValue = document.getElementById("hex-width-value");
+    const heightValue = document.getElementById("hex-height-value");
+
+    sizeSlider.addEventListener("input", (e) => {
+      const value = parseInt(e.target.value, 10);
+      sizeValue.textContent = value + "px";
+      grid.setSize(value);
+    });
+
+    widthSlider.addEventListener("input", (e) => {
+      const value = parseInt(e.target.value, 10);
+      widthValue.textContent = String(value);
+      grid.setDimensions(value, grid.height);
+    });
+
+    heightSlider.addEventListener("input", (e) => {
+      const value = parseInt(e.target.value, 10);
+      heightValue.textContent = String(value);
+      grid.setDimensions(grid.width, value);
+    });
+
+    document.getElementById("hex-reset-btn").addEventListener("click", () => {
+      sizeSlider.value = "30";
+      widthSlider.value = "15";
+      heightSlider.value = "10";
+      sizeValue.textContent = "30px";
+      widthValue.textContent = "15";
+      heightValue.textContent = "10";
+      grid.reset();
+    });
+
+    document.getElementById("hex-fill-btn").addEventListener("click", () => {
+      grid.fillRandom();
+    });
+
+    document.getElementById("hex-zoom-in").addEventListener("click", () => grid.zoomIn());
+    document.getElementById("hex-zoom-out").addEventListener("click", () => grid.zoomOut());
+    document.getElementById("hex-reset-view").addEventListener("click", () => grid.resetView());
+
+    grid.on("select", (hex) => {
+      const infoCard = document.getElementById("hex-info-card");
+      infoCard.style.display = "block";
+      document.getElementById("hex-coords").textContent = "(" + hex.q + ", " + hex.r + ")";
+      document.getElementById("hex-pixel").textContent = Math.round(hex.x) + ", " + Math.round(hex.y);
+      document.getElementById("hex-adjacent").textContent = String((hex.adjacent && hex.adjacent.length) || 0);
+    });
+
+    const search = new NeptuneSearch({
+      indexUrl: "./data/search-index.json",
+      vectorsUrl: "./data/vectors.json"
+    });
+
+    const LOCAL_DOCS_PORT = "65349";
+    const DOCS_BASE_URL =
+      location.hostname === "localhost" || location.hostname === "127.0.0.1"
+        ? "http://localhost:" + LOCAL_DOCS_PORT
+        : "https://vanduo.dev";
+
+    const ui = new NeptuneSearchUI({
+      container: document.getElementById("search-mount"),
+      search,
+      placeholder: "Search Vanduo docs...",
+      baseUrl: DOCS_BASE_URL,
+      onResultClick: (result) => {
+        window.open(DOCS_BASE_URL + "/#" + result.doc.route, "_blank", "noopener,noreferrer");
+      }
+    });
+    ui.mount();
+
+    demoCards.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const slug = btn.dataset.demoSlug;
+        const { route, demoSlug: current } = parseLabsHash();
+        if (route === "demos" && current === slug) {
+          location.hash = "#demos";
+          return;
+        }
+        location.hash = "#demos/" + slug;
+      });
+    });
+
+    document.getElementById("labs-demos-disclaimer-accept").addEventListener("click", () => {
+      try {
+        localStorage.setItem(LABS_DEMOS_DISCLAIMER_KEY, "1");
+      } catch (_e) {}
+      closeDemosDisclaimerIfOpen();
+    });
+
+    const hexHost = document.getElementById("hex-demo-container");
+    if (hexHost && typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => {
+        if (mainEl.dataset.labsRoute === "demos" && !demoHexPanel.hidden) resizeHexGrid(grid);
+      });
+      ro.observe(hexHost);
+    }
+
+    window.addEventListener("hashchange", () => syncLabsRouteFromHash(grid));
+    syncLabsRouteFromHash(grid);
+
+    (function syncThemeToggleIcon() {
+      const toggle = document.getElementById("dark-mode-toggle");
+      if (!toggle) return;
+      const icon = toggle.querySelector("i");
+      if (!icon) return;
+
+      const updateIcon = () => {
+        let pref = "system";
+        try {
+          pref = localStorage.getItem("vanduo-theme-preference") || "system";
+        } catch (_error) {}
+        if (pref === "system") {
+          icon.className = "ph ph-desktop";
+        } else if (pref === "light") {
+          icon.className = "ph ph-sun";
+        } else {
+          icon.className = "ph ph-moon";
+        }
+      };
+
+      updateIcon();
+      const observer = new MutationObserver(() => updateIcon());
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", updateIcon);
+    })();
+  </script>
+</body>
+</html>

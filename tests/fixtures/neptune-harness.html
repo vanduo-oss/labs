@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neptune Search Test Harness</title>
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f5;
+      --border-color: #e0e0e0;
+      --color-primary: #3b82f6;
+      --text-primary: #1f2937;
+      --text-muted: #6b7280;
+    }
+    [data-theme="dark"] {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --border-color: #2a2a2a;
+      --color-primary: #60a5fa;
+      --text-primary: #e5e5e5;
+      --text-muted: #9ca3af;
+    }
+    body {
+      font-family: system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 2rem;
+    }
+    #mount {
+      max-width: min(56rem, 100%);
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+
+  <script type="module">
+    import { NeptuneSearch, NeptuneSearchUI, cosineSimilarity, rankBySimilarity } from '/neptune-search.js';
+
+    // Minimal mock data for fast tests
+    const mockDocs = [
+      {
+        id: 'buttons',
+        title: 'Buttons',
+        category: 'Components',
+        tab: 'components',
+        route: 'docs/buttons',
+        icon: 'ph-cursor-click',
+        keywords: ['button', 'click', 'submit'],
+        headings: ['Button Variants', 'Button Sizes', 'Class Reference'],
+        bodyText: 'Buttons are interactive elements that trigger actions. Use variants like primary, secondary, success.',
+        classes: ['.vd-btn', '.vd-btn-primary', '.vd-btn-sm'],
+        chunks: [
+          { type: 'heading', text: 'Button Variants', heading: 'Button Variants' },
+          { type: 'paragraph', text: 'Primary buttons stand out.', heading: 'Button Variants' },
+          { type: 'class', text: '.vd-btn-primary — Primary action color', heading: 'Class Reference' },
+        ],
+      },
+      {
+        id: 'glass',
+        title: 'Glass Effects',
+        category: 'Effects',
+        tab: 'components',
+        route: 'docs/glass',
+        icon: 'ph-drop-half-bottom',
+        keywords: ['glass', 'frosted', 'blur', 'translucent'],
+        headings: ['Glass Basics', 'Glass Variants'],
+        bodyText: 'Glass effects create frosted translucent surfaces using backdrop-filter blur.',
+        classes: ['.vd-glass', '.vd-glass-floating'],
+        chunks: [
+          { type: 'heading', text: 'Glass Basics', heading: 'Glass Basics' },
+          { type: 'paragraph', text: 'Apply glass to cards and panels.', heading: 'Glass Basics' },
+        ],
+      },
+      {
+        id: 'getting-started',
+        title: 'Quick Start',
+        category: 'Start Here',
+        tab: 'guides',
+        route: 'docs/getting-started',
+        icon: 'ph-rocket-launch',
+        keywords: ['install', 'cdn', 'setup', 'quick start'],
+        headings: ['Installation', 'First Page'],
+        bodyText: 'Get started with Vanduo in under a minute by including the CDN link.',
+        classes: [],
+        chunks: [],
+      },
+    ];
+
+    // Mock vectors (3 docs, 384 dims each — simplified for tests)
+    // Use a shared base vector so all similarities are high in tests
+    const baseVec = Array(384).fill(0).map((_, i) => {
+      const v = Math.sin(i * 0.1) * 0.5;
+      return v;
+    });
+    const baseMag = Math.sqrt(baseVec.reduce((s, v) => s + v * v, 0));
+    const baseNorm = baseVec.map(v => v / baseMag);
+
+    const mockVectors = {
+      model: 'Xenova/all-MiniLM-L6-v2',
+      dimensions: 384,
+      documents: [
+        { id: 'buttons', embedding: [...baseNorm] },
+        { id: 'glass', embedding: [...baseNorm] },
+        { id: 'getting-started', embedding: [...baseNorm] },
+      ],
+    };
+
+    // Expose globals for Playwright
+    window.neptuneMath = { cosineSimilarity, rankBySimilarity };
+    window.NeptuneSearchUI = NeptuneSearchUI;
+
+    // Unicode-safe base64 for data URLs
+    function toBase64(str) {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
+    }
+
+    window.createSearch = async (options = {}) => {
+      const search = new NeptuneSearch({
+        indexUrl: 'data:application/json;base64,' + toBase64(JSON.stringify({ documents: mockDocs })),
+        vectorsUrl: 'data:application/json;base64,' + toBase64(JSON.stringify(mockVectors)),
+        ...options,
+      });
+      await search.initFuzzy();
+
+      // Mock semantic extractor to avoid CDN load in tests
+      search._extractor = async (query, opts) => {
+        // Return the shared base vector so similarities are always ~1.0 in tests
+        return { data: [...baseNorm] };
+      };
+      search._vectors = mockVectors.documents;
+      search._semanticReady = true;
+
+      return search;
+    };
+
+    window.createUI = async (options = {}) => {
+      const search = await window.createSearch(options.searchOptions);
+      const container = document.getElementById('mount');
+      container.innerHTML = '';
+      const ui = new NeptuneSearchUI({
+        container,
+        search,
+        ...options,
+      });
+      ui.mount();
+      return { search, ui };
+    };
+
+    window.mockDocs = mockDocs;
+    window.mockVectors = mockVectors;
+  </script>
+</body>
+</html>

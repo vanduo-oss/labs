@@ -1,7 +1,7 @@
 {
-  "name": "@vanduo-oss/labs-vd-hex",
+  "name": "@vanduo-oss/labs-vd-neptune-search",
   "version": "0.0.1",
-  "description": "vd-hex — experimental VdHexGrid canvas hex toolkit (ES modules)",
+  "description": "vd-neptune-search — in-browser hybrid fuzzy + semantic search for Vanduo Docs (ES modules)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -10,19 +10,38 @@
   },
   "keywords": [
     "vanduo",
-    "hex-grid",
-    "canvas",
-    "game-dev"
+    "search",
+    "fuse",
+    "semantic",
+    "transformers",
+    "hybrid"
   ],
   "exports": {
-    ".": "./hex-grid.js",
+    ".": "./neptune-search.js",
+    "./neptune-search.js": "./neptune-search.js",
     "./hex-grid.js": "./hex-grid.js",
     "./utils/hex-math.js": "./utils/hex-math.js"
   },
   "files": [
-    "hex-grid.js",
-    "utils/hex-math.js",
+    "neptune-search.js",
+    "data/search-index.json",
+    "data/vectors.json",
     "README.md",
+    "NEPTUNE-SEARCH.md",
     "LICENSE"
-  ]
+  ],
+  "scripts": {
+    "demo:serve": "npx --yes serve -l 3000",
+    "index": "node utils/neptune-indexer.mjs",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@xenova/transformers": "^2.17.2",
+    "fuse.js": "^7.3.0",
+    "sharp": "^0.33.5"
+  }
 }
