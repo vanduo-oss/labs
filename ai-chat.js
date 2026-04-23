@@ -57,6 +57,8 @@ const MODEL_OPTIONS = [
   }
 ];
 
+const MODEL_CACHE_FLAG_PREFIX = 'vd-ai-chat-model-cached:';
+
 function getModelOption(modelId) {
   return MODEL_OPTIONS.find((m) => m.id === modelId) || null;
 }
@@ -290,7 +292,7 @@ export class AiChatUI {
     wrapper.className = 'vd-ai-chat-wrap vd-card vd-card-glow vd-glass';
     
     wrapper.innerHTML = `
-      <div class="vd-card-body" style="display: flex; flex-direction: column; height: 500px; padding: 0;">
+      <div class="vd-card-body vd-ai-card-body" style="display: flex; flex-direction: column; padding: 0;">
         <!-- Header -->
         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color, #e0e0e0); display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -304,7 +306,7 @@ export class AiChatUI {
         </div>
 
         <!-- Setup Screen (shown initially) -->
-        <div class="vd-ai-setup" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center;">
+        <div class="vd-ai-setup" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 1.5rem 2rem; text-align: center;">
           <i class="ph ph-download-simple" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem;"></i>
           <h4 style="margin: 0 0 0.5rem; color: var(--text-primary);">Download Model</h4>
           
@@ -340,6 +342,7 @@ export class AiChatUI {
           <p class="vd-text-muted" style="font-size: 0.75rem; max-width: 320px; margin: 0 0 1.5rem;">
             <em>FOSS guardrails are active. Injection patterns courtesy of LlmGuard, ai-guardian, and llm-prompt-guard.</em>
           </p>
+          <p class="vd-ai-cache-hint vd-text-muted vd-text-sm" style="max-width: 320px; margin: 0 0 1rem;"></p>
           <button type="button" class="vd-btn vd-btn-primary vd-ai-load-btn">
             Load AI Model
           </button>
@@ -384,6 +387,7 @@ export class AiChatUI {
 
     this._elements = {
       wrapper,
+      cardBody: wrapper.querySelector('.vd-ai-card-body'),
       setupScreen: wrapper.querySelector('.vd-ai-setup'),
       loadBtn: wrapper.querySelector('.vd-ai-load-btn'),
       modelSelect: wrapper.querySelector('#vd-ai-model-select'),
@@ -392,6 +396,7 @@ export class AiChatUI {
       sysGpu: wrapper.querySelector('.vd-ai-sys-gpu'),
       sysF16: wrapper.querySelector('.vd-ai-sys-f16'),
       compatibleBadges: wrapper.querySelector('.vd-ai-compatible-badges'),
+      cacheHint: wrapper.querySelector('.vd-ai-cache-hint'),
       progressWrap: wrapper.querySelector('.vd-ai-progress-wrap'),
       progressBar: wrapper.querySelector('.vd-ai-progress-bar'),
       progressText: wrapper.querySelector('.vd-ai-progress-text'),
@@ -420,6 +425,7 @@ export class AiChatUI {
         try {
           this.chat.setModelId(resolved.modelId);
           this._renderFallbackNote(resolved);
+          this._renderCacheHint(resolved.modelId);
         } catch (err) {
           console.warn(err.message);
           e.target.value = this.chat.modelId; // Revert if already loading
@@ -441,9 +447,26 @@ export class AiChatUI {
 
     this.chat.onProgress((data) => {
       if (data.stage === 'downloading') {
-        this._elements.progressText.textContent = data.text || 'Downloading...';
+        const source = this._inferLoadSource(data.text);
+        const likelyCached = this._isModelLikelyCached(this.chat.modelId);
+        let prefix = 'Preparing model...';
+        if (source === 'network') {
+          prefix = 'Downloading model from web (first load may take a while).';
+        } else if (source === 'cache') {
+          prefix = 'Loading model from browser cache (no full re-download).';
+        } else if (likelyCached) {
+          prefix = 'Loading model from browser cache...';
+        } else {
+          prefix = 'Preparing model download...';
+        }
+
+        this._elements.progressText.textContent = data.text
+          ? `${prefix} ${data.text}`
+          : prefix;
         this._elements.progressBar.style.width = `${(data.loaded || 0) * 100}%`;
       } else if (data.stage === 'ready') {
+        this._markModelCached(this.chat.modelId);
+        this._renderCacheHint(this.chat.modelId);
         this._showChatInterface();
       } else if (data.stage === 'error') {
         this._elements.progressText.textContent = 'Error: ' + data.message;
@@ -465,6 +488,7 @@ export class AiChatUI {
     const resolved = this._resolveModelForSystem(requested);
     this.chat.setModelId(resolved.modelId);
     this._renderFallbackNote(resolved);
+    this._renderCacheHint(resolved.modelId);
   }
 
   async _detectSystemInfo() {
@@ -521,6 +545,44 @@ export class AiChatUI {
       note.style.display = 'none';
       note.textContent = '';
     }
+  }
+
+  _cacheFlagKey(modelId) {
+    return `${MODEL_CACHE_FLAG_PREFIX}${modelId}`;
+  }
+
+  _isModelLikelyCached(modelId) {
+    try {
+      return localStorage.getItem(this._cacheFlagKey(modelId)) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  _markModelCached(modelId) {
+    try {
+      localStorage.setItem(this._cacheFlagKey(modelId), '1');
+    } catch {
+      // Ignore storage errors (private mode / disabled storage).
+    }
+  }
+
+  _renderCacheHint(modelId) {
+    const hint = this._elements.cacheHint;
+    if (!hint) return;
+    if (this._isModelLikelyCached(modelId)) {
+      hint.textContent = 'This model appears cached in your browser. After refresh, loading is usually local and faster.';
+    } else {
+      hint.textContent = 'First load downloads model files from the web. Later loads usually use browser cache.';
+    }
+  }
+
+  _inferLoadSource(progressText) {
+    const text = String(progressText || '').toLowerCase();
+    if (!text) return 'unknown';
+    if (/(cache|cached|indexeddb|local)/.test(text)) return 'cache';
+    if (/(download|fetch|http|https|network|transfer|bytes|kb|mb|gb)/.test(text)) return 'network';
+    return 'unknown';
   }
 
   _renderSystemInfo() {
@@ -596,7 +658,12 @@ export class AiChatUI {
   }
 
   _showChatInterface() {
-    const { setupScreen, chatInterface, statusIndicator, statusText, chatInput, sendBtn } = this._elements;
+    const { cardBody, setupScreen, chatInterface, statusIndicator, statusText, chatInput, sendBtn } = this._elements;
+    if (cardBody) {
+      // Use natural height for setup mode, then switch to fixed viewport for chat mode.
+      cardBody.style.height = 'min(620px, 80vh)';
+      cardBody.style.minHeight = '460px';
+    }
     setupScreen.style.display = 'none';
     chatInterface.style.display = 'flex';
     statusIndicator.style.background = 'var(--vd-color-success, #22c55e)';
