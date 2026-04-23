@@ -13,24 +13,7 @@ function escapeHtml(s) {
 
 const LINK_RE = /\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
-function formatBoldAndEscape(text) {
-  const boldRe = /\*\*([^*]+)\*\*/g;
-  let last = 0;
-  let m;
-  let html = "";
-  while ((m = boldRe.exec(text)) !== null) {
-    if (m.index > last) html += escapeHtml(text.slice(last, m.index));
-    html += "<strong>" + formatInlineText(m[1]) + "</strong>";
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) html += escapeHtml(text.slice(last));
-  return html;
-}
-
-/**
- * Links and bold on a run with no backtick code (code is split out above).
- */
-function formatInlineNoCode(text) {
+function formatLinksAndEscape(text) {
   const segments = [];
   const re = new RegExp(LINK_RE.source, "g");
   let last = 0;
@@ -52,10 +35,28 @@ function formatInlineNoCode(text) {
         formatInlineText(seg.label) +
         "</a>";
     } else {
-      out += formatBoldAndEscape(seg.v);
+      out += escapeHtml(seg.v);
     }
   }
   return out;
+}
+
+/**
+ * Bold and links on a run with no backtick code (code is split out above).
+ * Parse bold first so wrappers like **[label](url)** render correctly.
+ */
+function formatInlineNoCode(text) {
+  const boldRe = /\*\*([\s\S]+?)\*\*/g;
+  let last = 0;
+  let m;
+  let html = "";
+  while ((m = boldRe.exec(text)) !== null) {
+    if (m.index > last) html += formatLinksAndEscape(text.slice(last, m.index));
+    html += "<strong>" + formatLinksAndEscape(m[1]) + "</strong>";
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) html += formatLinksAndEscape(text.slice(last));
+  return html;
 }
 
 /**
@@ -191,12 +192,12 @@ function parseBlockLines(lines) {
       continue;
     }
 
-    if (/^-\s+/.test(trimmed)) {
+    if (/^[-*]\s+/.test(trimmed)) {
       flushParagraph(para, out);
       const items = [];
       while (i < lines.length) {
         const L = lines[i].trim();
-        const um = L.match(/^-\s+(.*)$/);
+        const um = L.match(/^[-*]\s+(.*)$/);
         if (!um) break;
         items.push(um[1]);
         i++;

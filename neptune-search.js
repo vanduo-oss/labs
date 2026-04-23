@@ -30,6 +30,8 @@ const CDN = {
   ],
 };
 
+export const VD_NEPTUNE_SEARCH_VERSION = '0.0.1';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Math Helpers
 // ═══════════════════════════════════════════════════════════════════════
@@ -102,6 +104,8 @@ async function loadTransformers() {
 // ═══════════════════════════════════════════════════════════════════════
 
 export class NeptuneSearch {
+  static VERSION = VD_NEPTUNE_SEARCH_VERSION;
+
   constructor(options = {}) {
     this.indexUrl = options.indexUrl ?? './data/search-index.json';
     this.vectorsUrl = options.vectorsUrl ?? './data/vectors.json';
@@ -337,6 +341,8 @@ mergeResults(fuzzyResults, semanticResults) {
 // ═══════════════════════════════════════════════════════════════════════
 
 export class NeptuneSearchUI {
+  static VERSION = VD_NEPTUNE_SEARCH_VERSION;
+
   constructor(options = {}) {
     this.container = options.container;
     this.search = options.search;

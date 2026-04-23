@@ -341,7 +341,7 @@
       margin: 0;
       padding: clamp(1.5rem, 4vw, 2rem) clamp(1.25rem, 3vw, 1.75rem);
       box-sizing: border-box;
-      border-radius: var(--radius-lg);
+      border-radius: var(--card-border-radius);
       border: 1px solid var(--border-color);
       background: var(--bg-secondary);
       color: inherit;
@@ -411,6 +411,21 @@
       background: rgba(var(--vd-color-primary-rgb), 0.2);
       color: var(--color-primary);
       border: 1px solid rgba(var(--vd-color-primary-rgb), 0.35);
+    }
+
+    .labs-demo-card-badge-row {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .labs-demo-card-badge-version {
+      background: rgba(var(--vd-color-info-rgb), 0.2);
+      color: var(--vd-color-info);
+      border-color: rgba(var(--vd-color-info-rgb), 0.35);
+      text-transform: none;
+      letter-spacing: 0.02em;
     }
 
     .labs-demos-detail {
@@ -515,7 +530,9 @@
 
     .labs-md-prose {
       line-height: 1.65;
+      font-size: 1rem;
       color: var(--text-primary);
+      text-wrap: pretty;
     }
 
     .labs-md-prose h1,
@@ -534,6 +551,7 @@
 
     .labs-md-prose p {
       margin: 0.75em 0;
+      color: var(--text-secondary);
     }
 
     .labs-md-prose pre {
@@ -559,6 +577,25 @@
     .labs-md-prose ol {
       margin: 0.75em 0;
       padding-left: 1.35em;
+    }
+
+    .labs-md-prose li {
+      color: var(--text-secondary);
+    }
+
+    .labs-md-prose li + li {
+      margin-top: 0.35em;
+    }
+
+    .labs-md-prose strong {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .labs-md-prose a {
+      color: var(--color-primary);
+      text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.16em;
     }
 
     .labs-md-prose table {
@@ -649,6 +686,15 @@
         </div>
       </div>
       <div class="navbar-actions-always">
+        <a
+          class="dark-mode-toggle"
+          href="https://github.com/vanduo-oss/labs"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open Vanduo Labs GitHub repository"
+          title="View source on GitHub">
+          <i class="ph ph-github-logo"></i>
+        </a>
         <button class="dark-mode-toggle" id="dark-mode-toggle" data-toggle="theme" aria-label="Toggle dark mode">
           <i class="ph ph-moon"></i>
         </button>
@@ -793,14 +839,30 @@
             <span class="labs-demo-card-title">vd-hex</span>
             <span class="labs-demo-card-desc" id="labs-card-hex-desc">Experimental interactive hex-grid toolkit for visualization and game prototypes</span>
             <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
-            <span class="labs-demo-card-badge">Experimental</span>
+            <span class="labs-demo-card-badge-row">
+              <span class="labs-demo-card-badge">Experimental</span>
+              <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="hex"></span>
+            </span>
           </button>
           <button type="button" class="labs-demo-card" id="labs-card-neptune" data-demo-slug="neptune" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-neptune-desc">
             <span class="labs-demo-card-icon" aria-hidden="true"><i class="ph ph-magnifying-glass" style="font-size: 3rem;"></i></span>
             <span class="labs-demo-card-title">vd-neptune-search</span>
             <span class="labs-demo-card-desc" id="labs-card-neptune-desc">In-browser hybrid fuzzy + semantic search for documentation—no server required</span>
             <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
-            <span class="labs-demo-card-badge">Experimental</span>
+            <span class="labs-demo-card-badge-row">
+              <span class="labs-demo-card-badge">Experimental</span>
+              <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="neptune"></span>
+            </span>
+          </button>
+          <button type="button" class="labs-demo-card" id="labs-card-aichat" data-demo-slug="aichat" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-aichat-desc">
+            <span class="labs-demo-card-icon" aria-hidden="true"><i class="ph ph-robot" style="font-size: 3rem;"></i></span>
+            <span class="labs-demo-card-title">vd-ai-chat</span>
+            <span class="labs-demo-card-desc" id="labs-card-aichat-desc">In-browser AI chat with Gemma 2B and FOSS guardrails—no server required</span>
+            <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
+            <span class="labs-demo-card-badge-row">
+              <span class="labs-demo-card-badge">Experimental</span>
+              <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="aichat"></span>
+            </span>
           </button>
         </div>
 
@@ -878,6 +940,10 @@
                 <div class="labs-demo-panel-inner" id="labs-demo-neptune" hidden>
                   <div id="search-mount"></div>
                 </div>
+
+                <div class="labs-demo-panel-inner" id="labs-demo-aichat" hidden>
+                  <div id="chat-mount"></div>
+                </div>
               </div>
             </div>
 
@@ -925,9 +991,16 @@
 
   <script src="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.js"></script>
   <script type="module">
-    import { VdHexGrid } from "./hex-grid.js";
-    import { NeptuneSearch, NeptuneSearchUI } from "./neptune-search.js";
+    import { VD_HEX_VERSION, VdHexGrid } from "./hex-grid.js";
+    import { NeptuneSearch, NeptuneSearchUI, VD_NEPTUNE_SEARCH_VERSION } from "./neptune-search.js";
+    import { AiChat, AiChatUI, VD_AI_CHAT_VERSION } from "./ai-chat.js";
     import { labsMarkdownToHtml } from "./labs-md-to-html.js";
+
+    const COMPONENT_VERSION_MAP = {
+      hex: VD_HEX_VERSION,
+      neptune: VD_NEPTUNE_SEARCH_VERSION,
+      aichat: VD_AI_CHAT_VERSION
+    };
 
     if (window.ThemeCustomizer) {
       Object.assign(window.ThemeCustomizer.DEFAULTS, {
@@ -943,10 +1016,11 @@
       window.Vanduo.init();
     }
 
-    const DEMO_SLUGS = new Set(["hex", "neptune"]);
+    const DEMO_SLUGS = new Set(["hex", "neptune", "aichat"]);
     const DOC_FETCH = {
       hex: new URL("./doc/vd-hex.html", import.meta.url).toString(),
-      neptune: new URL("./NEPTUNE-SEARCH.md", import.meta.url).toString()
+      neptune: new URL("./NEPTUNE-SEARCH.md", import.meta.url).toString(),
+      aichat: new URL("./doc/vd-ai-chat.md", import.meta.url).toString()
     };
 
     const HEX_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/></svg>`;
@@ -956,19 +1030,27 @@
     const ROUTES = ["home", "about", "demos"];
     const panelEls = Array.from(document.querySelectorAll("[data-labs-panel]"));
     const demoCards = Array.from(document.querySelectorAll(".labs-demo-card"));
+    const versionBadgeEls = Array.from(document.querySelectorAll("[data-version-for]"));
     const detailEl = document.getElementById("labs-demos-detail");
     const detailTitleEl = document.getElementById("labs-demos-detail-title");
     const detailIconEl = document.getElementById("labs-demos-detail-icon");
     const emptyEl = document.getElementById("labs-demo-empty");
     const demoHexPanel = document.getElementById("labs-demo-hex");
     const demoNeptunePanel = document.getElementById("labs-demo-neptune");
+    const demoAiChatPanel = document.getElementById("labs-demo-aichat");
     const docPanel = document.getElementById("labs-doc-panel");
     const liveRegion = document.getElementById("labs-demos-live-region");
 
     let lastTopLevelRoute = "home";
-    const docHtmlCache = { hex: null, neptune: null };
+    const docHtmlCache = { hex: null, neptune: null, aichat: null };
     let docLoadSeq = 0;
     const LABS_DEMOS_DISCLAIMER_KEY = "vanduo-labs-demos-disclaimer-v1";
+
+    versionBadgeEls.forEach((el) => {
+      const slug = el.getAttribute("data-version-for");
+      const version = slug ? COMPONENT_VERSION_MAP[slug] : null;
+      el.textContent = version ? "v" + version : "v0.0.1";
+    });
 
     function closeDemosDisclaimerIfOpen() {
       const modal = document.getElementById("labs-demos-disclaimer-modal");
@@ -1077,6 +1159,15 @@
       return docHtmlCache.neptune;
     }
 
+    async function fetchAiChatDocumentationHtml() {
+      if (docHtmlCache.aichat) return docHtmlCache.aichat;
+      const res = await fetch(DOC_FETCH.aichat, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Could not load AI Chat documentation (" + res.status + ")");
+      const md = await res.text();
+      docHtmlCache.aichat = labsMarkdownToHtml(md);
+      return docHtmlCache.aichat;
+    }
+
     async function loadDocumentationForSlug(slug) {
       const seq = ++docLoadSeq;
       docPanel.classList.add("labs-doc-loading");
@@ -1085,6 +1176,7 @@
         let html;
         if (slug === "hex") html = await fetchHexDocumentationHtml();
         else if (slug === "neptune") html = await fetchNeptuneDocumentationHtml();
+        else if (slug === "aichat") html = await fetchAiChatDocumentationHtml();
         else return;
 
         if (seq !== docLoadSeq) return;
@@ -1092,7 +1184,7 @@
         docPanel.classList.remove("labs-doc-loading");
         docPanel.innerHTML = "";
         const wrap = document.createElement("div");
-        wrap.className = slug === "neptune" ? "labs-md-prose" : "labs-doc-html";
+        wrap.className = (slug === "neptune" || slug === "aichat") ? "labs-md-prose" : "labs-doc-html";
         wrap.innerHTML = html;
         docPanel.appendChild(wrap);
 
@@ -1123,6 +1215,7 @@
         emptyEl.hidden = false;
         demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = true;
+        demoAiChatPanel.hidden = true;
         liveRegion.textContent = "";
         return;
       }
@@ -1135,15 +1228,23 @@
         detailIconEl.innerHTML = HEX_ICON_SVG;
         demoHexPanel.hidden = false;
         demoNeptunePanel.hidden = true;
+        demoAiChatPanel.hidden = true;
         resizeHexGrid(gridRef);
-      } else {
+      } else if (demoSlug === "neptune") {
         detailTitleEl.textContent = "vd-neptune-search";
         detailIconEl.innerHTML = "<i class=\"ph ph-magnifying-glass\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
         demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = false;
+        demoAiChatPanel.hidden = true;
+      } else if (demoSlug === "aichat") {
+        detailTitleEl.textContent = "vd-ai-chat";
+        detailIconEl.innerHTML = "<i class=\"ph ph-robot\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
+        demoHexPanel.hidden = true;
+        demoNeptunePanel.hidden = true;
+        demoAiChatPanel.hidden = false;
       }
 
-      const label = demoSlug === "hex" ? "vd-hex" : "vd-neptune-search";
+      const label = demoSlug === "hex" ? "vd-hex" : (demoSlug === "neptune" ? "vd-neptune-search" : "vd-ai-chat");
       liveRegion.textContent = label + " demo and documentation opened.";
 
       loadDocumentationForSlug(demoSlug);
@@ -1243,6 +1344,13 @@
       }
     });
     ui.mount();
+
+    const chat = new AiChat();
+    const chatUi = new AiChatUI({
+      container: document.getElementById("chat-mount"),
+      chat
+    });
+    chatUi.mount();
 
     demoCards.forEach((btn) => {
       btn.addEventListener("click", () => {
