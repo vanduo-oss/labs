@@ -2,7 +2,7 @@
 
 Zero-dependency, client-side hybrid search engine for the Vanduo documentation site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
 
-- Component version: **`{{COMPONENT_VERSION}}`**
+- Component version: {{COMPONENT_VERSION}}
 - Live labs site: **https://labs.vanduo.dev**
 
 ```

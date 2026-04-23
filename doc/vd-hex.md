@@ -2,7 +2,7 @@
 
 Interactive canvas hex-grid component for Vanduo Labs, built on flat-top axial coordinates.
 
-- Component version: **`{{COMPONENT_VERSION}}`**
+- Component version: {{COMPONENT_VERSION}}
 - Live labs site: **https://labs.vanduo.dev**
 
 ### Quick Start
