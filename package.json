@@ -20,10 +20,14 @@
     ".": "./neptune-search.js",
     "./neptune-search.js": "./neptune-search.js",
     "./hex-grid.js": "./hex-grid.js",
+    "./ai-chat.js": "./ai-chat.js",
     "./utils/hex-math.js": "./utils/hex-math.js"
   },
   "files": [
+    "hex-grid.js",
     "neptune-search.js",
+    "ai-chat.js",
+    "utils/hex-math.js",
     "data/search-index.json",
     "data/vectors.json",
     "README.md",

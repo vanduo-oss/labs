@@ -20,6 +20,7 @@ import {
 } from './utils/hex-math.js';
 
 // Constants
+export const VD_HEX_VERSION = '0.0.1';
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 3.0;
 const ZOOM_FACTOR = 0.1;
@@ -43,6 +44,8 @@ const DRAG_THRESHOLD = 2;
  * });
  */
 export class VdHexGrid {
+    static VERSION = VD_HEX_VERSION;
+
     constructor({ element, canvas, size = 30, width = 10, height = 10, rotation = 0 }) {
         this.element = element;
         this.canvas = canvas;

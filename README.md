@@ -2,6 +2,18 @@
 
 Experimental components for the Vanduo ecosystem. Shipped as **ES modules** with zero runtime npm dependencies.
 
+Live demos are hosted on GitHub Pages at **https://labs.vanduo.dev**.
+
+## Experimental Component Versions
+
+All current experimental components are versioned as **`0.0.1`**:
+
+| Component | Version | Module |
+|------|------|------|
+| `vd-hex` | `0.0.1` | [`hex-grid.js`](./hex-grid.js) |
+| `vd-neptune-search` | `0.0.1` | [`neptune-search.js`](./neptune-search.js) |
+| `vd-ai-chat` | `0.0.1` | [`ai-chat.js`](./ai-chat.js) |
+
 ---
 
 ## vd-hex (VdHexGrid)
@@ -90,6 +102,36 @@ Serving only `demo/` breaks module and data URLs (`../neptune-search.js` and `..
 
 ---
 
+## vd-ai-chat (AiChat)
+
+In-browser **AI chat** component with local WebGPU inference and deterministic guardrails.
+
+See full documentation: [doc/vd-ai-chat.md](./doc/vd-ai-chat.md)
+
+### Quick Start
+
+```javascript
+import { AiChat, AiChatUI } from './ai-chat.js';
+
+const chat = new AiChat();
+const ui = new AiChatUI({
+  container: document.getElementById('chat-mount'),
+  chat,
+});
+
+ui.mount();
+```
+
+### Notes
+
+- Defaults to smaller Gemma 2B for fast startup, with additional Balanced/Quality/Coder model tiers.
+- Detects runtime hardware capabilities (WebGPU + `shader-f16`) and shows system compatibility info in setup UI.
+- Automatically applies compatible fallback variants on lower-capability devices when needed.
+- Model download is user-triggered and cached by the browser.
+- Includes deterministic regex guardrails that block known prompt-injection patterns before generation.
+
+---
+
 ## Keeping in sync
 
 The canonical copies live under the Vanduo **framework** repository (`framework/js/`). When you change a Labs component, edit the framework file first, then copy so both stay aligned:
@@ -104,6 +146,13 @@ cp docs/js/neptune-search.js labs/neptune-search.js
 cp docs/js/data/search-index.json labs/data/search-index.json
 cp docs/js/data/vectors.json labs/data/vectors.json
 ```
+
+## Pre-release Checklist
+
+- Confirm component versions are aligned (`vd-hex`, `vd-neptune-search`, `vd-ai-chat` => `0.0.1`).
+- Verify demo page badges and docs reflect current versions.
+- Run test suite (`pnpm test`) and smoke-check `https://labs.vanduo.dev`.
+- Ensure package export/file lists stay synchronized before publishing.
 
 ## License
 
