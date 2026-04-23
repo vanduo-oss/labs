@@ -996,11 +996,21 @@
     import { AiChat, AiChatUI, VD_AI_CHAT_VERSION } from "./ai-chat.js";
     import { labsMarkdownToHtml } from "./labs-md-to-html.js";
 
+    const DEFAULT_COMPONENT_VERSION = "0.0.1";
     const COMPONENT_VERSION_MAP = {
       hex: VD_HEX_VERSION,
       neptune: VD_NEPTUNE_SEARCH_VERSION,
       aichat: VD_AI_CHAT_VERSION
     };
+
+    function getComponentVersion(slug) {
+      const version = slug ? COMPONENT_VERSION_MAP[slug] : null;
+      return version || DEFAULT_COMPONENT_VERSION;
+    }
+
+    function hydrateComponentVersionTokens(md, slug) {
+      return md.replace(/\{\{COMPONENT_VERSION\}\}/g, getComponentVersion(slug));
+    }
 
     if (window.ThemeCustomizer) {
       Object.assign(window.ThemeCustomizer.DEFAULTS, {
@@ -1018,8 +1028,8 @@
 
     const DEMO_SLUGS = new Set(["hex", "neptune", "aichat"]);
     const DOC_FETCH = {
-      hex: new URL("./doc/vd-hex.html", import.meta.url).toString(),
-      neptune: new URL("./NEPTUNE-SEARCH.md", import.meta.url).toString(),
+      hex: new URL("./doc/vd-hex.md", import.meta.url).toString(),
+      neptune: new URL("./doc/vd-neptune-search.md", import.meta.url).toString(),
       aichat: new URL("./doc/vd-ai-chat.md", import.meta.url).toString()
     };
 
@@ -1048,8 +1058,7 @@
 
     versionBadgeEls.forEach((el) => {
       const slug = el.getAttribute("data-version-for");
-      const version = slug ? COMPONENT_VERSION_MAP[slug] : null;
-      el.textContent = version ? "v" + version : "v0.0.1";
+      el.textContent = "v" + getComponentVersion(slug);
     });
 
     function closeDemosDisclaimerIfOpen() {
@@ -1122,31 +1131,12 @@
       });
     }
 
-    function stripVdHexDocSection(section) {
-      const q = (sel) => section.querySelector(sel);
-      const removeHost = (node) => {
-        if (!node) return;
-        const card = node.closest(".vd-card");
-        if (card) card.remove();
-        else node.remove();
-      };
-      removeHost(q("#hex-demo-container"));
-      removeHost(q("#hex-size-slider"));
-      const info = q("#hex-info-card");
-      if (info) info.remove();
-    }
-
     async function fetchHexDocumentationHtml() {
       if (docHtmlCache.hex) return docHtmlCache.hex;
       const res = await fetch(DOC_FETCH.hex, { credentials: "same-origin" });
       if (!res.ok) throw new Error("Could not load vd-hex documentation (" + res.status + ")");
-      const text = await res.text();
-      const parser = new DOMParser();
-      const parsed = parser.parseFromString(text, "text/html");
-      const section = parsed.querySelector("section#vd-hex") || parsed.body.querySelector("section");
-      if (!section) throw new Error("vd-hex documentation has no section");
-      stripVdHexDocSection(section);
-      docHtmlCache.hex = section.innerHTML;
+      const md = hydrateComponentVersionTokens(await res.text(), "hex");
+      docHtmlCache.hex = labsMarkdownToHtml(md);
       return docHtmlCache.hex;
     }
 
@@ -1154,7 +1144,7 @@
       if (docHtmlCache.neptune) return docHtmlCache.neptune;
       const res = await fetch(DOC_FETCH.neptune, { credentials: "same-origin" });
       if (!res.ok) throw new Error("Could not load Neptune documentation (" + res.status + ")");
-      const md = await res.text();
+      const md = hydrateComponentVersionTokens(await res.text(), "neptune");
       docHtmlCache.neptune = labsMarkdownToHtml(md);
       return docHtmlCache.neptune;
     }
@@ -1163,7 +1153,7 @@
       if (docHtmlCache.aichat) return docHtmlCache.aichat;
       const res = await fetch(DOC_FETCH.aichat, { credentials: "same-origin" });
       if (!res.ok) throw new Error("Could not load AI Chat documentation (" + res.status + ")");
-      const md = await res.text();
+      const md = hydrateComponentVersionTokens(await res.text(), "aichat");
       docHtmlCache.aichat = labsMarkdownToHtml(md);
       return docHtmlCache.aichat;
     }
@@ -1184,7 +1174,7 @@
         docPanel.classList.remove("labs-doc-loading");
         docPanel.innerHTML = "";
         const wrap = document.createElement("div");
-        wrap.className = (slug === "neptune" || slug === "aichat") ? "labs-md-prose" : "labs-doc-html";
+        wrap.className = "labs-md-prose";
         wrap.innerHTML = html;
         docPanel.appendChild(wrap);
 
@@ -1195,8 +1185,8 @@
         if (seq !== docLoadSeq) return;
         docPanel.classList.remove("labs-doc-loading");
         docPanel.innerHTML = "<p class=\"labs-doc-error\" role=\"alert\">" +
-          "Documentation could not be loaded. Check that <code>doc/vd-hex.html</code> or " +
-          "<code>NEPTUNE-SEARCH.md</code> is present, serve this folder over HTTP (not file://), " +
+          "Documentation could not be loaded. Check that <code>doc/vd-hex.md</code>, " +
+          "<code>doc/vd-neptune-search.md</code>, and <code>doc/vd-ai-chat.md</code> are present, serve this folder over HTTP (not file://), " +
           "then refresh. See the browser network tab for details.</p>";
         console.warn("[labs]", err);
       }

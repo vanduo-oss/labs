@@ -1,5 +1,5 @@
 /**
- * Labs-only Markdown → HTML for NEPTUNE-SEARCH.md and similar docs.
+ * Labs-only Markdown → HTML for per-component docs in /doc/*.md.
  * No third-party dependencies. Escapes HTML; supports a small GFM-ish subset.
  */
 

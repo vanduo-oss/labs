@@ -4,7 +4,7 @@ In-browser **AI Chat** powered by WebLLM + WebGPU with Gemma-first defaults.
 
 Fully private, running entirely locally in your browser. FOSS guardrails enforced via strict system prompt.
 
-- Component version: **`0.0.1`**
+- Component version: **`{{COMPONENT_VERSION}}`**
 - Live labs site: **https://labs.vanduo.dev**
 
 ### Quick Start

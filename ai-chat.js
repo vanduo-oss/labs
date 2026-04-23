@@ -22,7 +22,7 @@ const CDN = {
   webllm: 'https://esm.run/@mlc-ai/web-llm'
 };
 
-export const VD_AI_CHAT_VERSION = '0.0.1';
+export const VD_AI_CHAT_VERSION = '0.0.2';
 
 let _webllmModule = null;
 

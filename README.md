@@ -6,19 +6,21 @@ Live demos are hosted on GitHub Pages at **https://labs.vanduo.dev**.
 
 ## Experimental Component Versions
 
-All current experimental components are versioned as **`0.0.1`**:
+Current component versions:
 
 | Component | Version | Module |
 |------|------|------|
 | `vd-hex` | `0.0.1` | [`hex-grid.js`](./hex-grid.js) |
 | `vd-neptune-search` | `0.0.1` | [`neptune-search.js`](./neptune-search.js) |
-| `vd-ai-chat` | `0.0.1` | [`ai-chat.js`](./ai-chat.js) |
+| `vd-ai-chat` | `0.0.2` | [`ai-chat.js`](./ai-chat.js) |
 
 ---
 
 ## vd-hex (VdHexGrid)
 
 Interactive **hex-grid** toolkit for the browser: canvas rendering, pan/zoom, hex selection, terrain helpers, and optional grid rotation.
+
+See full documentation: [doc/vd-hex.md](./doc/vd-hex.md)
 
 ### Files
 
@@ -52,7 +54,7 @@ grid.on('select', (hex) => {
 
 In-browser **hybrid search** over Vanduo Docs — instant fuzzy search via Fuse.js + semantic vector search via Transformers.js. Zero external LLM API calls.
 
-See full documentation: [NEPTUNE-SEARCH.md](./NEPTUNE-SEARCH.md)
+See full documentation: [doc/vd-neptune-search.md](./doc/vd-neptune-search.md)
 
 ### Search Quality (Tuned)
 
@@ -149,7 +151,7 @@ cp docs/js/data/vectors.json labs/data/vectors.json
 
 ## Pre-release Checklist
 
-- Confirm component versions are aligned (`vd-hex`, `vd-neptune-search`, `vd-ai-chat` => `0.0.1`).
+- Confirm component versions are aligned with exported module constants.
 - Verify demo page badges and docs reflect current versions.
 - Run test suite (`pnpm test`) and smoke-check `https://labs.vanduo.dev`.
 - Ensure package export/file lists stay synchronized before publishing.

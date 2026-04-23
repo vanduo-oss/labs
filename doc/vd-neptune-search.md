@@ -2,7 +2,7 @@
 
 Zero-dependency, client-side hybrid search engine for the Vanduo documentation site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
 
-- Component version: **`0.0.1`**
+- Component version: **`{{COMPONENT_VERSION}}`**
 - Live labs site: **https://labs.vanduo.dev**
 
 ```
@@ -536,7 +536,7 @@ Tests run against a local HTTP server (Python `http.server` on port 8790) using 
 ```
 labs/
 ├── neptune-search.js              # Core: NeptuneSearch + NeptuneSearchUI (~1000 lines)
-├── NEPTUNE-SEARCH.md              # This documentation
+├── doc/vd-neptune-search.md       # This documentation
 ├── package.json                   # Package: @vanduo-oss/labs-vd-neptune-search
 ├── data/
 │   ├── search-index.json          # Pre-built Fuse.js document corpus
