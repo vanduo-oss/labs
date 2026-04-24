@@ -60,10 +60,30 @@ const MODEL_OPTIONS = [
     tier: 'Coder',
     requires: [],
     fallbackId: 'Qwen2.5-Coder-1.5B-Instruct-q4f32_1-MLC'
-  }
+  },
+  // Gemma 4 E2B temporarily disabled: upstream artifact returns empty responses (zero tokens generated).
+  // Re-enable when welcoma/gemma-4-E2B-it-q4f16_1-MLC releases a fixed version.
+  // {
+  //   id: 'gemma-4-E2B-it-q4f16_1-MLC',
+  //   label: 'Gemma 4 E2B (~2.7GB)',
+  //   tier: 'Gemma 4',
+  //   requires: ['shader-f16'],
+  //   experimental: true,
+  //   overrides: {
+  //     context_window_size: 4096,
+  //     sliding_window_size: -1
+  //   },
+  //   modelUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC',
+  //   modelLibUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E2B-it-q4f16_1-MLC-webgpu.wasm'
+  // }
 ];
 
 const MODEL_CACHE_FLAG_PREFIX = 'vd-ai-chat-model-cached:';
+const DEFAULT_GENERATION_CONFIG = {
+  max_tokens: 512,
+  temperature: 0.7,
+  top_p: 0.9,
+};
 
 function getModelOption(modelId) {
   return MODEL_OPTIONS.find((m) => m.id === modelId) || null;
@@ -73,6 +93,48 @@ function getModelDisplayName(modelId) {
   const option = getModelOption(modelId);
   if (!option) return modelId;
   return option.label.split('(~')[0].replace(/\s+-\s+\w+$/, '').trim();
+}
+
+function buildModelAppConfig(modelId) {
+  const option = getModelOption(modelId);
+  if (!option?.modelUrl || !option?.modelLibUrl) return null;
+  return {
+    model_list: [
+      {
+        model: option.modelUrl,
+        model_id: option.id,
+        model_lib: option.modelLibUrl,
+        required_features: option.requires || [],
+        overrides: option.overrides || undefined
+      }
+    ]
+  };
+}
+
+function normalizeCompletionText(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map((part) => normalizeCompletionText(part)).join('');
+  }
+  if (value && typeof value === 'object') {
+    return normalizeCompletionText(value.text ?? value.content ?? value.value ?? '');
+  }
+  return '';
+}
+
+function extractCompletionChoiceText(choice) {
+  if (!choice) return '';
+  return (
+    normalizeCompletionText(choice.delta?.content) ||
+    normalizeCompletionText(choice.delta?.text) ||
+    normalizeCompletionText(choice.message?.content) ||
+    normalizeCompletionText(choice.text)
+  );
+}
+
+function extractCompletionResponseText(response) {
+  const choice = response?.choices?.[0];
+  return extractCompletionChoiceText(choice);
 }
 
 function formatBytes(bytes) {
@@ -183,18 +245,21 @@ export class AiChat {
       
       this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
 
-      this.engine = await CreateMLCEngine(
-        this.modelId,
-        {
-          initProgressCallback: (progress) => {
-            this._emitProgress({
-              stage: 'downloading',
-              text: progress.text,
-              loaded: progress.progress,
-            });
-          }
+      const appConfig = buildModelAppConfig(this.modelId);
+      const engineConfig = {
+        initProgressCallback: (progress) => {
+          this._emitProgress({
+            stage: 'downloading',
+            text: progress.text,
+            loaded: progress.progress,
+          });
         }
-      );
+      };
+      if (appConfig) {
+        engineConfig.appConfig = appConfig;
+      }
+
+      this.engine = await CreateMLCEngine(this.modelId, engineConfig);
       
       this._isLoaded = true;
       this._emitProgress({ stage: 'ready', message: 'Model loaded and ready!' });
@@ -234,6 +299,7 @@ export class AiChat {
     try {
       const chunks = await this.engine.chat.completions.create({
         messages: payload,
+        ...DEFAULT_GENERATION_CONFIG,
         stream: true,
         stream_options: { include_usage: true }
       });
@@ -243,11 +309,26 @@ export class AiChat {
       
       for await (const chunk of chunks) {
         if (chunk.usage) usage = chunk.usage;
-        const delta = chunk.choices[0]?.delta?.content || "";
+        const delta = extractCompletionResponseText(chunk);
+        if (!delta) continue;
         reply += delta;
         if (onUpdate) onUpdate(reply);
       }
 
+      if (!reply.trim()) {
+        const completion = await this.engine.chat.completions.create({
+          messages: payload,
+          ...DEFAULT_GENERATION_CONFIG,
+          stream: false
+        });
+        reply = extractCompletionResponseText(completion);
+        usage = completion?.usage || usage;
+        if (reply && onUpdate) onUpdate(reply);
+      }
+
+      if (!reply.trim()) {
+        throw new Error(`Model ${this.modelId} returned an empty response.`);
+      }
       this.messages.push({ role: 'assistant', content: reply });
       if (onFinish && usage) onFinish(usage);
       return reply;
@@ -798,7 +879,10 @@ export class AiChatUI {
     if (!modelSelect) return;
     const requested = modelSelect.value || this._selectedModelId || MODEL_OPTIONS[0].id;
     const resolved = this._resolveModelForSystem(requested);
-    this.chat.setModelId(resolved.modelId);
+    this._renderModelOptions();
+    if (!resolved.unavailable) {
+      this.chat.setModelId(resolved.modelId);
+    }
     this._renderFallbackNote(resolved);
     this._renderCacheHint(resolved.modelId);
     this._updateModelTitle(resolved.modelId);
@@ -900,14 +984,20 @@ export class AiChatUI {
     const option = getModelOption(modelId);
     if (!option) return modelId;
     const cached = this._isModelLikelyCached(modelId);
-    return `${option.label}${cached ? ' - Cached' : ''}`;
+    const resolved = this._resolveModelForSystem(modelId);
+    const flags = [];
+    if (option.experimental) flags.push('Experimental');
+    if (cached) flags.push('Cached');
+    if (resolved.unavailable) flags.push('Unavailable');
+    return `${option.label}${flags.length ? ` - ${flags.join(' - ')}` : ''}`;
   }
 
   _renderModelOptions() {
     const { modelSelect } = this._elements;
     const optionsMarkup = MODEL_OPTIONS.map((m) => {
       const selected = m.id === this._selectedModelId ? 'selected' : '';
-      return `<option value="${m.id}" ${selected}>${this._buildModelOptionLabel(m.id)}</option>`;
+      const disabled = this._resolveModelForSystem(m.id).unavailable ? 'disabled' : '';
+      return `<option value="${m.id}" ${selected} ${disabled}>${this._buildModelOptionLabel(m.id)}</option>`;
     }).join('');
 
     if (modelSelect) modelSelect.innerHTML = optionsMarkup;
@@ -969,26 +1059,40 @@ export class AiChatUI {
 
   _resolveModelForSystem(modelId) {
     const option = getModelOption(modelId);
-    if (!option) return { modelId, changed: false, reason: '' };
-    if (!this._systemInfo) return { modelId, changed: false, reason: '' };
+    if (!option) return { modelId, changed: false, unavailable: false, reason: '' };
+    if (!this._systemInfo) return { modelId, changed: false, unavailable: false, reason: '' };
 
-    const needsF16 = option.requires.includes('shader-f16');
-    if (needsF16 && !this._systemInfo.shaderF16 && option.fallbackId) {
+    const missingFeatures = (option.requires || []).filter((feature) => {
+      if (feature === 'shader-f16') return !this._systemInfo.shaderF16;
+      return true;
+    });
+
+    if (missingFeatures.length && option.fallbackId) {
       return {
         modelId: option.fallbackId,
         changed: true,
+        unavailable: false,
         reason: `Using compatibility fallback (${option.fallbackId}) because shader-f16 is not available on this device.`
       };
     }
 
-    return { modelId, changed: false, reason: '' };
+    if (missingFeatures.length) {
+      return {
+        modelId,
+        changed: false,
+        unavailable: true,
+        reason: `This model requires ${missingFeatures.join(', ')} support on your GPU. Choose another model on this device.`
+      };
+    }
+
+    return { modelId, changed: false, unavailable: false, reason: '' };
   }
 
   _renderFallbackNote(resolved) {
     const note = this._elements.fallbackNote;
     if (!note) return;
 
-    if (resolved.changed) {
+    if (resolved.changed || resolved.unavailable) {
       note.textContent = resolved.reason;
       note.style.display = 'block';
     } else {
@@ -1048,9 +1152,11 @@ export class AiChatUI {
     this._renderCacheHint(resolved.modelId);
     this._syncModelSelectors();
 
-    if (!this.chat.isLoaded() && !this.chat.isLoading()) {
+    if (!resolved.unavailable && !this.chat.isLoaded() && !this.chat.isLoading()) {
       this.chat.setModelId(resolved.modelId);
       this._updateModelTitle(resolved.modelId);
+    } else if (resolved.unavailable) {
+      this._updateModelTitle(requestedModelId);
     }
 
     this._updateSwitchButtonState();
@@ -1085,6 +1191,13 @@ export class AiChatUI {
       loadBtn.textContent = 'Model loaded';
       return;
     }
+    const selectedModel = this._elements.modelSelect?.value || this._selectedModelId || MODEL_OPTIONS[0].id;
+    const resolved = this._resolveModelForSystem(selectedModel);
+    if (resolved.unavailable) {
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Unsupported model';
+      return;
+    }
     loadBtn.disabled = false;
     loadBtn.textContent = 'Load AI Model';
   }
@@ -1098,11 +1211,12 @@ export class AiChatUI {
 
     const hasLoadedModel = this.chat.isLoaded();
     const loading = this.chat.isLoading();
-    const resolvedSelectedModelId = this._resolveModelForSystem(this._selectedModelId).modelId;
+    const resolvedSelected = this._resolveModelForSystem(this._selectedModelId);
+    const resolvedSelectedModelId = resolvedSelected.modelId;
     const sameAsActive = resolvedSelectedModelId === this.chat.modelId;
 
     modelSelect.disabled = loading;
-    button.disabled = !hasLoadedModel || loading || sameAsActive;
+    button.disabled = !hasLoadedModel || loading || sameAsActive || resolvedSelected.unavailable;
 
     const buttonLabel = button.querySelector('span');
     if (buttonLabel) {
@@ -1215,12 +1329,14 @@ export class AiChatUI {
 
     if (compatibleBadges) {
       compatibleBadges.innerHTML = MODEL_OPTIONS.map((model) => {
-        const requiresF16 = model.requires.includes('shader-f16');
-        const isNative = !requiresF16 || info.shaderF16;
-        const statusLabel = isNative ? 'native' : (model.fallbackId ? 'fallback' : 'unavailable');
+        const resolved = this._resolveModelForSystem(model.id);
+        const isNative = !resolved.changed && !resolved.unavailable;
+        const statusLabel = resolved.unavailable
+          ? 'unavailable'
+          : (resolved.changed ? 'fallback' : (model.experimental ? 'experimental' : 'native'));
         const color = isNative
           ? 'var(--vd-color-success, #22c55e)'
-          : (model.fallbackId ? 'var(--vd-color-warning, #f59e0b)' : 'var(--vd-color-danger, #ef4444)');
+          : (resolved.changed ? 'var(--vd-color-warning, #f59e0b)' : 'var(--vd-color-danger, #ef4444)');
 
         return `
           <span class="vd-text-sm" title="${model.id}" style="display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid ${color}; color: ${color}; border-radius: 999px; padding: 0.15rem 0.5rem; line-height: 1.1;">
@@ -1241,6 +1357,11 @@ export class AiChatUI {
     const { progressWrap } = this._elements;
     const selectedModel = this._elements.modelSelect?.value || this._selectedModelId || MODEL_OPTIONS[0].id;
     const resolved = this._resolveModelForSystem(selectedModel);
+    if (resolved.unavailable) {
+      this._renderFallbackNote(resolved);
+      this._updateSwitchButtonState();
+      return;
+    }
     this.chat.setModelId(resolved.modelId);
     this._renderFallbackNote(resolved);
     this._updateModelTitle(resolved.modelId);
@@ -1264,7 +1385,11 @@ export class AiChatUI {
     if (!this.chat.isLoaded() || this.chat.isLoading()) return;
 
     const resolved = this._resolveModelForSystem(this._selectedModelId);
-    if (resolved.modelId === this.chat.modelId) return;
+    if (resolved.unavailable || resolved.modelId === this.chat.modelId) {
+      this._renderFallbackNote(resolved);
+      this._updateSwitchButtonState();
+      return;
+    }
 
     this.chat.setModelId(resolved.modelId);
     this._renderFallbackNote(resolved);
@@ -1445,9 +1570,10 @@ export class AiChatUI {
     const assistantBubble = this._appendMessage('assistant', '<span class="vd-ai-typing">...</span>');
 
     try {
-      await this.chat.generate(
+      const finalReply = await this.chat.generate(
         text, 
         (reply) => {
+          if (!reply) return;
           assistantBubble.innerHTML = labsMarkdownToHtml(reply.replace(/\\n/g, '\n'));
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         },
@@ -1463,8 +1589,12 @@ export class AiChatUI {
           }
         }
       );
+      if (finalReply && !assistantBubble.textContent.trim()) {
+        assistantBubble.innerHTML = labsMarkdownToHtml(finalReply.replace(/\\n/g, '\n'));
+      }
     } catch (err) {
-      assistantBubble.innerHTML = '<span style="color: var(--vd-color-danger, #ef4444);">Error: Failed to generate response.</span>';
+      const message = err?.message || 'Failed to generate response.';
+      assistantBubble.innerHTML = `<span style="color: var(--vd-color-danger, #ef4444);">Error: ${this._esc(message)}</span>`;
     } finally {
       chatInput.disabled = false;
       sendBtn.disabled = false;
