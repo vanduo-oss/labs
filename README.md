@@ -11,8 +11,34 @@ Current component versions:
 | Component | Version | Module |
 |------|------|------|
 | `vd-hex` | `0.0.1` | [`hex-grid.js`](./hex-grid.js) |
-| `vd-neptune-search` | `0.0.1` | [`neptune-search.js`](./neptune-search.js) |
-| `vd-ai-chat` | `0.0.2` | [`ai-chat.js`](./ai-chat.js) |
+| `vd-neptune-search` | `0.0.2` | [`neptune-search.js`](./neptune-search.js) |
+| `vd-ai-chat` | `0.0.4` | [`ai-chat.js`](./ai-chat.js) |
+| `vd-ai-draw` | `0.0.2` | [`ai-draw.js`](./ai-draw.js) |
+
+### Shared Guardrails Modules
+
+`guardrails/*` is a public shared-service module family used across the Labs AI and search components. It provides deterministic validation and safety helpers for two different policy domains:
+
+- Shared service version: `0.0.1` (exported as `VD_GUARDRAILS_VERSION`)
+
+- `./guardrails/llm.js`: LLM-facing input validation + system-prompt composition for `vd-ai-chat` and `vd-ai-draw`.
+- `./guardrails/search.js`: deterministic query/index/vector and render-path hardening for `vd-neptune-search`.
+- `./guardrails/core.js`: shared result/error helpers used by both policy families.
+
+See canonical documentation: [doc/vd-guardrails.md](./doc/vd-guardrails.md)
+
+```javascript
+import { validateLlmInput, buildChatSystemPrompt } from './guardrails/llm.js';
+import { validateSearchIndexPayload, safeDocHref } from './guardrails/search.js';
+
+const inputCheck = validateLlmInput('Give me a concise answer about WebGPU.');
+if (!inputCheck.allowed) throw new Error(inputCheck.message);
+
+const systemPrompt = buildChatSystemPrompt({ extraRules: 'Keep outputs under 5 bullets.' });
+
+const indexCheck = validateSearchIndexPayload({ documents: [] });
+const href = safeDocHref('https://vanduo.dev', 'docs/buttons');
+```
 
 ---
 
@@ -97,8 +123,9 @@ pnpm run demo:serve
 
 Then open:
 
-- `http://localhost:3000/` for the standalone **Vanduo Labs** page (navbar + hero + `vd-hex` + `vd-neptune-search`)
+- `http://localhost:3000/` for the standalone **Vanduo Labs** page (navbar + hero + demos)
 - `http://localhost:3000/demo/neptune-demo` (or `/demo/neptune-demo.html`) for the focused Neptune demo page
+- `http://localhost:3000/demo/ai-draw-demo` (or `/demo/ai-draw-demo.html`) for the focused AI Draw demo page
 
 Serving only `demo/` breaks module and data URLs (`../neptune-search.js` and `../data/*` must resolve under the same origin).
 
@@ -134,6 +161,37 @@ ui.mount();
 
 ---
 
+## vd-ai-draw (AiDraw)
+
+In-browser **AI collaborative pixel canvas**. The AI can "see" a 1-bit pixel grid (serialized as text) and draw on it via `DRAW`/`ERASE` commands or full `[CANVAS]` blocks.
+
+See full documentation: [doc/vd-ai-draw.md](./doc/vd-ai-draw.md)
+
+### Quick Start
+
+```javascript
+import { AiDraw, AiDrawUI } from './ai-draw.js';
+
+const draw = new AiDraw();
+const ui = new AiDrawUI({
+  container: document.getElementById('draw-mount'),
+  draw,
+});
+
+ui.mount();
+```
+
+### Notes
+
+- **1-bit canvas** (`.` = white, `#` = black) keeps the serialized grid compact in the prompt.
+- Configurable sizes: 32×32, 64×64 (default), 128×128. A 64×64 grid is ~4 KB—safe for ~8K context windows.
+- The AI receives the canvas state with every user message and can reply with drawing commands.
+- Drawing tools: pencil (1px), brush (3px), eraser, grid overlay, and clear.
+- User draws freely; sending a chat message triggers the AI to look, comment, or improve.
+- Shares the same model picker, hardware detection, guardrails, and caching behavior as `vd-ai-chat`.
+
+---
+
 ## Keeping in sync
 
 The canonical copies live under the Vanduo **framework** repository (`framework/js/`). When you change a Labs component, edit the framework file first, then copy so both stay aligned:
@@ -147,6 +205,9 @@ cp framework/js/utils/hex-math.js labs/utils/hex-math.js
 cp docs/js/neptune-search.js labs/neptune-search.js
 cp docs/js/data/search-index.json labs/data/search-index.json
 cp docs/js/data/vectors.json labs/data/vectors.json
+
+# vd-ai-draw: module + docs
+cp framework/js/components/vd-ai-draw.js labs/ai-draw.js
 ```
 
 ## Pre-release Checklist

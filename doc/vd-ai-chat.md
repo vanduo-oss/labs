@@ -34,9 +34,12 @@ ui.mount();
 - Automatically applies model fallbacks (typically `q4f32_1`) when required features are unavailable.
 - Downloads and caches the selected model directly in the browser.
 - Runs inference via WebGPU for high performance without a backend server.
-- Uses FOSS guardrails to enforce harmlessness and objectivity.
+- Uses shared FOSS guardrails (`guardrails/llm.js`) to enforce harmlessness and objectivity.
 - Includes a deterministic regex scanner to fast-reject known prompt injections and jailbreaks before they reach the model.
+- Enforces deterministic input validation in both UI and headless API (`AiChat.generate()`), so non-UI consumers cannot bypass guardrails.
 - Built entirely with Vanduo framework UI components.
+
+For direct shared guardrails API usage (core contracts, LLM helpers, and search-policy split), see [doc/vd-guardrails.md](./vd-guardrails.md).
 
 ### Browser Caching & Loading Behavior
 

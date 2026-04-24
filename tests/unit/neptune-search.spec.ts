@@ -139,4 +139,46 @@ test.describe('NeptuneSearch Unit', () => {
     expect(result[0].score).toBeCloseTo(0.6, 5);
     expect(result[1].source).toBe('fuzzy');
   });
+
+  test('initFuzzy rejects malformed index payload', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const badPayload = { documents: [{ id: 'x', title: 'Only title' }] };
+      const toBase64 = (str: string) => btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
+      const search = new (await import('/neptune-search.js')).NeptuneSearch({
+        indexUrl: 'data:application/json;base64,' + toBase64(JSON.stringify(badPayload)),
+      });
+      try {
+        await search.initFuzzy();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, message: String(err?.message || '') };
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('invalid');
+  });
+
+  test('UI result links are safely constructed', async ({ page }) => {
+    const href = await page.evaluate(async () => {
+      const { ui } = await window.createUI({ baseUrl: 'javascript:alert(1)' });
+      ui._results = [{
+        doc: {
+          id: 'bad-doc',
+          title: 'Unsafe',
+          category: 'Security',
+          icon: 'ph-file-text" onclick="alert(1)',
+          bodyText: 'Unsafe payload test',
+          route: 'javascript:alert(1)',
+          keywords: ['unsafe'],
+        },
+        score: 0.9,
+        source: 'fuzzy',
+      }];
+      ui._renderResults();
+      return document.querySelector('.vd-neptune-result-link')?.getAttribute('href');
+    });
+
+    expect(href).toBe('#');
+  });
 });

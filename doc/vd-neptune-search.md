@@ -55,6 +55,20 @@ Zero-dependency, client-side hybrid search engine for the Vanduo documentation s
 - **ARIA compliant** — combobox pattern with activedescendant management
 - **ES module** — single `.js` file, tree-shakeable exports
 
+## Security Model
+
+`vd-neptune-search` does not run an instruction-following chat model in its semantic path. Semantic search uses embedding extraction (`feature-extraction`) + cosine similarity ranking, not chat completion. Because of that, classic prompt-jailbreak/system-prompt leakage attacks are not the primary risk surface here.
+
+Neptune guardrails focus on deterministic search safety (`guardrails/search.js`):
+
+- Query hygiene (normalization, min/max length, pathological repetition clamp)
+- Search corpus schema validation (`search-index.json`) and duplicate-id rejection
+- Vector payload validation (`vectors.json`) for shape, finite values, and consistent dimensions
+- Vector-to-document ID integrity checks
+- Safe link construction and icon class sanitization in result rendering
+
+For direct shared guardrails API usage and cross-component policy context, see [doc/vd-guardrails.md](./vd-guardrails.md).
+
 ## Tuning Update (Apr 2026)
 
 Hybrid search parameters were tuned against a curated 81-query benchmark set covering exact matches, synonyms, intent-style queries, and compound queries.
@@ -128,7 +142,9 @@ Both layers initialize on first use:
 | CDN blocked / network error (Transformers.js) | `_semanticFailed` flag set; `search()` falls back to fuzzy-only with `console.warn` |
 | Model download fails mid-stream | Same as above; subsequent Enter presses use fuzzy-only |
 | Query < 2 characters | Returns empty results immediately |
-| Vector references missing doc ID | `console.warn` emitted; result silently skipped |
+| Malformed index/vector payloads | Deterministically rejected during initialization |
+| Unsafe route/base URL or icon payload | Sanitized/fallback handling in render path |
+| Vector references missing doc ID | Deterministically rejected during semantic init |
 | Semantic init failed on this instance | `_semanticFailed` is set. Direct `await initSemantic()` / `await semanticSearch()` throw; `search()` catches failures and degrades (hybrid → fuzzy-only). Create a new `NeptuneSearch` to retry semantic loading |
 
 ## API Reference

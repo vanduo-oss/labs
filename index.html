@@ -864,6 +864,16 @@
               <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="aichat"></span>
             </span>
           </button>
+          <button type="button" class="labs-demo-card" id="labs-card-aidraw" data-demo-slug="aidraw" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-aidraw-desc">
+            <span class="labs-demo-card-icon" aria-hidden="true"><i class="ph ph-paint-brush" style="font-size: 3rem;"></i></span>
+            <span class="labs-demo-card-title">vd-ai-draw</span>
+            <span class="labs-demo-card-desc" id="labs-card-aidraw-desc">AI collaborative pixel canvas—draw, let AI see, and watch it improve</span>
+            <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
+            <span class="labs-demo-card-badge-row">
+              <span class="labs-demo-card-badge">Experimental</span>
+              <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="aidraw"></span>
+            </span>
+          </button>
         </div>
 
         <p id="labs-demos-live-region" class="sr-only" role="status" aria-live="polite"></p>
@@ -944,6 +954,10 @@
                 <div class="labs-demo-panel-inner" id="labs-demo-aichat" hidden>
                   <div id="chat-mount"></div>
                 </div>
+
+                <div class="labs-demo-panel-inner" id="labs-demo-aidraw" hidden>
+                  <div id="draw-mount"></div>
+                </div>
               </div>
             </div>
 
@@ -994,13 +1008,15 @@
     import { VD_HEX_VERSION, VdHexGrid } from "./hex-grid.js";
     import { NeptuneSearch, NeptuneSearchUI, VD_NEPTUNE_SEARCH_VERSION } from "./neptune-search.js";
     import { AiChat, AiChatUI, VD_AI_CHAT_VERSION } from "./ai-chat.js";
+    import { AiDraw, AiDrawUI, VD_AI_DRAW_VERSION } from "./ai-draw.js";
     import { labsMarkdownToHtml } from "./labs-md-to-html.js";
 
     const DEFAULT_COMPONENT_VERSION = "0.0.1";
     const COMPONENT_VERSION_MAP = {
       hex: VD_HEX_VERSION,
       neptune: VD_NEPTUNE_SEARCH_VERSION,
-      aichat: VD_AI_CHAT_VERSION
+      aichat: VD_AI_CHAT_VERSION,
+      aidraw: VD_AI_DRAW_VERSION
     };
 
     function getComponentVersion(slug) {
@@ -1026,11 +1042,12 @@
       window.Vanduo.init();
     }
 
-    const DEMO_SLUGS = new Set(["hex", "neptune", "aichat"]);
+    const DEMO_SLUGS = new Set(["hex", "neptune", "aichat", "aidraw"]);
     const DOC_FETCH = {
       hex: new URL("./doc/vd-hex.md", import.meta.url).toString(),
       neptune: new URL("./doc/vd-neptune-search.md", import.meta.url).toString(),
-      aichat: new URL("./doc/vd-ai-chat.md", import.meta.url).toString()
+      aichat: new URL("./doc/vd-ai-chat.md", import.meta.url).toString(),
+      aidraw: new URL("./doc/vd-ai-draw.md", import.meta.url).toString()
     };
 
     const HEX_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/></svg>`;
@@ -1048,11 +1065,12 @@
     const demoHexPanel = document.getElementById("labs-demo-hex");
     const demoNeptunePanel = document.getElementById("labs-demo-neptune");
     const demoAiChatPanel = document.getElementById("labs-demo-aichat");
+    const demoAidrawPanel = document.getElementById("labs-demo-aidraw");
     const docPanel = document.getElementById("labs-doc-panel");
     const liveRegion = document.getElementById("labs-demos-live-region");
 
     let lastTopLevelRoute = "home";
-    const docHtmlCache = { hex: null, neptune: null, aichat: null };
+    const docHtmlCache = { hex: null, neptune: null, aichat: null, aidraw: null };
     let docLoadSeq = 0;
     const LABS_DEMOS_DISCLAIMER_KEY = "vanduo-labs-demos-disclaimer-v1";
 
@@ -1149,6 +1167,15 @@
       return docHtmlCache.neptune;
     }
 
+    async function fetchAiDrawDocumentationHtml() {
+      if (docHtmlCache.aidraw) return docHtmlCache.aidraw;
+      const res = await fetch(DOC_FETCH.aidraw, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Could not load AI Draw documentation (" + res.status + ")");
+      const md = hydrateComponentVersionTokens(await res.text(), "aidraw");
+      docHtmlCache.aidraw = labsMarkdownToHtml(md);
+      return docHtmlCache.aidraw;
+    }
+
     async function fetchAiChatDocumentationHtml() {
       if (docHtmlCache.aichat) return docHtmlCache.aichat;
       const res = await fetch(DOC_FETCH.aichat, { credentials: "same-origin" });
@@ -1167,6 +1194,7 @@
         if (slug === "hex") html = await fetchHexDocumentationHtml();
         else if (slug === "neptune") html = await fetchNeptuneDocumentationHtml();
         else if (slug === "aichat") html = await fetchAiChatDocumentationHtml();
+        else if (slug === "aidraw") html = await fetchAiDrawDocumentationHtml();
         else return;
 
         if (seq !== docLoadSeq) return;
@@ -1206,6 +1234,7 @@
         demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = true;
         demoAiChatPanel.hidden = true;
+        demoAidrawPanel.hidden = true;
         liveRegion.textContent = "";
         return;
       }
@@ -1232,9 +1261,17 @@
         demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = true;
         demoAiChatPanel.hidden = false;
+        demoAidrawPanel.hidden = true;
+      } else if (demoSlug === "aidraw") {
+        detailTitleEl.textContent = "vd-ai-draw";
+        detailIconEl.innerHTML = "<i class=\"ph ph-paint-brush\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
+        demoHexPanel.hidden = true;
+        demoNeptunePanel.hidden = true;
+        demoAiChatPanel.hidden = true;
+        demoAidrawPanel.hidden = false;
       }
 
-      const label = demoSlug === "hex" ? "vd-hex" : (demoSlug === "neptune" ? "vd-neptune-search" : "vd-ai-chat");
+      const label = demoSlug === "hex" ? "vd-hex" : (demoSlug === "neptune" ? "vd-neptune-search" : (demoSlug === "aichat" ? "vd-ai-chat" : "vd-ai-draw"));
       liveRegion.textContent = label + " demo and documentation opened.";
 
       loadDocumentationForSlug(demoSlug);
@@ -1341,6 +1378,13 @@
       chat
     });
     chatUi.mount();
+
+    const draw = new AiDraw();
+    const drawUi = new AiDrawUI({
+      container: document.getElementById("draw-mount"),
+      draw
+    });
+    drawUi.mount();
 
     demoCards.forEach((btn) => {
       btn.addEventListener("click", () => {

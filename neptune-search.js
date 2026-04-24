@@ -15,6 +15,15 @@
  * ui.mount();
  */
 
+import {
+  normalizeSearchQuery,
+  safeDocHref,
+  sanitizeIconClass,
+  validateSearchIndexPayload,
+  validateSearchQuery,
+  validateVectorPayload,
+} from './guardrails/search.js';
+
 // ═══════════════════════════════════════════════════════════════════════
 // CDN Configuration
 // ═══════════════════════════════════════════════════════════════════════
@@ -30,7 +39,7 @@ const CDN = {
   ],
 };
 
-export const VD_NEPTUNE_SEARCH_VERSION = '0.0.1';
+export const VD_NEPTUNE_SEARCH_VERSION = '0.0.2';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Math Helpers
@@ -112,6 +121,10 @@ export class NeptuneSearch {
     this.fuseThreshold = options.fuseThreshold ?? 0.45;
     this.semanticThreshold = options.semanticThreshold ?? 0.30;
     this.maxResults = options.maxResults ?? 20;
+    this.queryMinLength = options.queryMinLength ?? 2;
+    this.queryMaxLength = options.queryMaxLength ?? 240;
+    this.maxDocuments = options.maxDocuments ?? 5000;
+    this.maxVectorDimensions = options.maxVectorDimensions ?? 4096;
     this.semanticBoost = options.semanticBoost ?? 1.0;
     this.modelName = options.modelName ?? 'Xenova/all-MiniLM-L6-v2';
 
@@ -146,6 +159,10 @@ export class NeptuneSearch {
         const response = await fetch(this.indexUrl);
         if (!response.ok) throw new Error(`Failed to load search index: ${response.status}`);
         const data = await response.json();
+        const payloadCheck = validateSearchIndexPayload(data, { maxDocuments: this.maxDocuments });
+        if (!payloadCheck.allowed) {
+          throw new Error(payloadCheck.message || 'Search index payload validation failed.');
+        }
         this._docs = data.documents;
         this._docMap = new Map(this._docs.map(d => [d.id, d]));
 
@@ -172,13 +189,19 @@ export class NeptuneSearch {
 
   fuzzySearch(query) {
     if (!this._fuse) return [];
-    if (!query || query.length < 2) return [];
-    return this._fuse.search(query, { limit: this.maxResults });
+    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
+    const check = validateSearchQuery(normalizedQuery, {
+      minLength: this.queryMinLength,
+      maxLength: this.queryMaxLength,
+    });
+    if (!check.allowed) return [];
+    return this._fuse.search(normalizedQuery, { limit: this.maxResults });
   }
 
   // ── Semantic Layer ───────────────────────────────────────────────────
 
   async initSemantic() {
+    await this.initFuzzy();
     if (this._semanticReady) return;
     if (this._semanticFailed) {
       throw new Error('Semantic search previously failed; recreate NeptuneSearch instance to retry');
@@ -209,6 +232,20 @@ export class NeptuneSearch {
             if (!r.ok) throw new Error(`Failed to load vectors: ${r.status}`);
             return r.json();
           });
+
+          const vectorsCheck = validateVectorPayload(vectorsData, {
+            maxDocuments: this.maxDocuments,
+            maxDimensions: this.maxVectorDimensions,
+          });
+          if (!vectorsCheck.allowed) {
+            throw new Error(vectorsCheck.message || 'Vector payload validation failed.');
+          }
+
+          const knownDocIds = new Set(this._docs.map((d) => d.id));
+          const unknownVectorId = vectorsData.documents.find((row) => !knownDocIds.has(row.id));
+          if (unknownVectorId) {
+            throw new Error(`Vector payload references unknown doc id: ${unknownVectorId.id}`);
+          }
         } catch (err) {
           this._semanticFailed = true;
           this._semanticPromise = null;
@@ -228,9 +265,14 @@ export class NeptuneSearch {
 
   async semanticSearch(query) {
     await this.initSemantic();
-    if (!query || query.length < 2) return [];
+    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
+    const check = validateSearchQuery(normalizedQuery, {
+      minLength: this.queryMinLength,
+      maxLength: this.queryMaxLength,
+    });
+    if (!check.allowed) return [];
 
-    const output = await this._extractor(query, { pooling: 'mean', normalize: true });
+    const output = await this._extractor(normalizedQuery, { pooling: 'mean', normalize: true });
     const queryVec = Array.from(output.data);
 
     return rankBySimilarity(queryVec, this._vectors, this.semanticThreshold).slice(0, 10);
@@ -275,27 +317,33 @@ mergeResults(fuzzyResults, semanticResults) {
   async search(query, { mode = 'hybrid' } = {}) {
     await this.initFuzzy();
 
+    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
+    const queryCheck = validateSearchQuery(normalizedQuery, {
+      minLength: this.queryMinLength,
+      maxLength: this.queryMaxLength,
+    });
+
     if (!['fuzzy', 'semantic', 'hybrid'].includes(mode)) {
       throw new Error(`Invalid search mode: "${mode}". Expected 'fuzzy', 'semantic', or 'hybrid'.`);
     }
 
     const result = {
-      query,
+      query: normalizedQuery,
       mode,
       fuzzy: [],
       semantic: [],
       merged: [],
     };
 
-    if (!query || query.length < 2) return result;
+    if (!queryCheck.allowed) return result;
 
     if (mode === 'fuzzy' || mode === 'hybrid') {
-      result.fuzzy = this.fuzzySearch(query);
+      result.fuzzy = this.fuzzySearch(normalizedQuery);
     }
 
     if (mode === 'semantic' || mode === 'hybrid') {
       try {
-        result.semantic = await this.semanticSearch(query);
+        result.semantic = await this.semanticSearch(normalizedQuery);
       } catch (err) {
         console.warn('[Neptune] Semantic search failed:', err.message);
         // Degrade gracefully to fuzzy-only
@@ -492,13 +540,19 @@ export class NeptuneSearchUI {
   // ── Event Handlers ───────────────────────────────────────────────────
 
   _onInput(e) {
-    const query = e.target.value.trim();
+    const query = normalizeSearchQuery(e.target.value, {
+      maxLength: this.search?.queryMaxLength ?? 240,
+    });
 
     clearTimeout(this._debounceTimer);
     this._semanticSeq++;
     this._elements.loader.hidden = true;
 
-    if (query.length < 2) {
+    const queryCheck = validateSearchQuery(query, {
+      minLength: this.search?.queryMinLength ?? 2,
+      maxLength: this.search?.queryMaxLength ?? 240,
+    });
+    if (!queryCheck.allowed) {
       this._clearResults();
       return;
     }
@@ -578,7 +632,15 @@ export class NeptuneSearchUI {
   }
 
   async _runSemantic(query) {
-    if (!this.search || query.length < 2) return;
+    if (!this.search) return;
+    const normalizedQuery = normalizeSearchQuery(query, {
+      maxLength: this.search.queryMaxLength ?? 240,
+    });
+    const queryCheck = validateSearchQuery(normalizedQuery, {
+      minLength: this.search.queryMinLength ?? 2,
+      maxLength: this.search.queryMaxLength ?? 240,
+    });
+    if (!queryCheck.allowed) return;
 
     clearTimeout(this._debounceTimer);
     const seq = this._semanticSeq;
@@ -591,7 +653,7 @@ export class NeptuneSearchUI {
     this._elements.input.setAttribute('aria-expanded', 'true');
 
     try {
-      const result = await this.search.search(query, { mode: 'hybrid' });
+      const result = await this.search.search(normalizedQuery, { mode: 'hybrid' });
       if (seq !== this._semanticSeq) return;
       this._results = result.merged;
       this._selectedIndex = -1;
@@ -601,7 +663,7 @@ export class NeptuneSearchUI {
       console.warn('[NeptuneUI] Semantic search error:', err);
       if (seq !== this._semanticSeq) return;
       this._elements.loader.hidden = true;
-      const result = await this.search.search(query, { mode: 'fuzzy' });
+      const result = await this.search.search(normalizedQuery, { mode: 'fuzzy' });
       if (seq !== this._semanticSeq) return;
       this._results = result.merged;
       this._renderResults();
@@ -643,6 +705,8 @@ export class NeptuneSearchUI {
 
   _renderResultCard(result, index) {
     const { doc, source } = result;
+    const safeIcon = sanitizeIconClass(doc.icon || 'ph-file-text');
+    const href = safeDocHref(this.baseUrl, doc.route);
     const badge = source === 'semantic'
       ? '<span class="vd-neptune-badge vd-neptune-badge-semantic">AI</span>'
       : '<span class="vd-neptune-badge vd-neptune-badge-fuzzy">Fuzzy</span>';
@@ -660,7 +724,7 @@ export class NeptuneSearchUI {
         tabindex="-1"
       >
         <div class="vd-neptune-result-header">
-          <span class="vd-neptune-result-icon"><i class="ph ${this._esc(doc.icon || 'ph-file-text')}"></i></span>
+          <span class="vd-neptune-result-icon"><i class="ph ${this._esc(safeIcon)}"></i></span>
           <span class="vd-neptune-result-title">${this._esc(doc.title)}</span>
           <span class="vd-neptune-result-trail">
             <span class="vd-neptune-result-category">${this._esc(doc.category)}</span>
@@ -674,7 +738,7 @@ export class NeptuneSearchUI {
           <div class="vd-neptune-result-keywords">${keywords}</div>
           <a
             class="vd-neptune-result-link"
-            href="${this._esc(this.baseUrl)}/#${this._esc(doc.route)}"
+            href="${this._esc(href)}"
             target="_blank"
             rel="noopener noreferrer"
             onclick="event.stopPropagation()"

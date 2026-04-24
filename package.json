@@ -21,12 +21,20 @@
     "./neptune-search.js": "./neptune-search.js",
     "./hex-grid.js": "./hex-grid.js",
     "./ai-chat.js": "./ai-chat.js",
-    "./utils/hex-math.js": "./utils/hex-math.js"
+    "./ai-draw.js": "./ai-draw.js",
+    "./utils/hex-math.js": "./utils/hex-math.js",
+    "./guardrails/core.js": "./guardrails/core.js",
+    "./guardrails/llm.js": "./guardrails/llm.js",
+    "./guardrails/search.js": "./guardrails/search.js"
   },
   "files": [
     "hex-grid.js",
     "neptune-search.js",
     "ai-chat.js",
+    "ai-draw.js",
+    "guardrails/core.js",
+    "guardrails/llm.js",
+    "guardrails/search.js",
     "utils/hex-math.js",
     "data/search-index.json",
     "data/vectors.json",

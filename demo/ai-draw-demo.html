@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Draw (WebGPU Models) — Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/icons/phosphor/regular/style.css">
+  <style>
+    .demo-root {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+    .demo-header {
+      padding: 3rem 1.5rem 1.5rem;
+      text-align: center;
+    }
+    .demo-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--color-primary);
+    }
+    .demo-header p {
+      color: var(--text-muted);
+      max-width: 520px;
+      margin: 0 auto 1.5rem;
+    }
+    .demo-theme-toggle {
+      display: inline-flex;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      transition: background 0.15s ease;
+    }
+    .demo-theme-toggle:hover {
+      background: var(--bg-tertiary);
+    }
+    .demo-draw-wrap {
+      padding: 0 1.5rem 2rem;
+      max-width: min(80rem, 100%);
+      margin: 0 auto;
+      width: 100%;
+    }
+    .demo-footer {
+      margin-top: auto;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+    }
+
+    .demo-info-section {
+      max-width: min(70rem, 100%);
+      margin: 0 auto 3rem;
+      padding: 0 1.5rem;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+    .demo-info-section h3 {
+      color: var(--color-primary);
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+    }
+    .demo-info-section h4 {
+      color: var(--text-primary);
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+      font-size: 1.05rem;
+    }
+    .demo-info-section p, .demo-info-section ul {
+      margin-bottom: 1rem;
+      color: var(--text-secondary);
+    }
+    .demo-info-section ul {
+      padding-left: 1.5rem;
+    }
+    .demo-info-section li {
+      margin-bottom: 0.5rem;
+    }
+    .demo-info-section a {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    .demo-info-section a:hover {
+      text-decoration: underline;
+    }
+    .demo-canvas-sample {
+      font-family: ui-monospace, monospace;
+      font-size: 0.72rem;
+      line-height: 1.2;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-root">
+    <header class="demo-header">
+      <h1>🎨 AI Draw (WebGPU)</h1>
+      <p>
+        In-browser AI collaborative pixel canvas using WebLLM.
+        <br>Draw something, then ask the AI what it sees or to improve it.
+        <br>Fully private, FOSS guardrails enforced. No server required.
+      </p>
+      <button class="demo-theme-toggle" id="theme-toggle" type="button">
+        <i class="ph ph-moon" id="theme-icon"></i>
+        <span id="theme-label">Dark</span>
+      </button>
+    </header>
+
+    <div class="demo-draw-wrap">
+      <div id="draw-mount"></div>
+    </div>
+
+    <div class="demo-info-section vd-card vd-card-glow vd-glass">
+      <div class="vd-card-body">
+        <h3>How it Works</h3>
+
+        <h4>Canvas as Text</h4>
+        <p>The AI "sees" the canvas because every pixel is serialized into the prompt as a compact text grid. This is efficient for small models because there is no image encoder—just plain text:</p>
+        <div class="demo-canvas-sample">................
+................
+.....####.......
+....#....#......
+....#....#......
+....#....#......
+.....####.......
+................
+................</div>
+        <p>Each row is a line of text. <code>.</code> = empty (white), <code>#</code> = filled (black). A 64×64 canvas is about 4 KB of text—well inside an 8K context window.</p>
+
+        <h4>How the AI Draws</h4>
+        <p>The AI can modify the canvas in two ways:</p>
+        <ul>
+          <li><strong>Individual commands:</strong> <code>DRAW x y</code> sets a pixel black; <code>ERASE x y</code> sets it white.</li>
+          <li><strong>Full canvas block:</strong> The AI outputs <code>[CANVAS]</code> followed by the complete grid and <code>[/CANVAS]</code>.</li>
+        </ul>
+        <p>Both methods are parsed automatically and applied to the live canvas in real time.</p>
+
+        <h4>Context Budget</h4>
+        <p>We use a 1-bit (black &amp; white) palette so the canvas can be larger while staying within the model's context limit. The default is 64×64, which uses roughly 4K tokens for the canvas plus room for conversation. You can switch to 32×32 for even smaller models, or 128×128 if you have headroom.</p>
+
+        <h4>Browser Caching &amp; Loading Behavior</h4>
+        <p>This component requires the user to explicitly click "Load AI Model" to initiate the WebGPU engine. This prevents hijacking your GPU and network bandwidth immediately upon page load.</p>
+        <p><strong>What happens when the page is refreshed?</strong></p>
+        <ul>
+          <li><strong>The Download is Cached:</strong> <a href="https://webllm.mlc.ai/" target="_blank" rel="noopener noreferrer">WebLLM</a> automatically utilizes the browser's native Cache API. After the initial ~1.5GB network download, the model weights are stored securely on your hard drive.</li>
+          <li><strong>VRAM Initialization:</strong> A page refresh destroys the active WebAssembly memory and WebGPU context. When you click "Load AI Model" <em>after</em> a refresh, the component skips the network download and rapidly reads the weights from the local cache directly into the GPU's VRAM. This takes only a few seconds.</li>
+        </ul>
+
+        <h4>Acknowledgments, Technologies &amp; Attribution</h4>
+        <p>Building a fully private, in-browser AI collaborator with robust guardrails relies on an incredible ecosystem of open-source tools:</p>
+
+        <h5>Core AI &amp; Inference</h5>
+        <ul>
+          <li><strong><a href="https://webllm.mlc.ai/" target="_blank" rel="noopener noreferrer">WebLLM (@mlc-ai/web-llm)</a></strong>: The core inference engine bringing LLM chat to browsers using WebGPU acceleration and WebAssembly.</li>
+          <li><strong><a href="https://ai.google.dev/gemma" target="_blank" rel="noopener noreferrer">Gemma 2B (Google DeepMind)</a></strong>: The quantized <code>gemma-2b-it-q4f16_1-MLC</code> model used here is part of a family of lightweight, state-of-the-art open models.</li>
+          <li><strong><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API" target="_blank" rel="noopener noreferrer">WebGPU API</a></strong>: The modern web standard allowing applications to access the device's underlying GPU.</li>
+        </ul>
+
+        <h5>Security &amp; Guardrails</h5>
+        <p>The deterministic prompt injection scanner relies on regex patterns compiled, tested, and refined by the cybersecurity community. We credit the authors of the following FOSS projects:</p>
+        <ul>
+          <li><strong><a href="https://github.com/North-Shore-AI/LlmGuard" target="_blank" rel="noopener noreferrer">LlmGuard (North-Shore-AI)</a></strong>: Comprehensive security protection for LLM applications.</li>
+          <li><strong><a href="https://github.com/itdove/ai-guardian" target="_blank" rel="noopener noreferrer">ai-guardian (itdove)</a></strong>: A robust security layer for detecting manipulation attempts.</li>
+          <li><strong><a href="https://www.npmjs.com/package/llm-prompt-guard" target="_blank" rel="noopener noreferrer">llm-prompt-guard (npm package)</a></strong>: A sub-millisecond prompt injection firewall designed for TypeScript/JS.</li>
+        </ul>
+
+        <h5>UI &amp; Design</h5>
+        <ul>
+          <li><strong><a href="https://github.com/vanduo-oss/framework" target="_blank" rel="noopener noreferrer">Vanduo Framework</a></strong>: The CSS framework powering the responsive, glassmorphic UI.</li>
+          <li><strong><a href="https://phosphoricons.com/" target="_blank" rel="noopener noreferrer">Phosphor Icons</a></strong>: The clean, consistent iconography used throughout.</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer class="demo-footer">
+      AI Draw &mdash; Experimental Labs Component for Vanduo
+    </footer>
+  </div>
+
+  <script type="module">
+    import { AiDraw, AiDrawUI } from '../ai-draw.js';
+
+    // ── Theme Toggle ──────────────────────────────────────────────────
+    const html = document.documentElement;
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const themeLabel = document.getElementById('theme-label');
+
+    function updateThemeUI() {
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      themeIcon.className = isDark ? 'ph ph-moon' : 'ph ph-sun';
+      themeLabel.textContent = isDark ? 'Dark' : 'Light';
+    }
+
+    themeToggle.addEventListener('click', () => {
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      updateThemeUI();
+    });
+
+    // ── Draw Setup ────────────────────────────────────────────────────
+    const draw = new AiDraw();
+    const ui = new AiDrawUI({
+      container: document.getElementById('draw-mount'),
+      draw
+    });
+
+    ui.mount();
+  </script>
+</body>
+</html>
