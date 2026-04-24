@@ -5,7 +5,6 @@ Canonical shared-service documentation for the public `guardrails/*` modules exp
 This module family centralizes deterministic validation and safety composition used across:
 
 - `vd-ai-chat`
-- `vd-ai-draw`
 - `vd-neptune-search`
 
 ## Purpose and Scope
@@ -29,16 +28,14 @@ Shared contracts and helpers used by both LLM and search guardrails:
 
 ### `./guardrails/llm.js`
 
-LLM policy surface used by `vd-ai-chat` and `vd-ai-draw`:
+LLM policy surface used by `vd-ai-chat`:
 
 - `BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT`
 - `DEFAULT_LLM_GUARD_PATTERNS`
 - `LLM_BLOCK_MESSAGE`
 - `validateLlmInput(input)`
 - `buildChatSystemPrompt(options?)`
-- `buildDrawSystemPrompt(options)`
 - `chatGuardrails`
-- `drawGuardrails`
 
 ### `./guardrails/search.js`
 
@@ -58,7 +55,7 @@ Search-specific deterministic hardening used by `vd-neptune-search`:
 Guardrails are intentionally split by runtime behavior and risk surface.
 
 - **LLM guardrails (`./guardrails/llm.js`)**
-  - Target instruction-following generators (`vd-ai-chat`, `vd-ai-draw`).
+  - Target instruction-following generators (`vd-ai-chat`).
   - Combine deterministic input blocking (regex pattern matching, max length, empty checks) with system-prompt policy composition.
 - **Search guardrails (`./guardrails/search.js`)**
   - Target retrieval/ranking workloads (`vd-neptune-search`).
@@ -122,11 +119,7 @@ Validates prompt text (`string` or options object) and returns allow/block resul
 
 Returns `BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT` and appends normalized `extraRules` when provided.
 
-#### `buildDrawSystemPrompt(options): string`
-
-Builds draw/canvas instruction policy (dimensions + output contract) and appends base FOSS safety policy.
-
-#### `chatGuardrails` / `drawGuardrails`
+#### `chatGuardrails`
 
 Preset objects that bundle:
 
@@ -218,19 +211,13 @@ if (!check.allowed) {
 }
 ```
 
-### Custom system prompt building for chat and draw
+### Custom system prompt building for chat
 
 ```javascript
-import { buildChatSystemPrompt, buildDrawSystemPrompt } from './guardrails/llm.js';
+import { buildChatSystemPrompt } from './guardrails/llm.js';
 
 const chatPrompt = buildChatSystemPrompt({
   extraRules: 'Prefer concise bullet points.',
-});
-
-const drawPrompt = buildDrawSystemPrompt({
-  width: 64,
-  height: 64,
-  extraRules: 'Favor geometric symmetry when possible.',
 });
 ```
 
@@ -258,10 +245,9 @@ const icon = sanitizeIconClass(doc.icon);
 
 ## Compatibility Notes
 
-`ai-chat.js` and `ai-draw.js` still export `InputGuardrail` for compatibility with existing integrations.
+`ai-chat.js` still exports `InputGuardrail` for compatibility with existing integrations.
 
 Preferred shared API for new code is `./guardrails/llm.js`, especially:
 
 - `validateLlmInput()`
 - `buildChatSystemPrompt()`
-- `buildDrawSystemPrompt()`

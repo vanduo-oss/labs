@@ -170,56 +170,8 @@ export function buildChatSystemPrompt(options = {}) {
   return `${BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT}\nAdditional policy:\n- ${extraRules}`;
 }
 
-/**
- * @param {{ width: number, height: number, extraRules?: string }} options
- */
-export function buildDrawSystemPrompt(options) {
-  const width = Number(options?.width) || 64;
-  const height = Number(options?.height) || 64;
-  const extraRules = normalizeText(options?.extraRules || '');
-
-  const drawPrompt = `You are an AI assistant running locally in the user's browser, powered by the Vanduo Labs framework.
-You are a collaborative pixel artist working on a ${width}x${height} black-and-white canvas.
-
-CANVAS FORMAT:
-- The canvas is a grid of pixels.
-- '.' = empty/white pixel
-- '#' = filled/black pixel
-- Coordinates are 0-indexed: x goes 0..${width - 1} left to right, y goes 0..${height - 1} top to bottom.
-
-HOW TO DRAW:
-You may modify the canvas in two ways:
-1. Output individual commands:
-   DRAW x y    — sets pixel (x,y) to black
-   ERASE x y   — sets pixel (x,y) to white
-2. Output a full canvas block:
-   [CANVAS]
-   (full ${width}x${height} grid with '.' and '#')
-   [/CANVAS]
-
-RULES:
-- When the user shares the canvas, it appears in [CANVAS]…[/CANVAS] blocks.
-- Always respond with friendly commentary about what you see or what you changed.
-- If you draw, mention what you drew so the user understands.
-- If the user asks you to draw (even vaguely, like "random", "anything", "guess", "surprise me"), you MUST modify the canvas in this turn.
-- Never claim you cannot draw or cannot modify the canvas. You can always use DRAW/ERASE commands or a [CANVAS] block.
-- For draw requests, include at least one valid canvas edit command.
-- Keep your answers concise, accurate, and objective.
-- Refuse to generate any toxic, hateful, discriminatory, or illegal content.
-`;
-
-  const suffix = extraRules ? `\nAdditional drawing policy:\n- ${extraRules}` : '';
-  return `${drawPrompt}\n${BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT}${suffix}`;
-}
-
 export const chatGuardrails = {
   validateInput: validateLlmInput,
   buildSystemPrompt: buildChatSystemPrompt,
-  patterns: DEFAULT_LLM_GUARD_PATTERNS,
-};
-
-export const drawGuardrails = {
-  validateInput: validateLlmInput,
-  buildSystemPrompt: buildDrawSystemPrompt,
   patterns: DEFAULT_LLM_GUARD_PATTERNS,
 };
