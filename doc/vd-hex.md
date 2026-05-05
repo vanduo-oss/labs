@@ -4,11 +4,12 @@ Interactive canvas hex-grid component for Vanduo Labs, built on flat-top axial c
 
 - Component version: {{COMPONENT_VERSION}}
 - Live labs site: **https://labs.vanduo.dev**
+- Status: **Shipped to Framework** (`@vanduo-oss/hex-grid`), while Labs keeps a mirror demo.
 
 ### Quick Start
 
 ```javascript
-import { VdHexGrid } from './hex-grid.js';
+import { VdHexGrid } from '@vanduo-oss/hex-grid';
 
 const grid = new VdHexGrid({
   element: document.getElementById('hex-demo-container'),
@@ -30,5 +31,7 @@ const grid = new VdHexGrid({
 
 ### Notes
 
+- Canonical install path: `pnpm add @vanduo-oss/hex-grid`.
+- Labs keeps `./hex-grid.js` and `./utils/hex-math.js` as demo mirrors.
 - The labs demo includes extra UI controls intended for experimentation.
 - Serve `labs/` over HTTP (not `file://`) so docs and modules load correctly.

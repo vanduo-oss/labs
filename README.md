@@ -44,8 +44,15 @@ const href = safeDocHref('https://vanduo.dev', 'docs/buttons');
 ## vd-hex (VdHexGrid)
 
 Interactive **hex-grid** toolkit for the browser: canvas rendering, pan/zoom, hex selection, terrain helpers, and optional grid rotation.
+Status: **Shipped to Framework** (canonical package: `@vanduo-oss/hex-grid`), with Labs maintained as an interactive mirror/demo surface.
 
 See full documentation: [doc/vd-hex.md](./doc/vd-hex.md)
+
+Install package:
+
+```bash
+pnpm add @vanduo-oss/hex-grid
+```
 
 ### Files
 
@@ -57,7 +64,7 @@ See full documentation: [doc/vd-hex.md](./doc/vd-hex.md)
 ### Usage
 
 ```javascript
-import { VdHexGrid } from './hex-grid.js';
+import { VdHexGrid } from '@vanduo-oss/hex-grid';
 
 const grid = new VdHexGrid({
   element: document.getElementById('container'),
@@ -161,7 +168,7 @@ ui.mount();
 
 ## Keeping in sync
 
-The canonical copies live under the Vanduo **framework** repository (`framework/js/`). When you change a Labs component, edit the framework file first, then copy so both stay aligned:
+The canonical `vd-hex` distribution is now `@vanduo-oss/hex-grid` (framework monorepo package). Labs keeps mirrors for demos. When updating the Labs mirror, sync from the framework source package inputs:
 
 ```bash
 # Example: from the monorepo root, after editing framework/js

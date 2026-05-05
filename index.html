@@ -428,6 +428,14 @@
       letter-spacing: 0.02em;
     }
 
+    .labs-demo-card-badge-shipped {
+      background: rgba(var(--vd-color-success-rgb), 0.2);
+      color: var(--vd-color-success);
+      border-color: rgba(var(--vd-color-success-rgb), 0.35);
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
     .labs-demos-detail {
       max-width: 70rem;
       margin: 0 auto;
@@ -792,7 +800,8 @@
             <p class="labs-about-lede">
               Vanduo Labs is where we ship ideas before they are polished—interactive demos, odd widgets, and
               half-serious prototypes that might graduate into the framework, or might just make us smile.
-              Nothing here is guaranteed stable; that is the point.
+              Most demos are not guaranteed stable; that is the point.
+              Some components, like <code>vd-hex</code>, are now shipped as canonical packages while Labs keeps interactive mirrors.
             </p>
             <div class="labs-about-grid">
               <div class="labs-about-tile">
@@ -840,7 +849,8 @@
             <span class="labs-demo-card-desc" id="labs-card-hex-desc">Experimental interactive hex-grid toolkit for visualization and game prototypes</span>
             <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
             <span class="labs-demo-card-badge-row">
-              <span class="labs-demo-card-badge">Experimental</span>
+              <span class="labs-demo-card-badge">Experimental Demo</span>
+              <span class="labs-demo-card-badge labs-demo-card-badge-shipped">Shipped to Framework</span>
               <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="hex"></span>
             </span>
           </button>
@@ -975,7 +985,8 @@
             Vanduo Labs hosts prototypes and demos that are <strong>not</strong> polished products. By continuing, you acknowledge the following:
           </p>
           <ul>
-            <li>Everything here is <strong>experimental</strong> and may change, break, or disappear without notice.</li>
+            <li>Most demos here are <strong>experimental</strong> and may change, break, or disappear without notice.</li>
+            <li><code>vd-hex</code> is additionally available as a shipped package: <code>@vanduo-oss/hex-grid</code>.</li>
             <li>Demos are provided <strong>as-is</strong>, for exploration only—not as production guidance or a stable API surface.</li>
             <li>There is <strong>no warranty</strong> of any kind (including fitness for a particular purpose).</li>
             <li>You use Labs demos <strong>at your own risk</strong>; we are not liable for any loss or damage arising from use.</li>
