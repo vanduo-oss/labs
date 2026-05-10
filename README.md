@@ -10,7 +10,6 @@ Current component versions:
 
 | Component | Version | Module |
 |------|------|------|
-| `vd-hex` | `0.0.1` | [`hex-grid.js`](./hex-grid.js) |
 | `vd-neptune-search` | `0.0.2` | [`neptune-search.js`](./neptune-search.js) |
 | `vd-ai-chat` | `0.0.4` | [`ai-chat.js`](./ai-chat.js) |
 
@@ -41,43 +40,19 @@ const href = safeDocHref('https://vanduo.dev', 'docs/buttons');
 
 ---
 
-## vd-hex (VdHexGrid)
+## vd-hex (VdHexGrid) — Graduated
 
-Interactive **hex-grid** toolkit for the browser: canvas rendering, pan/zoom, hex selection, terrain helpers, and optional grid rotation.
-Status: **Shipped to Framework** (canonical package: `@vanduo-oss/hex-grid`), with Labs maintained as an interactive mirror/demo surface.
+The hex-grid component has graduated from Labs into its own standalone package.
 
-See full documentation: [doc/vd-hex.md](./doc/vd-hex.md)
-
-Install package:
+- npm: [`@vanduo-oss/hex-grid`](https://www.npmjs.com/package/@vanduo-oss/hex-grid)
+- Repo: [`github.com/vanduo-oss/hex-grid`](https://github.com/vanduo-oss/hex-grid)
 
 ```bash
 pnpm add @vanduo-oss/hex-grid
 ```
 
-### Files
-
-| File | Role |
-|------|------|
-| [`hex-grid.js`](./hex-grid.js) | `VdHexGrid` class — canvas grid, events, pan/zoom, terrain API |
-| [`utils/hex-math.js`](./utils/hex-math.js) | Axial coordinates, pixel mapping, corners, neighbors, terrain metadata |
-
-### Usage
-
 ```javascript
 import { VdHexGrid } from '@vanduo-oss/hex-grid';
-
-const grid = new VdHexGrid({
-  element: document.getElementById('container'),
-  canvas: document.getElementById('canvas'),
-  size: 30,
-  width: 15,
-  height: 10,
-  rotation: 0
-});
-
-grid.on('select', (hex) => {
-  console.log(hex.q, hex.r);
-});
 ```
 
 ---
@@ -168,13 +143,9 @@ ui.mount();
 
 ## Keeping in sync
 
-The canonical `vd-hex` distribution is now `@vanduo-oss/hex-grid` (framework monorepo package). Labs keeps mirrors for demos. When updating the Labs mirror, sync from the framework source package inputs:
+Labs modules are synced from their canonical source locations:
 
 ```bash
-# Example: from the monorepo root, after editing framework/js
-cp framework/js/components/vd-hex.js labs/hex-grid.js
-cp framework/js/utils/hex-math.js labs/utils/hex-math.js
-
 # vd-neptune-search: module + generated corpus (regenerate with pnpm index when docs change)
 cp docs/js/neptune-search.js labs/neptune-search.js
 cp docs/js/data/search-index.json labs/data/search-index.json

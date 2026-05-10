@@ -7,8 +7,8 @@
   <title>Vanduo Labs</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/icons/phosphor/regular/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.9/dist/vanduo.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.9/dist/icons/phosphor/regular/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Dots&display=swap" rel="stylesheet">
@@ -280,41 +280,6 @@
       max-width: 28rem;
       margin-left: auto;
       margin-right: auto;
-    }
-
-    #hex-demo-container {
-      position: relative;
-      width: 100%;
-      height: 420px;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-    }
-
-    #hex-demo {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: grab;
-    }
-
-    .canvas-toolbar {
-      position: absolute;
-      top: 0.625rem;
-      right: 0.625rem;
-      display: flex;
-      gap: 0.5rem;
-      z-index: 2;
-    }
-
-    .canvas-toolbar .vd-btn {
-      padding: 0.35rem 0.6rem;
-      min-width: auto;
-    }
-
-    #hex-info-card {
-      display: none;
     }
 
     .labs-demo-card-grid {
@@ -801,7 +766,7 @@
               Vanduo Labs is where we ship ideas before they are polished—interactive demos, odd widgets, and
               half-serious prototypes that might graduate into the framework, or might just make us smile.
               Most demos are not guaranteed stable; that is the point.
-              Some components, like <code>vd-hex</code>, are now shipped as canonical packages while Labs keeps interactive mirrors.
+              Some components, like <code>vd-neptune-search</code>, are experimental prototypes that may graduate into the framework.
             </p>
             <div class="labs-about-grid">
               <div class="labs-about-tile">
@@ -827,7 +792,7 @@
             </div>
             <div class="labs-about-cta">
               <a href="#demos" class="vd-btn vd-btn-outline">Open live demos</a>
-              <span class="labs-about-cta-note vd-text-sm vd-text-muted">Hex grids, hybrid search, and whatever we wire up next.</span>
+              <span class="labs-about-cta-note vd-text-sm vd-text-muted">Hybrid search, AI chat, and whatever we wire up next.</span>
             </div>
           </div>
         </div>
@@ -839,21 +804,6 @@
     <div class="vd-container-responsive labs-main">
       <section id="labs-demos" class="labs-section" aria-label="Component demos">
         <div class="labs-demo-card-grid" role="list">
-          <button type="button" class="labs-demo-card" id="labs-card-hex" data-demo-slug="hex" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-hex-desc">
-            <span class="labs-demo-card-icon" aria-hidden="true">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-                <path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/>
-              </svg>
-            </span>
-            <span class="labs-demo-card-title">vd-hex</span>
-            <span class="labs-demo-card-desc" id="labs-card-hex-desc">Experimental interactive hex-grid toolkit for visualization and game prototypes</span>
-            <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
-            <span class="labs-demo-card-badge-row">
-              <span class="labs-demo-card-badge">Experimental Demo</span>
-              <span class="labs-demo-card-badge labs-demo-card-badge-shipped">Shipped to Framework</span>
-              <span class="labs-demo-card-badge labs-demo-card-badge-version" data-version-for="hex"></span>
-            </span>
-          </button>
           <button type="button" class="labs-demo-card" id="labs-card-neptune" data-demo-slug="neptune" aria-pressed="false" aria-controls="labs-demos-detail" aria-describedby="labs-card-neptune-desc">
             <span class="labs-demo-card-icon" aria-hidden="true"><i class="ph ph-magnifying-glass" style="font-size: 3rem;"></i></span>
             <span class="labs-demo-card-title">vd-neptune-search</span>
@@ -892,61 +842,6 @@
             <div class="labs-detail-stack-section">
               <h3 id="labs-demo-heading">Demo</h3>
               <div id="labs-demo-panel">
-                <div class="labs-demo-panel-inner" id="labs-demo-hex" hidden>
-                  <div id="hex-demo-container" class="vd-mb-4">
-                    <canvas id="hex-demo"></canvas>
-                    <div class="canvas-toolbar">
-                      <button type="button" id="hex-zoom-out" class="vd-btn vd-btn-outline" title="Zoom out">
-                        <i class="ph ph-minus"></i>
-                      </button>
-                      <button type="button" id="hex-zoom-in" class="vd-btn vd-btn-outline" title="Zoom in">
-                        <i class="ph ph-plus"></i>
-                      </button>
-                      <button type="button" id="hex-reset-view" class="vd-btn vd-btn-outline" title="Reset view">
-                        <i class="ph ph-arrows-counter-clockwise"></i>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="vd-row">
-                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
-                      <label class="vd-form-label" for="hex-size-slider">Hex size</label>
-                      <input type="range" id="hex-size-slider" class="vd-range" min="10" max="50" value="30" style="width: 100%;">
-                      <span id="hex-size-value" class="vd-text-sm vd-text-muted">30px</span>
-                    </div>
-                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
-                      <label class="vd-form-label" for="hex-width-slider">Grid width</label>
-                      <input type="range" id="hex-width-slider" class="vd-range" min="5" max="30" value="15" style="width: 100%;">
-                      <span id="hex-width-value" class="vd-text-sm vd-text-muted">15</span>
-                    </div>
-                    <div class="vd-col-12 vd-col-md-4 vd-mb-3">
-                      <label class="vd-form-label" for="hex-height-slider">Grid height</label>
-                      <input type="range" id="hex-height-slider" class="vd-range" min="5" max="20" value="10" style="width: 100%;">
-                      <span id="hex-height-value" class="vd-text-sm vd-text-muted">10</span>
-                    </div>
-                  </div>
-
-                  <div class="vd-mt-3">
-                    <button type="button" id="hex-reset-btn" class="vd-btn vd-btn-outline">
-                      <i class="ph ph-arrows-counter-clockwise"></i> Reset grid
-                    </button>
-                    <button type="button" id="hex-fill-btn" class="vd-btn vd-btn-outline">
-                      <i class="ph ph-paint-bucket"></i> Fill random
-                    </button>
-                  </div>
-
-                  <div class="vd-card vd-mt-4" id="hex-info-card">
-                    <div class="vd-card-body">
-                      <h4 class="vd-mb-3"><i class="ph ph-cursor-click"></i> Selected hex</h4>
-                      <div class="vd-row">
-                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Coordinates:</span> <strong id="hex-coords">-</strong></div>
-                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Pixel:</span> <strong id="hex-pixel">-</strong></div>
-                        <div class="vd-col-12 vd-col-md-4"><span class="vd-text-muted">Adjacent:</span> <strong id="hex-adjacent">-</strong></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 <div class="labs-demo-panel-inner" id="labs-demo-neptune" hidden>
                   <div id="search-mount"></div>
                 </div>
@@ -985,8 +880,7 @@
             Vanduo Labs hosts prototypes and demos that are <strong>not</strong> polished products. By continuing, you acknowledge the following:
           </p>
           <ul>
-            <li>Most demos here are <strong>experimental</strong> and may change, break, or disappear without notice.</li>
-            <li><code>vd-hex</code> is additionally available as a shipped package: <code>@vanduo-oss/hex-grid</code>.</li>
+            <li>Demos are <strong>experimental</strong> and may change, break, or disappear without notice.</li>
             <li>Demos are provided <strong>as-is</strong>, for exploration only—not as production guidance or a stable API surface.</li>
             <li>There is <strong>no warranty</strong> of any kind (including fitness for a particular purpose).</li>
             <li>You use Labs demos <strong>at your own risk</strong>; we are not liable for any loss or damage arising from use.</li>
@@ -1001,16 +895,14 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.7/dist/vanduo.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/vanduo-oss/framework@v1.3.9/dist/vanduo.min.js"></script>
   <script type="module">
-    import { VD_HEX_VERSION, VdHexGrid } from "./hex-grid.js";
     import { NeptuneSearch, NeptuneSearchUI, VD_NEPTUNE_SEARCH_VERSION } from "./neptune-search.js";
     import { AiChat, AiChatUI, VD_AI_CHAT_VERSION } from "./ai-chat.js";
     import { labsMarkdownToHtml } from "./labs-md-to-html.js";
 
     const DEFAULT_COMPONENT_VERSION = "0.0.1";
     const COMPONENT_VERSION_MAP = {
-      hex: VD_HEX_VERSION,
       neptune: VD_NEPTUNE_SEARCH_VERSION,
       aichat: VD_AI_CHAT_VERSION
     };
@@ -1038,14 +930,11 @@
       window.Vanduo.init();
     }
 
-    const DEMO_SLUGS = new Set(["hex", "neptune", "aichat"]);
+    const DEMO_SLUGS = new Set(["neptune", "aichat"]);
     const DOC_FETCH = {
-      hex: new URL("./doc/vd-hex.md", import.meta.url).toString(),
       neptune: new URL("./doc/vd-neptune-search.md", import.meta.url).toString(),
       aichat: new URL("./doc/vd-ai-chat.md", import.meta.url).toString()
     };
-
-    const HEX_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9.5 5.5v11L12 24 2.5 18.5v-11L12 2z"/></svg>`;
 
     const mainEl = document.querySelector("main");
     const navLinks = Array.from(document.querySelectorAll(".vd-navbar-nav .vd-nav-link"));
@@ -1057,14 +946,13 @@
     const detailTitleEl = document.getElementById("labs-demos-detail-title");
     const detailIconEl = document.getElementById("labs-demos-detail-icon");
     const emptyEl = document.getElementById("labs-demo-empty");
-    const demoHexPanel = document.getElementById("labs-demo-hex");
     const demoNeptunePanel = document.getElementById("labs-demo-neptune");
     const demoAiChatPanel = document.getElementById("labs-demo-aichat");
     const docPanel = document.getElementById("labs-doc-panel");
     const liveRegion = document.getElementById("labs-demos-live-region");
 
     let lastTopLevelRoute = "home";
-    const docHtmlCache = { hex: null, neptune: null, aichat: null };
+    const docHtmlCache = { neptune: null, aichat: null };
     let docLoadSeq = 0;
     const LABS_DEMOS_DISCLAIMER_KEY = "vanduo-labs-demos-disclaimer-v1";
 
@@ -1103,7 +991,7 @@
       return { route, demoSlug: null };
     }
 
-    function applyLabsRoute(route, gridRef, demoSlug) {
+    function applyLabsRoute(route, demoSlug) {
       if (route !== "demos") {
         closeDemosDisclaimerIfOpen();
       }
@@ -1127,29 +1015,11 @@
       if (routeChanged) window.scrollTo(0, 0);
 
       if (route === "demos") {
-        syncDemosSelection(demoSlug, gridRef);
+        syncDemosSelection(demoSlug);
         maybeOpenDemosDisclaimer();
       } else {
-        syncDemosSelection(null, gridRef);
+        syncDemosSelection(null);
       }
-    }
-
-    function resizeHexGrid(gridRef) {
-      if (!gridRef) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          gridRef.setDimensions(gridRef.width, gridRef.height);
-        });
-      });
-    }
-
-    async function fetchHexDocumentationHtml() {
-      if (docHtmlCache.hex) return docHtmlCache.hex;
-      const res = await fetch(DOC_FETCH.hex, { credentials: "same-origin" });
-      if (!res.ok) throw new Error("Could not load vd-hex documentation (" + res.status + ")");
-      const md = hydrateComponentVersionTokens(await res.text(), "hex");
-      docHtmlCache.hex = labsMarkdownToHtml(md);
-      return docHtmlCache.hex;
     }
 
     async function fetchNeptuneDocumentationHtml() {
@@ -1176,8 +1046,7 @@
       docPanel.textContent = "Loading documentation…";
       try {
         let html;
-        if (slug === "hex") html = await fetchHexDocumentationHtml();
-        else if (slug === "neptune") html = await fetchNeptuneDocumentationHtml();
+        if (slug === "neptune") html = await fetchNeptuneDocumentationHtml();
         else if (slug === "aichat") html = await fetchAiChatDocumentationHtml();
         else return;
 
@@ -1197,14 +1066,14 @@
         if (seq !== docLoadSeq) return;
         docPanel.classList.remove("labs-doc-loading");
         docPanel.innerHTML = "<p class=\"labs-doc-error\" role=\"alert\">" +
-          "Documentation could not be loaded. Check that <code>doc/vd-hex.md</code>, " +
-          "<code>doc/vd-neptune-search.md</code>, and <code>doc/vd-ai-chat.md</code> are present, serve this folder over HTTP (not file://), " +
+          "Documentation could not be loaded. Check that " +
+          "<code>doc/vd-neptune-search.md</code> and <code>doc/vd-ai-chat.md</code> are present, serve this folder over HTTP (not file://), " +
           "then refresh. See the browser network tab for details.</p>";
         console.warn("[labs]", err);
       }
     }
 
-    function syncDemosSelection(demoSlug, gridRef) {
+    function syncDemosSelection(demoSlug) {
       demoCards.forEach((btn) => {
         const slug = btn.dataset.demoSlug;
         const on = slug === demoSlug;
@@ -1215,7 +1084,6 @@
       if (!demoSlug) {
         detailEl.hidden = true;
         emptyEl.hidden = false;
-        demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = true;
         demoAiChatPanel.hidden = true;
         liveRegion.textContent = "";
@@ -1225,28 +1093,19 @@
       emptyEl.hidden = true;
       detailEl.hidden = false;
 
-      if (demoSlug === "hex") {
-        detailTitleEl.textContent = "vd-hex";
-        detailIconEl.innerHTML = HEX_ICON_SVG;
-        demoHexPanel.hidden = false;
-        demoNeptunePanel.hidden = true;
-        demoAiChatPanel.hidden = true;
-        resizeHexGrid(gridRef);
-      } else if (demoSlug === "neptune") {
+      if (demoSlug === "neptune") {
         detailTitleEl.textContent = "vd-neptune-search";
         detailIconEl.innerHTML = "<i class=\"ph ph-magnifying-glass\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
-        demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = false;
         demoAiChatPanel.hidden = true;
       } else if (demoSlug === "aichat") {
         detailTitleEl.textContent = "vd-ai-chat";
         detailIconEl.innerHTML = "<i class=\"ph ph-robot\" style=\"font-size: 2.25rem;\" aria-hidden=\"true\"></i>";
-        demoHexPanel.hidden = true;
         demoNeptunePanel.hidden = true;
         demoAiChatPanel.hidden = false;
       }
 
-      const label = demoSlug === "hex" ? "vd-hex" : (demoSlug === "neptune" ? "vd-neptune-search" : "vd-ai-chat");
+      const label = demoSlug === "neptune" ? "vd-neptune-search" : "vd-ai-chat";
       liveRegion.textContent = label + " demo and documentation opened.";
 
       loadDocumentationForSlug(demoSlug);
@@ -1256,74 +1115,15 @@
       });
     }
 
-    function syncLabsRouteFromHash(gridRef) {
+    function syncLabsRouteFromHash() {
       let { route, demoSlug } = parseLabsHash();
       if (!location.hash) {
         history.replaceState(null, "", "#home");
         route = "home";
         demoSlug = null;
       }
-      applyLabsRoute(route, gridRef, demoSlug);
+      applyLabsRoute(route, demoSlug);
     }
-
-    const grid = new VdHexGrid({
-      element: document.getElementById("hex-demo-container"),
-      canvas: document.getElementById("hex-demo"),
-      size: 30,
-      width: 15,
-      height: 10
-    });
-
-    const sizeSlider = document.getElementById("hex-size-slider");
-    const widthSlider = document.getElementById("hex-width-slider");
-    const heightSlider = document.getElementById("hex-height-slider");
-    const sizeValue = document.getElementById("hex-size-value");
-    const widthValue = document.getElementById("hex-width-value");
-    const heightValue = document.getElementById("hex-height-value");
-
-    sizeSlider.addEventListener("input", (e) => {
-      const value = parseInt(e.target.value, 10);
-      sizeValue.textContent = value + "px";
-      grid.setSize(value);
-    });
-
-    widthSlider.addEventListener("input", (e) => {
-      const value = parseInt(e.target.value, 10);
-      widthValue.textContent = String(value);
-      grid.setDimensions(value, grid.height);
-    });
-
-    heightSlider.addEventListener("input", (e) => {
-      const value = parseInt(e.target.value, 10);
-      heightValue.textContent = String(value);
-      grid.setDimensions(grid.width, value);
-    });
-
-    document.getElementById("hex-reset-btn").addEventListener("click", () => {
-      sizeSlider.value = "30";
-      widthSlider.value = "15";
-      heightSlider.value = "10";
-      sizeValue.textContent = "30px";
-      widthValue.textContent = "15";
-      heightValue.textContent = "10";
-      grid.reset();
-    });
-
-    document.getElementById("hex-fill-btn").addEventListener("click", () => {
-      grid.fillRandom();
-    });
-
-    document.getElementById("hex-zoom-in").addEventListener("click", () => grid.zoomIn());
-    document.getElementById("hex-zoom-out").addEventListener("click", () => grid.zoomOut());
-    document.getElementById("hex-reset-view").addEventListener("click", () => grid.resetView());
-
-    grid.on("select", (hex) => {
-      const infoCard = document.getElementById("hex-info-card");
-      infoCard.style.display = "block";
-      document.getElementById("hex-coords").textContent = "(" + hex.q + ", " + hex.r + ")";
-      document.getElementById("hex-pixel").textContent = Math.round(hex.x) + ", " + Math.round(hex.y);
-      document.getElementById("hex-adjacent").textContent = String((hex.adjacent && hex.adjacent.length) || 0);
-    });
 
     const search = new NeptuneSearch({
       indexUrl: "./data/search-index.json",
@@ -1373,16 +1173,8 @@
       closeDemosDisclaimerIfOpen();
     });
 
-    const hexHost = document.getElementById("hex-demo-container");
-    if (hexHost && typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => {
-        if (mainEl.dataset.labsRoute === "demos" && !demoHexPanel.hidden) resizeHexGrid(grid);
-      });
-      ro.observe(hexHost);
-    }
-
-    window.addEventListener("hashchange", () => syncLabsRouteFromHash(grid));
-    syncLabsRouteFromHash(grid);
+    window.addEventListener("hashchange", () => syncLabsRouteFromHash());
+    syncLabsRouteFromHash();
 
     (function syncThemeToggleIcon() {
       const toggle = document.getElementById("dark-mode-toggle");
