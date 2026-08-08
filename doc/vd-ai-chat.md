@@ -9,17 +9,29 @@ Fully private, running entirely locally in your browser. FOSS guardrails enforce
 
 ### Quick Start
 
+**Headless engine (vanilla ESM):**
+
 ```javascript
-import { AiChat, AiChatUI } from './ai-chat.js';
+import { AiChat } from './ai-chat.js';
 
 const chat = new AiChat();
-const ui = new AiChatUI({
-  container: document.getElementById('chat-mount'),
-  chat
-});
-
-ui.mount();
+await chat.load();
+const reply = await chat.generate('Hello');
 ```
+
+**Labs Vue + vd3 UI:**
+
+```vue
+<script setup>
+import VdAiChatUI from './src/components/VdAiChatUI.vue';
+</script>
+
+<template>
+  <VdAiChatUI />
+</template>
+```
+
+Legacy imperative `AiChatUI` remains exported from `ai-chat.js` for compatibility; the Labs site uses `VdAiChatUI`.
 
 ### Features
 
@@ -35,7 +47,7 @@ ui.mount();
 - Uses shared FOSS guardrails (`guardrails/llm.js`) to enforce harmlessness and objectivity.
 - Includes a deterministic regex scanner to fast-reject known prompt injections and jailbreaks before they reach the model.
 - Enforces deterministic input validation in both UI and headless API (`AiChat.generate()`), so non-UI consumers cannot bypass guardrails.
-- UI chrome uses Vanduo `vd-*` classes; the Labs site shell is built with `@vanduo-oss/vd3`.
+- Labs UI is `VdAiChatUI` (Vue + `@vanduo-oss/vd3`); headless `AiChat` stays a vanilla ES module.
 
 For direct shared guardrails API usage (core contracts, LLM helpers, and search-policy split), see [doc/vd-guardrails.md](./vd-guardrails.md).
 

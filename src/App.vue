@@ -8,14 +8,16 @@ import {
   VdNavbar,
   VdThemeSwitcher,
 } from '@vanduo-oss/vd3';
-import { NeptuneSearch, NeptuneSearchUI, VD_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
-import { AiChat, AiChatUI, VD_AI_CHAT_VERSION } from '../ai-chat.js';
+import { DEFAULT_DOCS_BASE_URL, VD_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
+import { VD_AI_CHAT_VERSION } from '../ai-chat.js';
 import { labsMarkdownToHtml } from '../labs-md-to-html.js';
+import VdNeptuneSearchUI from './components/VdNeptuneSearchUI.vue';
+import VdAiChatUI from './components/VdAiChatUI.vue';
 
 const DEMO_SLUGS = new Set(['neptune', 'aichat']);
 const ROUTES = ['home', 'about', 'demos'];
 const LABS_DEMOS_DISCLAIMER_KEY = 'vanduo-labs-demos-disclaimer-v1';
-const LOCAL_DOCS_PORT = '65349';
+const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
 
 const COMPONENT_VERSION_MAP = {
   neptune: VD_NEPTUNE_SEARCH_VERSION,
@@ -30,13 +32,8 @@ const docLoading = ref(false);
 const docError = ref('');
 const liveRegionText = ref('');
 
-const searchMount = ref(null);
-const chatMount = ref(null);
-
 const docHtmlCache = { neptune: null, aichat: null };
 let docLoadSeq = 0;
-let searchUi = null;
-let chatUi = null;
 let lastTopLevelRoute = 'home';
 
 const neptuneVersion = computed(() => `v${COMPONENT_VERSION_MAP.neptune}`);
@@ -165,44 +162,13 @@ function selectDemo(slug) {
   location.hash = `#demos/${slug}`;
 }
 
-function docsBaseUrl() {
-  return location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-    ? `http://localhost:${LOCAL_DOCS_PORT}`
-    : 'https://vanduo.dev';
-}
-
 onMounted(() => {
-  const search = new NeptuneSearch({
-    indexUrl: '/data/search-index.json',
-    vectorsUrl: '/data/vectors.json',
-  });
-  const baseUrl = docsBaseUrl();
-  searchUi = new NeptuneSearchUI({
-    container: searchMount.value,
-    search,
-    placeholder: 'Search Vanduo docs...',
-    baseUrl,
-    onResultClick: (result) => {
-      window.open(`${baseUrl}/#${result.doc.route}`, '_blank', 'noopener,noreferrer');
-    },
-  });
-  searchUi.mount();
-
-  const chat = new AiChat();
-  chatUi = new AiChatUI({
-    container: chatMount.value,
-    chat,
-  });
-  chatUi.mount();
-
   window.addEventListener('hashchange', syncLabsRouteFromHash);
   syncLabsRouteFromHash();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('hashchange', syncLabsRouteFromHash);
-  searchUi = null;
-  chatUi = null;
 });
 
 watch(demoSlug, (slug) => {
@@ -456,7 +422,7 @@ watch(demoSlug, (slug) => {
               </span>
               <span class="labs-demo-card-title">vd-neptune-search</span>
               <span class="labs-demo-card-desc" id="labs-card-neptune-desc"
-                >In-browser hybrid fuzzy + semantic search for documentation—no server required</span
+                >In-browser hybrid fuzzy + semantic search over vd3 docs—no server required</span
               >
               <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
               <span class="labs-demo-card-badge-row">
@@ -542,14 +508,18 @@ watch(demoSlug, (slug) => {
                   id="labs-demo-neptune"
                   :hidden="demoSlug !== 'neptune'"
                 >
-                  <div id="search-mount" ref="searchMount"></div>
+                  <VdNeptuneSearchUI
+                    v-if="demoSlug === 'neptune'"
+                    :base-url="DOCS_BASE_URL"
+                    placeholder="Search vd3 docs…"
+                  />
                 </div>
                 <div
                   class="labs-demo-panel-inner"
                   id="labs-demo-aichat"
                   :hidden="demoSlug !== 'aichat'"
                 >
-                  <div id="chat-mount" ref="chatMount"></div>
+                  <VdAiChatUI v-if="demoSlug === 'aichat'" />
                 </div>
               </div>
             </div>

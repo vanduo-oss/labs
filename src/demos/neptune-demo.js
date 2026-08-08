@@ -1,36 +1,61 @@
-import { createApp, h } from 'vue';
+import { createApp, h, ref } from 'vue';
 import { VanduoVue, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
-import { NeptuneSearch, NeptuneSearchUI } from '../../neptune-search.js';
+import { DEFAULT_DOCS_BASE_URL } from '../../neptune-search.js';
+import VdNeptuneSearchUI from '../components/VdNeptuneSearchUI.vue';
+
+const lastDebug = ref('Type a query and press Enter to see raw results…');
 
 const DemoApp = {
   name: 'NeptuneDemo',
   setup() {
+    function onResultClick(result) {
+      lastDebug.value = JSON.stringify(
+        {
+          timestamp: new Date().toISOString(),
+          selected: {
+            id: result.doc.id,
+            title: result.doc.title,
+            score: result.score,
+            source: result.source,
+            route: result.doc.route,
+            href: `${DEFAULT_DOCS_BASE_URL}${result.doc.route === '/' ? '/' : result.doc.route}`,
+          },
+        },
+        null,
+        2,
+      );
+    }
+
     return () =>
       h('div', { class: 'demo-root' }, [
         h('header', { class: 'demo-header' }, [
           h('h1', 'Neptune Hybrid Search'),
           h('p', [
-            'Instant fuzzy search + semantic AI search over Vanduo Docs.',
+            'Instant fuzzy search + semantic AI search over ',
+            h('strong', 'vd3 docs'),
+            '.',
             h('br'),
             'Try: ',
-            h('strong', '"glass card"'),
+            h('strong', '"button ring"'),
             ', ',
-            h('strong', '"how to theme"'),
+            h('strong', '"glass"'),
             ', or ',
-            h('strong', '"button sizes"'),
+            h('strong', '"getting started"'),
           ]),
           h(VdThemeSwitcher, { menu: false }),
         ]),
-        h('div', { class: 'demo-search-wrap' }, [h('div', { id: 'search-mount' })]),
+        h('div', { class: 'demo-search-wrap' }, [
+          h(VdNeptuneSearchUI, {
+            baseUrl: DEFAULT_DOCS_BASE_URL,
+            placeholder: 'Search vd3 docs…',
+            onResultClick,
+          }),
+        ]),
         h('div', { class: 'demo-debug' }, [
-          h('h3', 'Debug Output (last search)'),
-          h(
-            'pre',
-            { id: 'debug-output' },
-            'Type a query and press Enter to see raw results…',
-          ),
+          h('h3', 'Debug Output (last selection)'),
+          h('pre', { id: 'debug-output' }, lastDebug.value),
         ]),
         h(
           'footer',
@@ -38,60 +63,6 @@ const DemoApp = {
           'Neptune Hybrid Search — Experimental Labs Component for Vanduo',
         ),
       ]);
-  },
-  mounted() {
-    const debugOutput = document.getElementById('debug-output');
-    const search = new NeptuneSearch({
-      indexUrl: '/data/search-index.json',
-      vectorsUrl: '/data/vectors.json',
-    });
-
-    const ui = new NeptuneSearchUI({
-      container: document.getElementById('search-mount'),
-      search,
-      placeholder: 'Search docs…',
-      onResultClick: (result) => {
-        debugOutput.textContent = JSON.stringify(
-          {
-            timestamp: new Date().toISOString(),
-            selected: {
-              id: result.doc.id,
-              title: result.doc.title,
-              score: result.score,
-              source: result.source,
-              route: result.doc.route,
-            },
-          },
-          null,
-          2,
-        );
-        window.open(`https://vanduo.dev/#${result.doc.route}`, '_blank', 'noopener,noreferrer');
-      },
-    });
-    ui.mount();
-
-    const originalSearch = search.search.bind(search);
-    search.search = async function (...args) {
-      const result = await originalSearch(...args);
-      debugOutput.textContent = JSON.stringify(
-        {
-          timestamp: new Date().toISOString(),
-          query: result.query,
-          mode: result.mode,
-          fuzzyCount: result.fuzzy.length,
-          semanticCount: result.semantic.length,
-          merged: result.merged.map((r) => ({
-            id: r.doc.id,
-            title: r.doc.title,
-            score: r.score,
-            source: r.source,
-          })),
-        },
-        null,
-        2,
-      );
-      return result;
-    };
   },
 };
 

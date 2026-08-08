@@ -2,7 +2,7 @@ import { createApp, h } from 'vue';
 import { VanduoVue, VdCard, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
-import { AiChat, AiChatUI } from '../../ai-chat.js';
+import VdAiChatUI from '../components/VdAiChatUI.vue';
 
 const DemoApp = {
   name: 'AiChatDemo',
@@ -21,7 +21,7 @@ const DemoApp = {
           ),
           h(VdThemeSwitcher, { menu: false }),
         ]),
-        h('div', { class: 'demo-chat-wrap' }, [h('div', { id: 'chat-mount' })]),
+        h('div', { class: 'demo-chat-wrap' }, [h(VdAiChatUI)]),
         h(
           VdCard,
           { class: 'demo-info-section vd-card-glow vd-glass' },
@@ -42,7 +42,7 @@ const DemoApp = {
                     { href: 'https://webllm.mlc.ai/', target: '_blank', rel: 'noopener noreferrer' },
                     'WebLLM',
                   ),
-                  ' automatically utilizes the browser\'s native Cache API. After the initial model download, weights are stored securely on your hard drive.',
+                  " automatically utilizes the browser's native Cache API. After the initial model download, weights are stored securely on your hard drive.",
                 ]),
                 h('li', [
                   h('strong', 'VRAM Initialization: '),
@@ -79,24 +79,10 @@ const DemoApp = {
                         target: '_blank',
                         rel: 'noopener noreferrer',
                       },
-                      'Gemma 4 (Google DeepMind)',
+                      'Gemma 4',
                     ),
                   ]),
-                  ': Primary local models (E2B / E4B) packaged for WebLLM/WebGPU.',
-                ]),
-                h('li', [
-                  h('strong', [
-                    h(
-                      'a',
-                      {
-                        href: 'https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API',
-                        target: '_blank',
-                        rel: 'noopener noreferrer',
-                      },
-                      'WebGPU API',
-                    ),
-                  ]),
-                  ': The modern web standard allowing applications to access the device\'s underlying GPU.',
+                  ': Primary local models (E2B / E4B) via community MLC/WebLLM packages.',
                 ]),
               ]),
               h('h5', 'UI & Design'),
@@ -113,7 +99,7 @@ const DemoApp = {
                       '@vanduo-oss/vd3',
                     ),
                   ]),
-                  ': Vanduo UI for Vue 3 powering the Labs site shell.',
+                  ': Vanduo UI for Vue 3 powering the Labs site shell and chat UI.',
                 ]),
                 h('li', [
                   h('strong', [
@@ -135,14 +121,6 @@ const DemoApp = {
         ),
         h('footer', { class: 'demo-footer' }, 'AI Chat — Experimental Labs Component for Vanduo'),
       ]);
-  },
-  mounted() {
-    const chat = new AiChat();
-    const ui = new AiChatUI({
-      container: document.getElementById('chat-mount'),
-      chat,
-    });
-    ui.mount();
   },
 };
 

@@ -39,7 +39,9 @@ const CDN = {
   ],
 };
 
-export const VD_NEPTUNE_SEARCH_VERSION = '0.0.2';
+export const VD_NEPTUNE_SEARCH_VERSION = '0.0.3';
+
+export const DEFAULT_DOCS_BASE_URL = 'https://vanduo-oss.github.io/vd3-docs';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Math Helpers
@@ -374,6 +376,11 @@ mergeResults(fuzzyResults, semanticResults) {
     return this._docMap?.get(id) ?? null;
   }
 
+  /** @returns {Array<Record<string, unknown>>} */
+  getDocuments() {
+    return Array.isArray(this._docs) ? this._docs.slice() : [];
+  }
+
   isSemanticReady() {
     return this._semanticReady;
   }
@@ -398,8 +405,8 @@ export class NeptuneSearchUI {
     this.placeholder = options.placeholder ?? 'Search docs…';
     this.debounceMs = options.debounceMs ?? 150;
     this.showSemanticHint = options.showSemanticHint ?? true;
-    this.baseUrl = options.baseUrl ?? 'https://vanduo.dev';
-    this.emptyMessage = options.emptyMessage ?? 'No docs found. Try a different query or browse categories below.';
+    this.baseUrl = options.baseUrl ?? DEFAULT_DOCS_BASE_URL;
+    this.emptyMessage = options.emptyMessage ?? 'No docs found. Try another query or pick a category filter.';
 
     this._mounted = false;
     this._elements = {};
@@ -724,7 +731,7 @@ export class NeptuneSearchUI {
         tabindex="-1"
       >
         <div class="vd-neptune-result-header">
-          <span class="vd-neptune-result-icon"><i class="ph ${this._esc(safeIcon)}"></i></span>
+          <span class="vd-neptune-result-icon"><i class="ph ph-${this._esc(safeIcon)}"></i></span>
           <span class="vd-neptune-result-title">${this._esc(doc.title)}</span>
           <span class="vd-neptune-result-trail">
             <span class="vd-neptune-result-category">${this._esc(doc.category)}</span>

@@ -1,9 +1,10 @@
 # vd-neptune-search — In-Browser Hybrid Search
 
-Zero-dependency, client-side hybrid search engine for the Vanduo documentation site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
+Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://vanduo-oss.github.io/vd3-docs/)** site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
 
 - Component version: {{COMPONENT_VERSION}}
 - Live labs site: **https://labs.vanduo.dev**
+- Docs corpus: **https://vanduo-oss.github.io/vd3-docs/** (`vanduo-oss/vd3-docs`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -48,12 +49,13 @@ Zero-dependency, client-side hybrid search engine for the Vanduo documentation s
 
 ## Features
 
-- **Zero runtime npm dependencies** — Fuse.js and Transformers.js load from CDN on demand
-- **Dual interface** — headless `NeptuneSearch` API + `NeptuneSearchUI` DOM component
+- **Zero runtime npm dependencies** (headless engine) — Fuse.js and Transformers.js load from CDN on demand
+- **Dual interface** — headless `NeptuneSearch` API + Labs Vue UI (`VdNeptuneSearchUI`) on `@vanduo-oss/vd3` (legacy `NeptuneSearchUI` DOM helper remains for tests/compat)
+- **vd3-docs corpus** — path routes (`/components/button`), category filters, and result links to GitHub Pages docs
 - **Graceful degradation** — falls back to fuzzy-only if semantic fails
 - **Keyboard accessible** — full Arrow/Enter/Escape navigation, Cmd+K shortcut
 - **ARIA compliant** — combobox pattern with activedescendant management
-- **ES module** — single `.js` file, tree-shakeable exports
+- **ES module** — headless engine ships as a single `.js` file with tree-shakeable exports
 
 ## Security Model
 
@@ -370,8 +372,8 @@ new NeptuneSearchUI(options: NeptuneSearchUIOptions)
 | `placeholder` | `string` | `'Search docs…'` | Input placeholder text |
 | `debounceMs` | `number` | `150` | Debounce delay for fuzzy search on keystroke |
 | `showSemanticHint` | `boolean` | `true` | Show "Enter for AI search" hint in the input |
-| `baseUrl` | `string` | `'https://vanduo.dev'` | Base URL for result card "Open docs" links |
-| `emptyMessage` | `string` | `'No docs found. Try a different query or browse categories below.'` | Message shown when search returns no results |
+| `baseUrl` | `string` | `'https://vanduo-oss.github.io/vd3-docs'` | Base URL for result card "Open docs" path links |
+| `emptyMessage` | `string` | `'No docs found. Try another query or pick a category filter.'` | Message shown when search returns no results |
 
 #### Methods
 
@@ -483,33 +485,31 @@ Each embedding is pre-normalized, so cosine similarity is a simple dot product.
 
 ## Indexer
 
-The indexer (`utils/neptune-indexer.mjs`) regenerates both data files from source HTML.
+The indexer (`utils/neptune-indexer.mjs`) regenerates both data files from **vd3-docs**.
 
 ### Usage
 
 ```bash
 pnpm index   # or: node utils/neptune-indexer.mjs
+# optional local nav.ts:
+VD3_DOCS_PATH=../vd3-docs pnpm index
 ```
 
 ### What It Does
 
-1. Reads `sections.json` manifest from `../docs/sections/`
-2. For each HTML fragment:
-   - Extracts headings (h2–h4), paragraphs, list items, CSS classes, alerts, demo titles
-   - Builds structured chunks grouped by heading context
-   - Concatenates body text (capped at 8000 chars)
-3. Writes `data/search-index.json`
-4. Loads `@xenova/transformers` with `Xenova/all-MiniLM-L6-v2` (quantized)
-5. Generates embeddings for each document (text: `title. category. keywords. headings. bodyText`, capped at 512 chars)
-6. Writes `data/vectors.json`
-7. Validates consistency: every doc ID exists in vectors and vice versa. Exits with error on mismatch.
+1. Loads the page catalog from `vd3-docs` `src/nav.ts` (local sibling / `VD3_DOCS_PATH`, else GitHub raw)
+2. Crawls prerendered HTML from `https://vanduo-oss.github.io/vd3-docs{route}`
+3. Extracts copy from `#main-content .doc-content` only (strips sidebar, code panes, demo chrome)
+4. Builds structured chunks (paragraphs + class tables), headings, keywords from nav
+5. Writes path-route documents to `data/search-index.json` (`route` like `/components/button`)
+6. Loads `@xenova/transformers` with `Xenova/all-MiniLM-L6-v2` (quantized)
+7. Generates embeddings (`title. category. keywords. headings. bodyText`, capped at 512 chars)
+8. Writes `data/vectors.json` and validates index/vector id consistency
 
 ### Requirements
 
-- Node.js
+- Node.js + network access to vd3-docs (or a local `VD3_DOCS_PATH` clone for `nav.ts`)
 - `@xenova/transformers` (dev dependency)
-- Source HTML files at `../docs/sections/`
-- `sections.json` manifest
 
 ## Testing
 

@@ -10,7 +10,7 @@ Current component versions:
 
 | Component | Version | Module |
 |------|------|------|
-| `vd-neptune-search` | `0.0.2` | [`neptune-search.js`](./neptune-search.js) |
+| `vd-neptune-search` | `0.0.3` | [`neptune-search.js`](./neptune-search.js) |
 | `vd-ai-chat` | `0.0.5` | [`ai-chat.js`](./ai-chat.js) |
 
 ### Shared Guardrails Modules
@@ -59,16 +59,19 @@ import { VdHexGrid } from '@vanduo-oss/hex-grid';
 
 ## vd-neptune-search (Neptune Hybrid Search)
 
-In-browser **hybrid search** over Vanduo Docs — instant fuzzy search via Fuse.js + semantic vector search via Transformers.js. Zero external LLM API calls.
+In-browser **hybrid search** over **[vd3 docs](https://vanduo-oss.github.io/vd3-docs/)** — instant fuzzy search via Fuse.js + semantic vector search via Transformers.js. Zero external LLM API calls.
+
+Labs UI: Vue + vd3 component `VdNeptuneSearchUI` (headless `NeptuneSearch` remains a vanilla ES module).
 
 See full documentation: [doc/vd-neptune-search.md](./doc/vd-neptune-search.md)
 
 ### Search Quality (Tuned)
 
-- Benchmark quality (Apr 2026): **MRR 0.9938**, **Top-1 98.8% (80/81)**, **Top-3 100%**, **Top-5 100%**
+- Corpus: vd3-docs nav catalog + prerendered page HTML (path routes such as `/components/button`)
 - Runtime defaults: `fuseThreshold=0.45`, `semanticThreshold=0.30`, `keywords` weight `2.5`
 - Hybrid merge: score-sorted interleave across semantic + fuzzy results (deduped by doc ID)
 - Embeddings are generated from: `title + category + keywords + headings + bodyText` (512-char cap)
+- Rebuild index: `pnpm index` (optional `VD3_DOCS_PATH=../vd3-docs`)
 - Repro benchmark tools: `utils/neptune-benchmark.mjs` + `utils/benchmark-queries.json`
 
 ### Quick Start
@@ -127,16 +130,14 @@ See full documentation: [doc/vd-ai-chat.md](./doc/vd-ai-chat.md)
 ### Quick Start
 
 ```javascript
-import { AiChat, AiChatUI } from './ai-chat.js';
+import { AiChat } from './ai-chat.js';
 
 const chat = new AiChat();
-const ui = new AiChatUI({
-  container: document.getElementById('chat-mount'),
-  chat,
-});
-
-ui.mount();
+await chat.load();
+await chat.generate('Hello');
 ```
+
+Labs UI: Vue + vd3 component `VdAiChatUI` (headless `AiChat` remains a vanilla ES module).
 
 ### Notes
 

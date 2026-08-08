@@ -86,18 +86,25 @@ test.describe('Guardrails Unit', () => {
     expect(result.code).toBe('search.vectors.dimension_mismatch');
   });
 
-  test('safeDocHref rejects unsafe route and base protocol', async ({ page }) => {
+  test('safeDocHref supports path routes and rejects unsafe values', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/guardrails/search.js');
+      const base = 'https://vanduo-oss.github.io/vd3-docs';
       return {
-        safe: mod.safeDocHref('https://vanduo.dev', 'docs/buttons'),
-        badRoute: mod.safeDocHref('https://vanduo.dev', 'javascript:alert(1)'),
-        badBase: mod.safeDocHref('javascript:alert(1)', 'docs/buttons'),
+        path: mod.safeDocHref(base, '/components/button'),
+        home: mod.safeDocHref(base, '/'),
+        legacyHash: mod.safeDocHref(base, 'docs/buttons'),
+        badRoute: mod.safeDocHref(base, 'javascript:alert(1)'),
+        badPath: mod.safeDocHref(base, '/../etc/passwd'),
+        badBase: mod.safeDocHref('javascript:alert(1)', '/components/button'),
       };
     });
-    expect(result.safe).toBe('https://vanduo.dev/#docs/buttons');
+    expect(result.path).toBe('https://vanduo-oss.github.io/vd3-docs/components/button');
+    expect(result.home).toBe('https://vanduo-oss.github.io/vd3-docs/');
+    expect(result.legacyHash).toBe('https://vanduo-oss.github.io/vd3-docs/#docs/buttons');
     expect(result.badRoute).toBe('#');
-    expect(result.badBase).toBe('https://vanduo.dev/#docs/buttons');
+    expect(result.badPath).toBe('#');
+    expect(result.badBase).toBe('https://vanduo-oss.github.io/vd3-docs/components/button');
   });
 
   test('AiChat headless generate blocks before model-load requirement', async ({ page }) => {

@@ -28,16 +28,16 @@ const CDN = {
   webllm: 'https://esm.run/@mlc-ai/web-llm'
 };
 
-export const VD_AI_CHAT_VERSION = '0.0.5';
+export const VD_AI_CHAT_VERSION = '0.0.6';
 
 let _webllmModule = null;
 
-const MODEL_GROUPS = [
+export const MODEL_GROUPS = [
   { id: 'gemma4', label: 'Gemma 4' },
   { id: 'optional', label: 'Optional' },
 ];
 
-const MODEL_OPTIONS = [
+export const MODEL_OPTIONS = [
   {
     id: 'gemma-4-E2B-it-q4f16_1-MLC',
     label: 'Gemma 4 E2B (~2.7GB) - Fast (Default)',
@@ -108,11 +108,11 @@ const DEFAULT_GENERATION_CONFIG = {
   top_p: 0.9,
 };
 
-function getModelOption(modelId) {
+export function getModelOption(modelId) {
   return MODEL_OPTIONS.find((m) => m.id === modelId) || null;
 }
 
-function getModelDisplayName(modelId) {
+export function getModelDisplayName(modelId) {
   const option = getModelOption(modelId);
   if (!option) return modelId;
   return option.label.split('(~')[0].replace(/\s+-\s+\w+$/, '').trim();
@@ -367,7 +367,8 @@ export class AiChat {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// AiChatUI — DOM Component
+// AiChatUI — legacy imperative DOM component (compat / tests)
+// Labs site uses Vue `VdAiChatUI` instead.
 // ═══════════════════════════════════════════════════════════════════════
 
 export class AiChatUI {
