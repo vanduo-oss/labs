@@ -16,6 +16,7 @@ import { labsMarkdownToHtml } from '../labs-md-to-html.js';
 import VdlNeptuneSearchUI from './components/VdlNeptuneSearchUI.vue';
 import VdlAiChatUI from './components/VdlAiChatUI.vue';
 import VdlModelEvalUI from './components/VdlModelEvalUI.vue';
+import VdlHomeAtmosphere from './components/VdlHomeAtmosphere.vue';
 import {
   isGladosHomeQuote,
   nextHomeQuoteIntervalMs,
@@ -356,6 +357,7 @@ watch(toolSlug, (slug) => {
       :aria-hidden="route === 'home' ? 'false' : 'true'"
       :inert="route !== 'home'"
     >
+      <VdlHomeAtmosphere :active="route === 'home'" />
       <section class="hero">
         <h2
           class="hero-title"
@@ -401,6 +403,16 @@ watch(toolSlug, (slug) => {
             >, but we might soon…
           </template>
           <template v-else-if="homeQuoteEntry">{{ homeQuoteEntry.text }}</template>
+        </p>
+        <p class="vdl-home-atmosphere-credit">
+          Atmosphere inspired by
+          <a
+            href="https://codepen.io/cameronknight/pen/ogxWmBP"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Interactive Liquid Gradient</a
+          >
+          by Cameron Knight
         </p>
       </section>
     </div>

@@ -202,6 +202,62 @@ html {
       }
     }
 
+    /* Home liquid atmosphere: skip static body washes so WebGL can read cleanly. */
+    body:has(main[data-labs-route="home"]) {
+      background-color: var(--bg-primary);
+      background-image: none;
+    }
+
+    .vdl-home-atmosphere {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.35s ease;
+    }
+
+    .vdl-home-atmosphere-active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .vdl-home-atmosphere-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .labs-view-home {
+      position: relative;
+      z-index: 1;
+      min-height: calc(100vh - 80px);
+    }
+
+    .vdl-home-atmosphere-credit {
+      margin: 2.75rem auto 0;
+      padding: 0 1rem;
+      max-width: 28rem;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      letter-spacing: 0.01em;
+      color: var(--text-muted, var(--vd-color-muted, #888));
+      opacity: 0.72;
+    }
+
+    .vdl-home-atmosphere-credit a {
+      color: inherit;
+      text-decoration: underline;
+      text-decoration-color: rgba(var(--vd-color-primary-rgb), 0.35);
+      text-underline-offset: 0.15em;
+    }
+
+    .vdl-home-atmosphere-credit a:hover {
+      color: var(--color-primary);
+      text-decoration-color: var(--color-primary);
+    }
+
     .hero {
       display: flex;
       flex-direction: column;
@@ -209,9 +265,11 @@ html {
       justify-content: center;
       text-align: center;
       position: relative;
+      z-index: 1;
       overflow: hidden;
       padding-top: 9.5rem;
       padding-bottom: 5rem;
+      min-height: calc(100vh - 80px);
     }
 
     .hero .hero-wiki-link {

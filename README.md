@@ -184,6 +184,12 @@ This repository is maintained by vanduo-oss; external contributions are not acce
 
 Security reports: see [SECURITY.md](./SECURITY.md).
 
+## Credits
+
+Home page liquid atmosphere is inspired by Cameron Knight’s
+[Interactive Liquid Gradient using Three.js](https://codepen.io/cameronknight/pen/ogxWmBP)
+(CodePen). Labs ships a vanilla WebGL reimplementation bound to vd3 primary/neutral theme tokens — no Three.js CDN.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
