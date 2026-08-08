@@ -1,5 +1,5 @@
 /**
- * vd-neptune-search — In-browser Hybrid Search for Vanduo Docs
+ * vdl-neptune-search — In-browser Hybrid Search for Vanduo Docs
  *
  * Provides both a headless API (NeptuneSearch) and a UI component
  * (NeptuneSearchUI) for fuzzy + semantic hybrid search over
@@ -39,7 +39,9 @@ const CDN = {
   ],
 };
 
-export const VD_NEPTUNE_SEARCH_VERSION = '0.0.2';
+export const VDL_NEPTUNE_SEARCH_VERSION = '0.0.3';
+
+export const DEFAULT_DOCS_BASE_URL = 'https://vanduo-oss.github.io/vd3-docs';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Math Helpers
@@ -113,7 +115,7 @@ async function loadTransformers() {
 // ═══════════════════════════════════════════════════════════════════════
 
 export class NeptuneSearch {
-  static VERSION = VD_NEPTUNE_SEARCH_VERSION;
+  static VERSION = VDL_NEPTUNE_SEARCH_VERSION;
 
   constructor(options = {}) {
     this.indexUrl = options.indexUrl ?? './data/search-index.json';
@@ -374,6 +376,11 @@ mergeResults(fuzzyResults, semanticResults) {
     return this._docMap?.get(id) ?? null;
   }
 
+  /** @returns {Array<Record<string, unknown>>} */
+  getDocuments() {
+    return Array.isArray(this._docs) ? this._docs.slice() : [];
+  }
+
   isSemanticReady() {
     return this._semanticReady;
   }
@@ -389,7 +396,7 @@ mergeResults(fuzzyResults, semanticResults) {
 // ═══════════════════════════════════════════════════════════════════════
 
 export class NeptuneSearchUI {
-  static VERSION = VD_NEPTUNE_SEARCH_VERSION;
+  static VERSION = VDL_NEPTUNE_SEARCH_VERSION;
 
   constructor(options = {}) {
     this.container = options.container;
@@ -398,8 +405,8 @@ export class NeptuneSearchUI {
     this.placeholder = options.placeholder ?? 'Search docs…';
     this.debounceMs = options.debounceMs ?? 150;
     this.showSemanticHint = options.showSemanticHint ?? true;
-    this.baseUrl = options.baseUrl ?? 'https://vanduo.dev';
-    this.emptyMessage = options.emptyMessage ?? 'No docs found. Try a different query or browse categories below.';
+    this.baseUrl = options.baseUrl ?? DEFAULT_DOCS_BASE_URL;
+    this.emptyMessage = options.emptyMessage ?? 'No docs found. Try another query or pick a category filter.';
 
     this._mounted = false;
     this._elements = {};
@@ -420,6 +427,9 @@ export class NeptuneSearchUI {
     this._buildDOM();
     this._bindEvents();
     this._mounted = true;
+    // Warm Transformers.js + MiniLM in the background so Enter feels instant.
+    // Fuzzy search remains available while this runs (non-blocking progress bar).
+    this._preloadSemantic();
   }
 
   destroy() {
@@ -432,16 +442,27 @@ export class NeptuneSearchUI {
     this._selectedIndex = -1;
   }
 
+  /**
+   * Kick off semantic init without awaiting. Safe to call repeatedly —
+   * NeptuneSearch.initSemantic() is promise-cached per instance.
+   */
+  _preloadSemantic() {
+    if (!this.search) return;
+    this.search.initSemantic().catch((err) => {
+      console.warn('[NeptuneUI] Semantic preload failed:', err?.message || err);
+    });
+  }
+
   // ── DOM Construction ─────────────────────────────────────────────────
 
   _buildDOM() {
     const wrapper = document.createElement('div');
-    wrapper.className = 'vd-neptune-search';
+    wrapper.className = 'vdl-neptune-search';
     wrapper.innerHTML = `
-      <div class="vd-neptune-input-wrap">
+      <div class="vdl-neptune-input-wrap">
         <input
           type="text"
-          class="vd-neptune-input"
+          class="vdl-neptune-input"
           placeholder="${this._esc(this.placeholder)}"
           autocomplete="off"
           autocapitalize="off"
@@ -451,24 +472,24 @@ export class NeptuneSearchUI {
           aria-autocomplete="list"
           aria-haspopup="listbox"
           aria-expanded="false"
-          aria-controls="vd-neptune-results"
+          aria-controls="vdl-neptune-results"
           aria-activedescendant=""
         />
-        <span class="vd-neptune-hint" aria-hidden="true">
+        <span class="vdl-neptune-hint" aria-hidden="true">
           ${this.showSemanticHint ? '<kbd>Enter</kbd> for AI search' : ''}
         </span>
       </div>
-      <div class="vd-neptune-dropdown" id="vd-neptune-results" role="listbox" hidden>
-        <div class="vd-neptune-loader" hidden>
-          <span class="vd-neptune-spinner"></span>
-          <span class="vd-neptune-loader-text">Searching with AI…</span>
+      <div class="vdl-neptune-dropdown" id="vdl-neptune-results" role="listbox" hidden>
+        <div class="vdl-neptune-loader" hidden>
+          <span class="vdl-neptune-spinner"></span>
+          <span class="vdl-neptune-loader-text">Searching with AI…</span>
         </div>
-        <div class="vd-neptune-results"></div>
-        <div class="vd-neptune-empty" hidden>${this._esc(this.emptyMessage)}</div>
+        <div class="vdl-neptune-results"></div>
+        <div class="vdl-neptune-empty" hidden>${this._esc(this.emptyMessage)}</div>
       </div>
-      <div class="vd-neptune-progress" hidden>
-        <div class="vd-neptune-progress-bar"></div>
-        <span class="vd-neptune-progress-text"></span>
+      <div class="vdl-neptune-progress" hidden>
+        <div class="vdl-neptune-progress-bar"></div>
+        <span class="vdl-neptune-progress-text"></span>
       </div>
     `;
 
@@ -476,15 +497,15 @@ export class NeptuneSearchUI {
 
     this._elements = {
       wrapper,
-      input: wrapper.querySelector('.vd-neptune-input'),
-      dropdown: wrapper.querySelector('.vd-neptune-dropdown'),
-      results: wrapper.querySelector('.vd-neptune-results'),
-      empty: wrapper.querySelector('.vd-neptune-empty'),
-      loader: wrapper.querySelector('.vd-neptune-loader'),
-      progress: wrapper.querySelector('.vd-neptune-progress'),
-      progressBar: wrapper.querySelector('.vd-neptune-progress-bar'),
-      progressText: wrapper.querySelector('.vd-neptune-progress-text'),
-      hint: wrapper.querySelector('.vd-neptune-hint'),
+      input: wrapper.querySelector('.vdl-neptune-input'),
+      dropdown: wrapper.querySelector('.vdl-neptune-dropdown'),
+      results: wrapper.querySelector('.vdl-neptune-results'),
+      empty: wrapper.querySelector('.vdl-neptune-empty'),
+      loader: wrapper.querySelector('.vdl-neptune-loader'),
+      progress: wrapper.querySelector('.vdl-neptune-progress'),
+      progressBar: wrapper.querySelector('.vdl-neptune-progress-bar'),
+      progressText: wrapper.querySelector('.vdl-neptune-progress-text'),
+      hint: wrapper.querySelector('.vdl-neptune-hint'),
     };
   }
 
@@ -694,7 +715,7 @@ export class NeptuneSearchUI {
     results.innerHTML = this._results.map((r, i) => this._renderResultCard(r, i)).join('');
 
     // Bind click handlers
-    results.querySelectorAll('.vd-neptune-result').forEach((el, i) => {
+    results.querySelectorAll('.vdl-neptune-result').forEach((el, i) => {
       el.addEventListener('click', () => this._selectResult(this._results[i]));
       el.addEventListener('mouseenter', () => {
         this._selectedIndex = i;
@@ -708,36 +729,36 @@ export class NeptuneSearchUI {
     const safeIcon = sanitizeIconClass(doc.icon || 'ph-file-text');
     const href = safeDocHref(this.baseUrl, doc.route);
     const badge = source === 'semantic'
-      ? '<span class="vd-neptune-badge vd-neptune-badge-semantic">AI</span>'
-      : '<span class="vd-neptune-badge vd-neptune-badge-fuzzy">Fuzzy</span>';
+      ? '<span class="vdl-neptune-badge vdl-neptune-badge-semantic">AI</span>'
+      : '<span class="vdl-neptune-badge vdl-neptune-badge-fuzzy">Fuzzy</span>';
 
     const keywords = (doc.keywords || []).slice(0, 3).map(k =>
-      `<span class="vd-neptune-keyword">${this._esc(k)}</span>`
+      `<span class="vdl-neptune-keyword">${this._esc(k)}</span>`
     ).join('');
 
     return `
       <div
-        class="vd-neptune-result"
-        id="vd-neptune-result-${index}"
+        class="vdl-neptune-result"
+        id="vdl-neptune-result-${index}"
         role="option"
         data-index="${index}"
         tabindex="-1"
       >
-        <div class="vd-neptune-result-header">
-          <span class="vd-neptune-result-icon"><i class="ph ${this._esc(safeIcon)}"></i></span>
-          <span class="vd-neptune-result-title">${this._esc(doc.title)}</span>
-          <span class="vd-neptune-result-trail">
-            <span class="vd-neptune-result-category">${this._esc(doc.category)}</span>
+        <div class="vdl-neptune-result-header">
+          <span class="vdl-neptune-result-icon"><i class="ph ph-${this._esc(safeIcon)}"></i></span>
+          <span class="vdl-neptune-result-title">${this._esc(doc.title)}</span>
+          <span class="vdl-neptune-result-trail">
+            <span class="vdl-neptune-result-category">${this._esc(doc.category)}</span>
             ${badge}
           </span>
         </div>
-        <div class="vd-neptune-result-body">
+        <div class="vdl-neptune-result-body">
           ${this._esc(doc.bodyText?.slice(0, 100) || '')}…
         </div>
-        <div class="vd-neptune-result-footer">
-          <div class="vd-neptune-result-keywords">${keywords}</div>
+        <div class="vdl-neptune-result-footer">
+          <div class="vdl-neptune-result-keywords">${keywords}</div>
           <a
-            class="vd-neptune-result-link"
+            class="vdl-neptune-result-link"
             href="${this._esc(href)}"
             target="_blank"
             rel="noopener noreferrer"
@@ -749,14 +770,14 @@ export class NeptuneSearchUI {
   }
 
   _updateSelection() {
-    const items = this._elements.results.querySelectorAll('.vd-neptune-result');
+    const items = this._elements.results.querySelectorAll('.vdl-neptune-result');
     items.forEach((el, i) => {
       el.classList.toggle('is-selected', i === this._selectedIndex);
       el.setAttribute('aria-selected', String(i === this._selectedIndex));
     });
     const input = this._elements.input;
     if (this._selectedIndex >= 0 && items[this._selectedIndex]) {
-      const activeId = items[this._selectedIndex].getAttribute('id') || `vd-neptune-result-${this._selectedIndex}`;
+      const activeId = items[this._selectedIndex].getAttribute('id') || `vdl-neptune-result-${this._selectedIndex}`;
       items[this._selectedIndex].setAttribute('id', activeId);
       input.setAttribute('aria-activedescendant', activeId);
       input.setAttribute('aria-expanded', 'true');
@@ -816,7 +837,7 @@ export class NeptuneSearchUI {
 // ═══════════════════════════════════════════════════════════════════════
 
 const NEPTUNE_STYLES = `
-.vd-neptune-search {
+.vdl-neptune-search {
   position: relative;
   font-family: var(--font-family-sans, system-ui, sans-serif);
   width: 100%;
@@ -824,11 +845,11 @@ const NEPTUNE_STYLES = `
   margin: 0;
 }
 
-.vd-neptune-input-wrap {
+.vdl-neptune-input-wrap {
   position: relative;
 }
 
-.vd-neptune-input {
+.vdl-neptune-input {
   width: 100%;
   padding: 0.75rem 1rem;
   padding-right: 7rem;
@@ -841,13 +862,13 @@ const NEPTUNE_STYLES = `
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.vd-neptune-input:focus {
+.vdl-neptune-input:focus {
   outline: none;
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.vd-neptune-hint {
+.vdl-neptune-hint {
   position: absolute;
   right: 0.75rem;
   top: 50%;
@@ -860,7 +881,7 @@ const NEPTUNE_STYLES = `
   gap: 0.25rem;
 }
 
-.vd-neptune-hint kbd {
+.vdl-neptune-hint kbd {
   display: inline-block;
   padding: 0.125rem 0.375rem;
   font-size: 0.6875rem;
@@ -871,7 +892,7 @@ const NEPTUNE_STYLES = `
   color: var(--text-muted, #6b7280);
 }
 
-.vd-neptune-dropdown {
+.vdl-neptune-dropdown {
   margin-top: 0.5rem;
   max-height: min(60vh, 28rem);
   overflow-x: hidden;
@@ -882,23 +903,23 @@ const NEPTUNE_STYLES = `
   box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1));
 }
 
-.vd-neptune-result {
+.vdl-neptune-result {
   padding: 0.75rem 1rem;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color, #f0f0f0);
   transition: background 0.1s ease;
 }
 
-.vd-neptune-result:last-child {
+.vdl-neptune-result:last-child {
   border-bottom: none;
 }
 
-.vd-neptune-result:hover,
-.vd-neptune-result.is-selected {
+.vdl-neptune-result:hover,
+.vdl-neptune-result.is-selected {
   background: var(--bg-secondary, #f8f9fa);
 }
 
-.vd-neptune-result-header {
+.vdl-neptune-result-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -906,21 +927,21 @@ const NEPTUNE_STYLES = `
   margin-bottom: 0.25rem;
 }
 
-.vd-neptune-result-icon {
+.vdl-neptune-result-icon {
   color: var(--color-primary, #3b82f6);
   font-size: 1.125rem;
   line-height: 1;
   flex-shrink: 0;
 }
 
-.vd-neptune-result-title {
+.vdl-neptune-result-title {
   font-weight: 600;
   color: var(--text-primary, #1f2937);
   flex: 1 1 12rem;
   min-width: 0;
 }
 
-.vd-neptune-result-trail {
+.vdl-neptune-result-trail {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -928,7 +949,7 @@ const NEPTUNE_STYLES = `
   margin-left: auto;
 }
 
-.vd-neptune-result-category {
+.vdl-neptune-result-category {
   font-size: 0.75rem;
   color: var(--text-muted, #6b7280);
   background: var(--bg-secondary, #f5f5f5);
@@ -936,7 +957,7 @@ const NEPTUNE_STYLES = `
   border-radius: var(--radius-sm, 0.25rem);
 }
 
-.vd-neptune-badge {
+.vdl-neptune-badge {
   font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -945,36 +966,36 @@ const NEPTUNE_STYLES = `
   border-radius: var(--radius-sm, 0.25rem);
 }
 
-.vd-neptune-badge-semantic {
+.vdl-neptune-badge-semantic {
   background: rgba(59, 130, 246, 0.1);
   color: var(--color-primary, #3b82f6);
 }
 
-.vd-neptune-badge-fuzzy {
+.vdl-neptune-badge-fuzzy {
   background: rgba(107, 114, 128, 0.1);
   color: var(--text-muted, #6b7280);
 }
 
-.vd-neptune-result-body {
+.vdl-neptune-result-body {
   font-size: 0.8125rem;
   color: var(--text-muted, #6b7280);
   line-height: 1.4;
   margin-bottom: 0.375rem;
 }
 
-.vd-neptune-result-footer {
+.vdl-neptune-result-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.vd-neptune-result-keywords {
+.vdl-neptune-result-keywords {
   display: flex;
   gap: 0.375rem;
   flex-wrap: wrap;
 }
 
-.vd-neptune-keyword {
+.vdl-neptune-keyword {
   font-size: 0.6875rem;
   color: var(--text-muted, #6b7280);
   background: var(--bg-secondary, #f5f5f5);
@@ -982,25 +1003,25 @@ const NEPTUNE_STYLES = `
   border-radius: var(--radius-sm, 0.25rem);
 }
 
-.vd-neptune-result-link {
+.vdl-neptune-result-link {
   font-size: 0.8125rem;
   color: var(--color-primary, #3b82f6);
   text-decoration: none;
   font-weight: 500;
 }
 
-.vd-neptune-result-link:hover {
+.vdl-neptune-result-link:hover {
   text-decoration: underline;
 }
 
-.vd-neptune-empty {
+.vdl-neptune-empty {
   padding: 2rem 1rem;
   text-align: center;
   font-size: 0.875rem;
   color: var(--text-muted, #6b7280);
 }
 
-.vd-neptune-loader {
+.vdl-neptune-loader {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1010,26 +1031,26 @@ const NEPTUNE_STYLES = `
   background: var(--bg-secondary, #f8f9fa);
 }
 
-.vd-neptune-spinner {
+.vdl-neptune-spinner {
   display: inline-block;
   width: 1rem;
   height: 1rem;
   border: 2px solid var(--border-color, #e0e0e0);
   border-top-color: var(--color-primary, #3b82f6);
   border-radius: 50%;
-  animation: vd-neptune-spin 0.8s linear infinite;
+  animation: vdl-neptune-spin 0.8s linear infinite;
 }
 
-@keyframes vd-neptune-spin {
+@keyframes vdl-neptune-spin {
   to { transform: rotate(360deg); }
 }
 
-.vd-neptune-loader-text {
+.vdl-neptune-loader-text {
   font-size: 0.875rem;
   color: var(--text-muted, #6b7280);
 }
 
-.vd-neptune-progress {
+.vdl-neptune-progress {
   margin-top: 0.75rem;
   padding: 0.75rem;
   background: var(--bg-secondary, #f8f9fa);
@@ -1037,7 +1058,7 @@ const NEPTUNE_STYLES = `
   border: 1px solid var(--border-color, #e0e0e0);
 }
 
-.vd-neptune-progress-bar {
+.vdl-neptune-progress-bar {
   height: 4px;
   background: var(--color-primary, #3b82f6);
   border-radius: 2px;
@@ -1045,7 +1066,7 @@ const NEPTUNE_STYLES = `
   transition: width 0.3s ease;
 }
 
-.vd-neptune-progress-text {
+.vdl-neptune-progress-text {
   display: block;
   margin-top: 0.375rem;
   font-size: 0.75rem;

@@ -1,11 +1,11 @@
-# vd-guardrails
+# vdl-guardrails
 
 Canonical shared-service documentation for the public `guardrails/*` modules exported by Vanduo Labs.
 
 This module family centralizes deterministic validation and safety composition used across:
 
-- `vd-ai-chat`
-- `vd-neptune-search`
+- `vdl-ai-chat`
+- `vdl-neptune-search`
 
 ## Purpose and Scope
 
@@ -28,7 +28,7 @@ Shared contracts and helpers used by both LLM and search guardrails:
 
 ### `./guardrails/llm.js`
 
-LLM policy surface used by `vd-ai-chat`:
+LLM policy surface used by `vdl-ai-chat`:
 
 - `BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT`
 - `DEFAULT_LLM_GUARD_PATTERNS`
@@ -39,7 +39,7 @@ LLM policy surface used by `vd-ai-chat`:
 
 ### `./guardrails/search.js`
 
-Search-specific deterministic hardening used by `vd-neptune-search`:
+Search-specific deterministic hardening used by `vdl-neptune-search`:
 
 - `normalizeSearchQuery(query, options?)`
 - `validateSearchQuery(query, options?)`
@@ -55,10 +55,10 @@ Search-specific deterministic hardening used by `vd-neptune-search`:
 Guardrails are intentionally split by runtime behavior and risk surface.
 
 - **LLM guardrails (`./guardrails/llm.js`)**
-  - Target instruction-following generators (`vd-ai-chat`).
+  - Target instruction-following generators (`vdl-ai-chat`).
   - Combine deterministic input blocking (regex pattern matching, max length, empty checks) with system-prompt policy composition.
 - **Search guardrails (`./guardrails/search.js`)**
-  - Target retrieval/ranking workloads (`vd-neptune-search`).
+  - Target retrieval/ranking workloads (`vdl-neptune-search`).
   - Focus on deterministic query hygiene, payload/schema validation, finite-vector checks, and render-path sanitization.
   - Not framed as classic prompt-jailbreak defense, because semantic search is embedding extraction + ranking, not chat completion.
 

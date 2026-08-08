@@ -25,6 +25,26 @@ test.describe('Guardrails Unit', () => {
     expect(result.matchedPatternIds?.length ?? 0).toBeGreaterThan(0);
   });
 
+  test('buildChatSystemPrompt describes Vanduo Labs demo context and FOSS rules', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/guardrails/llm.js');
+      const base = mod.buildChatSystemPrompt();
+      const withExtra = mod.buildChatSystemPrompt({ extraRules: 'Prefer short answers.' });
+      return { base, withExtra, constant: mod.BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT };
+    });
+
+    expect(result.base).toBe(result.constant);
+    expect(result.base).toContain('Vanduo Labs');
+    expect(result.base).toContain('vanduo-oss');
+    expect(result.base).toContain('vd3');
+    expect(result.base).toContain('vd3-cbun');
+    expect(result.base).toMatch(/web demo|browser-based/i);
+    expect(result.base).toContain('FOSS');
+    expect(result.base).toContain('helpful, harmless, and honest');
+    expect(result.withExtra).toContain('Prefer short answers.');
+    expect(result.withExtra.startsWith(result.base.trim())).toBe(true);
+  });
+
   test('search query normalization and validation', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/guardrails/search.js');
@@ -86,18 +106,25 @@ test.describe('Guardrails Unit', () => {
     expect(result.code).toBe('search.vectors.dimension_mismatch');
   });
 
-  test('safeDocHref rejects unsafe route and base protocol', async ({ page }) => {
+  test('safeDocHref supports path routes and rejects unsafe values', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/guardrails/search.js');
+      const base = 'https://vanduo-oss.github.io/vd3-docs';
       return {
-        safe: mod.safeDocHref('https://vanduo.dev', 'docs/buttons'),
-        badRoute: mod.safeDocHref('https://vanduo.dev', 'javascript:alert(1)'),
-        badBase: mod.safeDocHref('javascript:alert(1)', 'docs/buttons'),
+        path: mod.safeDocHref(base, '/components/button'),
+        home: mod.safeDocHref(base, '/'),
+        legacyHash: mod.safeDocHref(base, 'docs/buttons'),
+        badRoute: mod.safeDocHref(base, 'javascript:alert(1)'),
+        badPath: mod.safeDocHref(base, '/../etc/passwd'),
+        badBase: mod.safeDocHref('javascript:alert(1)', '/components/button'),
       };
     });
-    expect(result.safe).toBe('https://vanduo.dev/#docs/buttons');
+    expect(result.path).toBe('https://vanduo-oss.github.io/vd3-docs/components/button');
+    expect(result.home).toBe('https://vanduo-oss.github.io/vd3-docs/');
+    expect(result.legacyHash).toBe('https://vanduo-oss.github.io/vd3-docs/#docs/buttons');
     expect(result.badRoute).toBe('#');
-    expect(result.badBase).toBe('https://vanduo.dev/#docs/buttons');
+    expect(result.badPath).toBe('#');
+    expect(result.badBase).toBe('https://vanduo-oss.github.io/vd3-docs/components/button');
   });
 
   test('AiChat headless generate blocks before model-load requirement', async ({ page }) => {
@@ -124,7 +151,8 @@ test.describe('Guardrails Unit', () => {
   test('AiChat generate ignores empty stream deltas and reads content arrays', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
-      const chat = new mod.AiChat();
+      // Use a WebLLM-backed option — default Gemma is LiteRT.
+      const chat = new mod.AiChat({ modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC' });
       chat._isLoaded = true;
       let request = null;
       chat.engine = {
@@ -158,14 +186,121 @@ test.describe('Guardrails Unit', () => {
     expect(result.messages.at(-1)).toEqual({ role: 'assistant', content: 'Hello there' });
   });
 
+  test('AiChat LiteRT generate uses conversation multi-turn context', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const chat = new mod.AiChat({ modelId: 'gemma-4-E2B-it-web' });
+      chat._isLoaded = true;
+      const turns = [];
+      chat.engine = {
+        createConversation: async () => {
+          const conversation = {
+            sendMessageStreaming: async function* (text) {
+              turns.push(text);
+              const reply = turns.length === 1 ? 'Hello Dana.' : 'Your name is Dana.';
+              yield { content: [{ type: 'text', text: reply }] };
+            },
+            delete: async () => {},
+          };
+          return conversation;
+        },
+      };
+      chat._conversation = await chat.engine.createConversation();
+      const n1 = await chat.generate('My name is Dana.');
+      const n2 = await chat.generate('What is my name?');
+      return { n1, n2, turns, messages: chat.messages };
+    });
+    expect(result.turns).toEqual(['My name is Dana.', 'What is my name?']);
+    expect(result.n1).toBe('Hello Dana.');
+    expect(result.n2).toBe('Your name is Dana.');
+    expect(result.messages).toEqual([
+      { role: 'user', content: 'My name is Dana.' },
+      { role: 'assistant', content: 'Hello Dana.' },
+      { role: 'user', content: 'What is my name?' },
+      { role: 'assistant', content: 'Your name is Dana.' },
+    ]);
+  });
+
+  test('AiChat LiteRT conversation preface includes Vanduo Labs system prompt', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const chatMod = await import('/ai-chat.js');
+      const llmMod = await import('/guardrails/llm.js');
+      const chat = new chatMod.AiChat({ modelId: 'gemma-4-E2B-it-web' });
+      chat._isLoaded = true;
+      let createArgs = null;
+      chat.engine = {
+        createConversation: async (opts) => {
+          createArgs = opts || null;
+          return {
+            sendMessageStreaming: async function* () {
+              yield { content: [{ type: 'text', text: 'ok' }] };
+            },
+            delete: async () => {},
+          };
+        },
+      };
+      await chat._ensureLiteRTConversation(true);
+      return {
+        createArgs,
+        expected: llmMod.buildChatSystemPrompt(),
+      };
+    });
+
+    expect(result.createArgs?.preface?.messages?.[0]?.role).toBe('system');
+    expect(result.createArgs?.preface?.messages?.[0]?.content).toBe(result.expected);
+    expect(result.createArgs.preface.messages[0].content).toContain('vanduo-oss');
+    expect(result.createArgs.preface.messages[0].content).toContain('vd3-cbun');
+  });
+
+  test('AiChat Gemma 4 MLC payloads omit system role (WebLLM template limitation)', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const chat = new mod.AiChat({ modelId: 'gemma-4-E2B-it-q4f16_1-MLC' });
+      chat._isLoaded = true;
+      let request = null;
+      chat.engine = {
+        reload: async () => {},
+        chat: {
+          completions: {
+            create: async (req) => {
+              request = {
+                roles: (req.messages || []).map((m) => m.role),
+                firstContent: req.messages?.[0]?.content || '',
+              };
+              if (req.stream) {
+                async function* chunks() {
+                  yield { choices: [{ delta: { content: 'Paris' } }] };
+                }
+                return chunks();
+              }
+              return {
+                choices: [{ message: { content: 'Paris' } }],
+                usage: { total_tokens: 2 },
+              };
+            },
+          },
+        },
+      };
+      await chat.generate('Capital of France?');
+      return request;
+    });
+    expect(result.roles).toEqual(['user']);
+    expect(result.firstContent).toBe('Capital of France?');
+    expect(result.firstContent.includes('FOSS')).toBe(false);
+  });
+
   test('AiChat generate falls back to non-stream completion when stream is empty', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
       const chat = new mod.AiChat({ modelId: 'gemma-4-E2B-it-q4f16_1-MLC' });
       chat._isLoaded = true;
       let calls = 0;
+      let reloads = 0;
       const requests = [];
       chat.engine = {
+        reload: async () => {
+          reloads += 1;
+        },
         chat: {
           completions: {
             create: async (request) => {
@@ -175,6 +310,7 @@ test.describe('Guardrails Unit', () => {
                 max_tokens: request.max_tokens,
                 temperature: request.temperature,
                 top_p: request.top_p,
+                enable_thinking: request.enable_thinking,
               });
               if (request.stream) {
                 async function* chunks() {
@@ -195,17 +331,95 @@ test.describe('Guardrails Unit', () => {
       const updates = [];
       let usage = null;
       const reply = await chat.generate('hello', (text) => updates.push(text), (u) => { usage = u; });
-      return { calls, requests, reply, updates, usage, messages: chat.messages };
+      return { calls, reloads, requests, reply, updates, usage, messages: chat.messages };
     });
 
     expect(result.calls).toBe(2);
+    expect(result.reloads).toBe(1);
     expect(result.requests).toEqual([
-      { stream: true, max_tokens: 512, temperature: 0.7, top_p: 0.9 },
-      { stream: false, max_tokens: 512, temperature: 0.7, top_p: 0.9 },
+      { stream: true, max_tokens: 768, temperature: 0.7, top_p: 0.9, enable_thinking: false },
+      { stream: false, max_tokens: 768, temperature: 0.7, top_p: 0.9, enable_thinking: false },
     ]);
     expect(result.reply).toBe('Fallback reply');
     expect(result.updates).toEqual(['Fallback reply']);
     expect(result.usage.total_tokens).toBe(3);
     expect(result.messages.at(-1)).toEqual({ role: 'assistant', content: 'Fallback reply' });
+  });
+
+  test('AiChat setModelId awaits engine dispose before switching backends', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const chat = new mod.AiChat({ modelId: 'gemma-4-E2B-it-web' });
+      const order = [];
+      chat._isLoaded = true;
+      chat._conversation = {
+        delete: async () => {
+          order.push('conversation-delete');
+        },
+      };
+      chat.engine = {
+        delete: async () => {
+          order.push('engine-delete');
+        },
+      };
+      await chat.setModelId('Qwen2.5-1.5B-Instruct-q4f16_1-MLC', { resetMessages: true });
+      order.push(`model:${chat.modelId}`);
+      return {
+        order,
+        isLoaded: chat.isLoaded(),
+        engine: chat.engine,
+        conversation: chat._conversation,
+        messages: chat.messages,
+      };
+    });
+
+    expect(result.order).toEqual([
+      'conversation-delete',
+      'engine-delete',
+      'model:Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+    ]);
+    expect(result.isLoaded).toBe(false);
+    expect(result.engine).toBeNull();
+    expect(result.conversation).toBeNull();
+    expect(result.messages).toEqual([]);
+  });
+
+  test('AiChat optional WebLLM models include system role and keep history', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const chatMod = await import('/ai-chat.js');
+      const llmMod = await import('/guardrails/llm.js');
+      const chat = new chatMod.AiChat({ modelId: 'SmolLM2-360M-Instruct-q4f16_1-MLC' });
+      chat._isLoaded = true;
+      const payloads = [];
+      chat.engine = {
+        chat: {
+          completions: {
+            create: async (req) => {
+              payloads.push({
+                roles: (req.messages || []).map((m) => m.role),
+                system: req.messages?.[0]?.role === 'system' ? req.messages[0].content : null,
+              });
+              async function* chunks() {
+                yield { choices: [{ delta: { content: payloads.length === 1 ? 'Hi' : 'Still here' } }] };
+              }
+              return chunks();
+            },
+          },
+        },
+      };
+      await chat.generate('Hello');
+      await chat.generate('Still there?');
+      return {
+        payloads,
+        messages: chat.messages.map((m) => m.role),
+        expectedSystem: llmMod.buildChatSystemPrompt(),
+      };
+    });
+
+    expect(result.payloads[0].roles).toEqual(['system', 'user']);
+    expect(result.payloads[1].roles).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(result.payloads[0].system).toBe(result.expectedSystem);
+    expect(result.payloads[0].system).toContain('Vanduo Labs');
+    expect(result.messages).toEqual(['user', 'assistant', 'user', 'assistant']);
   });
 });

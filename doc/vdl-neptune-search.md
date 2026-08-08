@@ -1,9 +1,10 @@
-# vd-neptune-search — In-Browser Hybrid Search
+# vdl-neptune-search — In-Browser Hybrid Search
 
-Zero-dependency, client-side hybrid search engine for the Vanduo documentation site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
+Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://vanduo-oss.github.io/vd3-docs/)** site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
 
 - Component version: {{COMPONENT_VERSION}}
 - Live labs site: **https://labs.vanduo.dev**
+- Docs corpus: **https://vanduo-oss.github.io/vd3-docs/** (`vanduo-oss/vd3-docs`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -48,16 +49,17 @@ Zero-dependency, client-side hybrid search engine for the Vanduo documentation s
 
 ## Features
 
-- **Zero runtime npm dependencies** — Fuse.js and Transformers.js load from CDN on demand
-- **Dual interface** — headless `NeptuneSearch` API + `NeptuneSearchUI` DOM component
+- **Zero runtime npm dependencies** (headless engine) — Fuse.js and Transformers.js load from CDN on demand
+- **Dual interface** — headless `NeptuneSearch` API + Labs Vue UI (`VdlNeptuneSearchUI`) on `@vanduo-oss/vd3` (legacy `NeptuneSearchUI` DOM helper remains for tests/compat)
+- **vd3-docs corpus** — path routes (`/components/button`), category filters, and result links to GitHub Pages docs
 - **Graceful degradation** — falls back to fuzzy-only if semantic fails
 - **Keyboard accessible** — full Arrow/Enter/Escape navigation, Cmd+K shortcut
 - **ARIA compliant** — combobox pattern with activedescendant management
-- **ES module** — single `.js` file, tree-shakeable exports
+- **ES module** — headless engine ships as a single `.js` file with tree-shakeable exports
 
 ## Security Model
 
-`vd-neptune-search` does not run an instruction-following chat model in its semantic path. Semantic search uses embedding extraction (`feature-extraction`) + cosine similarity ranking, not chat completion. Because of that, classic prompt-jailbreak/system-prompt leakage attacks are not the primary risk surface here.
+`vdl-neptune-search` does not run an instruction-following chat model in its semantic path. Semantic search uses embedding extraction (`feature-extraction`) + cosine similarity ranking, not chat completion. Because of that, classic prompt-jailbreak/system-prompt leakage attacks are not the primary risk surface here.
 
 Neptune guardrails focus on deterministic search safety (`guardrails/search.js`):
 
@@ -67,7 +69,7 @@ Neptune guardrails focus on deterministic search safety (`guardrails/search.js`)
 - Vector-to-document ID integrity checks
 - Safe link construction and icon class sanitization in result rendering
 
-For direct shared guardrails API usage and cross-component policy context, see [doc/vd-guardrails.md](./vd-guardrails.md).
+For direct shared guardrails API usage and cross-component policy context, see [doc/vdl-guardrails.md](./vdl-guardrails.md).
 
 ## Tuning Update (Apr 2026)
 
@@ -122,17 +124,16 @@ ui.mount();
 | Layer | Trigger | Engine | Data |
 |-------|---------|--------|------|
 | **Fuzzy** | Every keystroke (debounced 150ms) | Fuse.js v7 (CDN) | `data/search-index.json` |
-| **Semantic** | Enter key / form submit | Transformers.js v3 + `Xenova/all-MiniLM-L6-v2` (CDN, ~23MB) | `data/vectors.json` |
+| **Semantic** | Enter key / form submit (model preloaded on UI mount) | Transformers.js v3 + `Xenova/all-MiniLM-L6-v2` (CDN, ~23MB) | `data/vectors.json` |
 | **Merge** | After both complete | Custom ranker | Score-sorted interleave across semantic + fuzzy, deduped, capped |
 
-### Lazy Loading
+### Eager Semantic Preload + Lazy Fuzzy
 
-Both layers initialize on first use:
-
-- **Fuse.js** loads on the first keystroke (or first `initFuzzy()` call)
-- **Transformers.js + model** loads on the first Enter key press (or first `initSemantic()` call)
-- The model download (~23MB) happens once per browser session; subsequent uses hit the browser cache
-- Init is promise-cached: concurrent callers share the same in-flight initialization
+- **Fuzzy (Fuse.js)** loads on first use (`initFuzzy()` / first keystroke). The Vue UI also warms fuzzy on mount so category chips are ready.
+- **Transformers.js + MiniLM** (`Xenova/all-MiniLM-L6-v2`, ~23MB quantized) starts loading as soon as the search UI mounts (`NeptuneSearchUI` / `VdlNeptuneSearchUI`), in the background. Fuzzy typing stays available while it downloads.
+- Progress is shown via a non-blocking progress strip (`onSemanticProgress`), not by freezing the input.
+- The model download happens once per browser session; subsequent visits/uses hit the browser cache. `initSemantic()` is promise-cached per `NeptuneSearch` instance (and the Vue UI reuses a module singleton across HMR / `v-if` remounts).
+- Headless callers can still call `await search.initSemantic()` explicitly; UI mount already does this fire-and-forget.
 
 ### Graceful Degradation
 
@@ -254,7 +255,7 @@ await search.initSemantic();
 
 ##### `semanticSearch(query: string): Promise<SemanticResult[]>`
 
-Performs a semantic search query. Embeds the query using MiniLM-L6-v2 and computes cosine similarity against all document vectors. Returns top 10 results above `semanticThreshold`. Awaits `initSemantic()` internally (no need to pre-call). Use `initSemantic()` + `onSemanticProgress()` only when you want eager loading or download progress before the first semantic query.
+Performs a semantic search query. Embeds the query using MiniLM-L6-v2 and computes cosine similarity against all document vectors. Returns top 10 results above `semanticThreshold`. Awaits `initSemantic()` internally (no need to pre-call). UI components call `initSemantic()` on mount so the model is usually warm before the first Enter; use `onSemanticProgress()` to show download progress.
 
 ```javascript
 const results = await search.semanticSearch('how do I style cards');
@@ -370,14 +371,14 @@ new NeptuneSearchUI(options: NeptuneSearchUIOptions)
 | `placeholder` | `string` | `'Search docs…'` | Input placeholder text |
 | `debounceMs` | `number` | `150` | Debounce delay for fuzzy search on keystroke |
 | `showSemanticHint` | `boolean` | `true` | Show "Enter for AI search" hint in the input |
-| `baseUrl` | `string` | `'https://vanduo.dev'` | Base URL for result card "Open docs" links |
-| `emptyMessage` | `string` | `'No docs found. Try a different query or browse categories below.'` | Message shown when search returns no results |
+| `baseUrl` | `string` | `'https://vanduo-oss.github.io/vd3-docs'` | Base URL for result card "Open docs" path links |
+| `emptyMessage` | `string` | `'No docs found. Try another query or pick a category filter.'` | Message shown when search returns no results |
 
 #### Methods
 
 ##### `mount(): void`
 
-Builds the DOM, binds event listeners, and injects default styles. Idempotent — calling `mount()` on an already-mounted instance is a no-op.
+Builds the DOM, binds event listeners, and injects default styles. Starts a background `initSemantic()` preload (non-blocking). Idempotent — calling `mount()` on an already-mounted instance is a no-op.
 
 ```javascript
 ui.mount();
@@ -413,7 +414,7 @@ The UI implements the [WAI-ARIA Combobox pattern](https://www.w3.org/WAI/ARIA/ap
 | `<input>` | `aria-autocomplete="list"` | Suggests list-based completions |
 | `<input>` | `aria-haspopup="listbox"` | Indicates popup list |
 | `<input>` | `aria-expanded` | `true` when dropdown visible, `false` otherwise |
-| `<input>` | `aria-controls="vd-neptune-results"` | Links to results listbox |
+| `<input>` | `aria-controls="vdl-neptune-results"` | Links to results listbox |
 | `<input>` | `aria-activedescendant` | ID of currently highlighted result |
 | Results container | `role="listbox"` | Identifies as listbox |
 | Each result | `role="option"` | Identifies as selectable option |
@@ -483,33 +484,31 @@ Each embedding is pre-normalized, so cosine similarity is a simple dot product.
 
 ## Indexer
 
-The indexer (`utils/neptune-indexer.mjs`) regenerates both data files from source HTML.
+The indexer (`utils/neptune-indexer.mjs`) regenerates both data files from **vd3-docs**.
 
 ### Usage
 
 ```bash
 pnpm index   # or: node utils/neptune-indexer.mjs
+# optional local nav.ts:
+VD3_DOCS_PATH=../vd3-docs pnpm index
 ```
 
 ### What It Does
 
-1. Reads `sections.json` manifest from `../docs/sections/`
-2. For each HTML fragment:
-   - Extracts headings (h2–h4), paragraphs, list items, CSS classes, alerts, demo titles
-   - Builds structured chunks grouped by heading context
-   - Concatenates body text (capped at 8000 chars)
-3. Writes `data/search-index.json`
-4. Loads `@xenova/transformers` with `Xenova/all-MiniLM-L6-v2` (quantized)
-5. Generates embeddings for each document (text: `title. category. keywords. headings. bodyText`, capped at 512 chars)
-6. Writes `data/vectors.json`
-7. Validates consistency: every doc ID exists in vectors and vice versa. Exits with error on mismatch.
+1. Loads the page catalog from `vd3-docs` `src/nav.ts` (local sibling / `VD3_DOCS_PATH`, else GitHub raw)
+2. Crawls prerendered HTML from `https://vanduo-oss.github.io/vd3-docs{route}`
+3. Extracts copy from `#main-content .doc-content` only (strips sidebar, code panes, demo chrome)
+4. Builds structured chunks (paragraphs + class tables), headings, keywords from nav
+5. Writes path-route documents to `data/search-index.json` (`route` like `/components/button`)
+6. Loads `@xenova/transformers` with `Xenova/all-MiniLM-L6-v2` (quantized)
+7. Generates embeddings (`title. category. keywords. headings. bodyText`, capped at 512 chars)
+8. Writes `data/vectors.json` and validates index/vector id consistency
 
 ### Requirements
 
-- Node.js
+- Node.js + network access to vd3-docs (or a local `VD3_DOCS_PATH` clone for `nav.ts`)
 - `@xenova/transformers` (dev dependency)
-- Source HTML files at `../docs/sections/`
-- `sections.json` manifest
 
 ## Testing
 
@@ -527,7 +526,7 @@ pnpm report        # Show last test report
 | Test File | Type | Coverage |
 |-----------|------|----------|
 | `tests/unit/neptune-search.spec.ts` | Unit | Math helpers (cosine similarity), `rankBySimilarity`, `mergeResults` (capping, dedup, deterministic tie behavior, score-order merge, `semanticBoost`) |
-| `tests/e2e/vd-neptune-search.spec.ts` | E2E | Fuzzy search, semantic search, hybrid merge, UI mounting, input debouncing, keyboard navigation (Arrow/Enter/Escape), Cmd+K focus, result click callback, mount/destroy/remount lifecycle, ARIA attributes |
+| `tests/e2e/vdl-neptune-search.spec.ts` | E2E | Fuzzy search, semantic search, hybrid merge, UI mounting, input debouncing, keyboard navigation (Arrow/Enter/Escape), Cmd+K focus, result click callback, mount/destroy/remount lifecycle, ARIA attributes |
 | `tests/fixtures/neptune-harness.html` | Fixture | Test harness with mock data (3 docs, 384-dim vectors), mocked semantic extractor |
 
 Tests run against a local HTTP server (Python `http.server` on port 8790) using Playwright with Chromium (desktop + mobile viewport).
@@ -552,8 +551,8 @@ Tests run against a local HTTP server (Python `http.server` on port 8790) using 
 ```
 labs/
 ├── neptune-search.js              # Core: NeptuneSearch + NeptuneSearchUI (~1000 lines)
-├── doc/vd-neptune-search.md       # This documentation
-├── package.json                   # Package: @vanduo-oss/labs-vd-neptune-search
+├── doc/vdl-neptune-search.md       # This documentation
+├── package.json                   # Package: @vanduo-oss/labs-vdl-neptune-search
 ├── data/
 │   ├── search-index.json          # Pre-built Fuse.js document corpus
 │   └── vectors.json               # Pre-computed 384-dim embeddings
@@ -565,7 +564,7 @@ labs/
 │   ├── unit/
 │   │   └── neptune-search.spec.ts # Unit tests
 │   ├── e2e/
-│   │   └── vd-neptune-search.spec.ts # E2E tests
+│   │   └── vdl-neptune-search.spec.ts # E2E tests
 │   └── fixtures/
 │       └── neptune-harness.html   # Test harness
 └── playwright.config.ts           # Playwright configuration
@@ -607,8 +606,8 @@ labs/
 ### Debug Tips
 
 - From `labs/`, run `pnpm run demo:serve`, then open `/demo/neptune-demo.html` over HTTP to interactively test search with a debug panel showing raw fuzzy, semantic, and merged results
-- Use `onSemanticProgress()` to monitor model download progress
-- Call `await search.initSemantic()` early if you want the model ready before the first `semanticSearch()` (optional — `semanticSearch()` initializes the layer itself)
+- Use `onSemanticProgress()` to monitor model download progress (UI surfaces this as a progress strip under the search box on first visit)
+- Semantic preload starts on UI mount; headless code can still `await search.initSemantic()` to wait for readiness before querying
 
 ## License
 

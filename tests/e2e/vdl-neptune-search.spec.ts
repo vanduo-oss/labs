@@ -72,13 +72,91 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
     await page.waitForTimeout(200); // debounce
 
-    const results = page.locator('.vd-neptune-result');
+    const results = page.locator('.vdl-neptune-result');
     await expect(results.first()).toBeVisible();
-    await expect(results.first().locator('.vd-neptune-result-title')).toContainText('Buttons');
+    await expect(results.first().locator('.vdl-neptune-result-title')).toContainText('Buttons');
+  });
+
+  test('UI mount preloads semantic layer without blocking fuzzy', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const search = await window.createSearch();
+      // Harness marks semantic ready; clear so preload path runs.
+      search._semanticReady = false;
+      let initCalls = 0;
+      const orig = search.initSemantic.bind(search);
+      search.initSemantic = async () => {
+        initCalls += 1;
+        await new Promise((r) => setTimeout(r, 80));
+        search._semanticReady = true;
+        search._emitSemanticProgress({ stage: 'ready', message: 'Search model ready' });
+        return orig();
+      };
+
+      const container = document.getElementById('mount');
+      container.innerHTML = '';
+      const ui = new window.NeptuneSearchUI({ container, search });
+      ui.mount();
+
+      // Fuzzy should work while preload is still in flight.
+      const input = container.querySelector('.vdl-neptune-input');
+      input.value = 'button';
+      input.dispatchEvent(new Event('input'));
+      await new Promise((r) => setTimeout(r, 250));
+      const fuzzyCount = container.querySelectorAll('.vdl-neptune-result').length;
+
+      await new Promise((r) => setTimeout(r, 100));
+      return {
+        initCalls,
+        fuzzyCount,
+        ready: search.isSemanticReady(),
+      };
+    });
+
+    expect(result.initCalls).toBeGreaterThanOrEqual(1);
+    expect(result.fuzzyCount).toBeGreaterThan(0);
+    expect(result.ready).toBe(true);
+  });
+
+  test('UI remount reuses in-flight semantic preload promise', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const search = await window.createSearch();
+      search._semanticReady = false;
+      search._semanticFailed = false;
+      search._semanticPromise = null;
+
+      let pipelineStarts = 0;
+      search.initSemantic = async function () {
+        if (this._semanticReady) return;
+        if (!this._semanticPromise) {
+          pipelineStarts += 1;
+          this._semanticPromise = (async () => {
+            await new Promise((r) => setTimeout(r, 60));
+            this._semanticReady = true;
+          })();
+        }
+        return this._semanticPromise;
+      };
+
+      const container = document.getElementById('mount');
+      container.innerHTML = '';
+      const ui1 = new window.NeptuneSearchUI({ container, search });
+      ui1.mount();
+      ui1.destroy();
+
+      container.innerHTML = '';
+      const ui2 = new window.NeptuneSearchUI({ container, search });
+      ui2.mount();
+      await search.initSemantic();
+
+      return { pipelineStarts, ready: search.isSemanticReady() };
+    });
+
+    expect(result.pipelineStarts).toBe(1);
+    expect(result.ready).toBe(true);
   });
 
   test('UI shows empty state for no results', async ({ page }) => {
@@ -86,11 +164,11 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('xyzabc');
     await page.waitForTimeout(200);
 
-    await expect(page.locator('.vd-neptune-empty')).toBeVisible();
+    await expect(page.locator('.vdl-neptune-empty')).toBeVisible();
   });
 
   test('UI keyboard navigation works', async ({ page }) => {
@@ -98,16 +176,16 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
     await page.waitForTimeout(200);
 
     await input.press('ArrowDown');
-    const first = page.locator('.vd-neptune-result').first();
+    const first = page.locator('.vdl-neptune-result').first();
     await expect(first).toHaveClass(/is-selected/);
 
     await input.press('Escape');
-    await expect(page.locator('.vd-neptune-dropdown')).toBeHidden();
+    await expect(page.locator('.vdl-neptune-dropdown')).toBeHidden();
   });
 
   test('Cmd+K focuses search input', async ({ page }) => {
@@ -115,7 +193,7 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.blur();
     await page.keyboard.press('Meta+k');
     await expect(input).toBeFocused();
@@ -139,11 +217,11 @@ test.describe('NeptuneSearch E2E', () => {
       ui.mount();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
     await page.waitForTimeout(200);
 
-    await page.locator('.vd-neptune-result').first().click();
+    await page.locator('.vdl-neptune-result').first().click();
     await page.waitForTimeout(100);
 
     expect(clicked).not.toBeNull();
@@ -158,7 +236,7 @@ test.describe('NeptuneSearch E2E', () => {
       const ui1 = new window.NeptuneSearchUI({ container, search });
       ui1.mount();
 
-      const input1 = container.querySelector('.vd-neptune-input') as HTMLInputElement;
+      const input1 = container.querySelector('.vdl-neptune-input') as HTMLInputElement;
       input1.value = 'button';
       input1.dispatchEvent(new Event('input'));
       await new Promise(r => setTimeout(r, 300));
@@ -169,12 +247,12 @@ test.describe('NeptuneSearch E2E', () => {
       const ui2 = new window.NeptuneSearchUI({ container, search });
       ui2.mount();
 
-      const input2 = container.querySelector('.vd-neptune-input') as HTMLInputElement;
+      const input2 = container.querySelector('.vdl-neptune-input') as HTMLInputElement;
       input2.value = 'glass';
       input2.dispatchEvent(new Event('input'));
       await new Promise(r => setTimeout(r, 300));
 
-      const results2 = container.querySelectorAll('.vd-neptune-result');
+      const results2 = container.querySelectorAll('.vdl-neptune-result');
       return { count: results2.length };
     });
 
@@ -186,13 +264,13 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
     await page.waitForTimeout(200);
 
-    const firstId = await page.locator('.vd-neptune-result').first().getAttribute('id');
+    const firstId = await page.locator('.vdl-neptune-result').first().getAttribute('id');
     expect(firstId).toBeTruthy();
-    expect(firstId).toMatch(/^vd-neptune-result-\d+$/);
+    expect(firstId).toMatch(/^vdl-neptune-result-\d+$/);
   });
 
   test('keyboard nav updates aria-activedescendant on input', async ({ page }) => {
@@ -200,7 +278,7 @@ test.describe('NeptuneSearch E2E', () => {
       await window.createUI();
     });
 
-    const input = page.locator('.vd-neptune-input');
+    const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
     await page.waitForTimeout(200);
 

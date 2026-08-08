@@ -3,7 +3,11 @@ import { allow, block, normalizeText } from './core.js';
 export { VD_GUARDRAILS_VERSION } from './core.js';
 
 const SAFE_ICON_RE = /^[a-z0-9-]{1,64}$/i;
-const SAFE_ROUTE_RE = /^[a-z0-9/_-]{1,240}$/i;
+/** Legacy hash-route ids (no leading slash). */
+const SAFE_HASH_ROUTE_RE = /^[a-z0-9/_-]{1,240}$/i;
+/** Path routes for vd3-docs (`/` or `/components/button`). */
+const SAFE_PATH_ROUTE_RE = /^\/(?:[a-z0-9/_-]{0,239})$/i;
+const DEFAULT_DOCS_BASE = 'https://vanduo-oss.github.io/vd3-docs';
 
 /**
  * @param {unknown} query
@@ -78,7 +82,11 @@ export function validateSearchIndexDocument(doc) {
   if (!id) return block({ code: 'search.doc.id', message: 'Document id is missing or invalid.' });
   if (!title) return block({ code: 'search.doc.title', message: 'Document title is missing or invalid.' });
   if (!category) return block({ code: 'search.doc.category', message: 'Document category is missing or invalid.' });
-  if (!route || !SAFE_ROUTE_RE.test(route) || route.startsWith('/')) {
+  const routeOk = route
+    && (SAFE_PATH_ROUTE_RE.test(route) || SAFE_HASH_ROUTE_RE.test(route))
+    && !/[:?#]|\/\//.test(route)
+    && !route.includes('..');
+  if (!routeOk) {
     return block({ code: 'search.doc.route', message: 'Document route is missing or unsafe.' });
   }
   if (!icon || !SAFE_ICON_RE.test(icon)) {
@@ -167,32 +175,46 @@ export function validateVectorPayload(payload, options = {}) {
 }
 
 /**
+ * Build a safe docs URL.
+ * Prefers path routes for vd3-docs (`/components/button` → `{base}/components/button`).
+ * Legacy hash routes without a leading slash still resolve to `{base}/#{route}`.
+ *
  * @param {unknown} baseUrl
  * @param {unknown} route
  */
 export function safeDocHref(baseUrl, route) {
-  let safeBase = String(baseUrl || '').trim() || 'https://vanduo.dev';
+  let safeBase = String(baseUrl || '').trim() || DEFAULT_DOCS_BASE;
   try {
     const parsed = new URL(safeBase);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      safeBase = 'https://vanduo.dev';
+      safeBase = DEFAULT_DOCS_BASE;
+    } else {
+      safeBase = parsed.origin + parsed.pathname.replace(/\/$/, '');
     }
   } catch {
-    safeBase = 'https://vanduo.dev';
+    safeBase = DEFAULT_DOCS_BASE;
   }
+
   const safeRoute = String(route || '').trim();
-  if (!SAFE_ROUTE_RE.test(safeRoute) || safeRoute.startsWith('/')) {
-    return '#';
+  if (!safeRoute) return '#';
+  if (/[:?#]|\/\//.test(safeRoute) || safeRoute.includes('..')) return '#';
+
+  if (safeRoute.startsWith('/')) {
+    if (!SAFE_PATH_ROUTE_RE.test(safeRoute)) return '#';
+    if (safeRoute === '/') return `${safeBase}/`;
+    return `${safeBase}${safeRoute}`;
   }
-  return `${safeBase.replace(/\/$/, '')}/#${safeRoute}`;
+
+  if (!SAFE_HASH_ROUTE_RE.test(safeRoute)) return '#';
+  return `${safeBase}/#${safeRoute}`;
 }
 
 /**
  * @param {unknown} icon
  */
 export function sanitizeIconClass(icon) {
-  const value = String(icon || '').trim();
-  if (!SAFE_ICON_RE.test(value)) return 'ph-file-text';
+  const value = String(icon || '').trim().replace(/^ph-/, '');
+  if (!SAFE_ICON_RE.test(value)) return 'file-text';
   return value;
 }
 

@@ -1,4 +1,6 @@
 node_modules/
+dist/
+.models/
 .DS_Store
 *.log
 .env
@@ -8,3 +10,7 @@ playwright-report/
 mempalace.yaml
 .kilo
 gemma-4-debug.md
+
+# Experimental local Gemma smoke harnesses (not for Pages / production build)
+demo/gemma-*.html
+utils/gemma-smoke-runner.mjs
