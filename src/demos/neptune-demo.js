@@ -5,7 +5,7 @@ import '../styles/legacy-bridge.css';
 import { DEFAULT_DOCS_BASE_URL } from '../../neptune-search.js';
 import VdlNeptuneSearchUI from '../components/VdlNeptuneSearchUI.vue';
 
-const lastDebug = ref('Type a query and press Enter to see raw results…');
+const lastDebug = ref('Type a query to see hybrid results (AI + fuzzy)…');
 
 const DemoApp = {
   name: 'NeptuneDemo',

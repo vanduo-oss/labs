@@ -18,8 +18,11 @@ const props = defineProps({
   vectorsUrl: { type: String, default: '/data/vectors.json' },
   baseUrl: { type: String, default: DEFAULT_DOCS_BASE_URL },
   placeholder: { type: String, default: 'Search vd3 docs…' },
-  debounceMs: { type: Number, default: 150 },
+  /** Debounce for auto hybrid/fuzzy search after typing pauses. */
+  debounceMs: { type: Number, default: 350 },
   showSemanticHint: { type: Boolean, default: true },
+  /** Autofocus the search input on mount when safe (skips modals / other fields). */
+  autofocus: { type: Boolean, default: true },
   emptyMessage: {
     type: String,
     default: 'No docs found. Try another query or pick a category filter.',
@@ -58,6 +61,7 @@ let engine = null;
 let ownsEngine = false;
 let debounceTimer = null;
 let semanticSeq = 0;
+let didEnrichOnReady = false;
 let unsubscribeSemantic = null;
 let keyboardHandler = null;
 let clickOutsideHandler = null;
@@ -151,30 +155,34 @@ function clearResultsUI({ keepShortHint = false } = {}) {
   dropdownOpen.value = false;
 }
 
-async function runFuzzy(rawQuery) {
-  const eng = await ensureEngine();
-  semanticSeq += 1;
-  const seq = semanticSeq;
-  loading.value = true;
-  loadingMessage.value = 'Searching…';
-  statusMessage.value = '';
-  openDropdown();
-  try {
-    const result = await eng.search(rawQuery, { mode: 'fuzzy' });
-    if (seq !== semanticSeq) return;
-    results.value = result.merged;
-    selectedIndex.value = -1;
-    shortQueryHint.value = false;
-    if (!results.value.length) statusMessage.value = props.emptyMessage;
-  } finally {
-    if (seq === semanticSeq) {
-      loading.value = false;
-      loadingMessage.value = '';
+/**
+ * Focus search when safe: skip open modals and other text fields, but allow
+ * taking focus from buttons (e.g. demo card) after Neptune mounts.
+ */
+function tryAutofocusInput() {
+  if (!props.autofocus) return;
+  const ae = document.activeElement;
+  if (ae?.closest?.('dialog, [role="dialog"], [aria-modal="true"]')) return;
+  if (ae && ae !== inputEl.value) {
+    const tag = ae.tagName;
+    if (
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      ae.isContentEditable
+    ) {
+      return;
     }
   }
+  inputEl.value?.focus({ preventScroll: true });
 }
 
-async function runHybrid(rawQuery) {
+/**
+ * Run search for the current query.
+ * - Auto path: hybrid when semantic is ready, otherwise fuzzy (live while model loads).
+ * - Immediate/Enter path: always hybrid (awaits model if still warming).
+ */
+async function runSearch(rawQuery, { forceHybrid = false } = {}) {
   const eng = await ensureEngine();
   const normalized = normalizeSearchQuery(rawQuery, {
     maxLength: eng.queryMaxLength ?? 240,
@@ -188,27 +196,29 @@ async function runHybrid(rawQuery) {
     statusMessage.value = normalized
       ? `Type at least ${eng.queryMinLength ?? 2} characters to search.`
       : '';
-    openDropdown();
+    if (normalized) openDropdown();
+    else clearResultsUI();
     return;
   }
 
-  clearTimeout(debounceTimer);
+  const useHybrid = forceHybrid || Boolean(eng.isSemanticReady?.());
   const seq = ++semanticSeq;
-  results.value = [];
   selectedIndex.value = -1;
   shortQueryHint.value = false;
   loading.value = true;
-  loadingMessage.value = 'Searching with AI…';
+  loadingMessage.value = useHybrid ? 'Searching with AI…' : 'Searching…';
   statusMessage.value = '';
   openDropdown();
 
   try {
-    const result = await eng.search(normalized, { mode: 'hybrid' });
+    const result = await eng.search(normalized, {
+      mode: useHybrid ? 'hybrid' : 'fuzzy',
+    });
     if (seq !== semanticSeq) return;
     results.value = result.merged;
     if (!results.value.length) statusMessage.value = props.emptyMessage;
   } catch (err) {
-    console.warn('[VdlNeptuneSearchUI] hybrid search failed', err);
+    console.warn('[VdlNeptuneSearchUI] search failed', err);
     if (seq !== semanticSeq) return;
     const fallback = await eng.search(normalized, { mode: 'fuzzy' });
     if (seq !== semanticSeq) return;
@@ -222,11 +232,12 @@ async function runHybrid(rawQuery) {
   }
 }
 
-function onInput() {
+function scheduleSearch(rawQuery, { immediate = false } = {}) {
   const engMin = engine?.queryMinLength ?? 2;
   const engMax = engine?.queryMaxLength ?? 240;
-  const normalized = normalizeSearchQuery(query.value, { maxLength: engMax });
+  const normalized = normalizeSearchQuery(rawQuery, { maxLength: engMax });
   clearTimeout(debounceTimer);
+  // Invalidate in-flight responses while the user keeps typing.
   semanticSeq += 1;
   loading.value = false;
   loadingMessage.value = '';
@@ -249,9 +260,17 @@ function onInput() {
   }
 
   shortQueryHint.value = false;
+  if (immediate) {
+    runSearch(normalized, { forceHybrid: true });
+    return;
+  }
   debounceTimer = setTimeout(() => {
-    runFuzzy(normalized);
+    runSearch(normalized);
   }, props.debounceMs);
+}
+
+function onInput() {
+  scheduleSearch(query.value);
 }
 
 function onKeyDown(e) {
@@ -270,12 +289,12 @@ function onKeyDown(e) {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (selectedIndex.value >= 0) selectResult(list[selectedIndex.value]);
-      else runHybrid(query.value);
+      else scheduleSearch(query.value, { immediate: true });
       return;
     }
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    runHybrid(query.value);
+    scheduleSearch(query.value, { immediate: true });
   }
 }
 
@@ -311,10 +330,19 @@ onMounted(async () => {
       modelLoading.value = false;
       modelProgressMessage.value = '';
       modelProgressPct.value = 0;
+      // Enrich current query once when the model first becomes ready.
+      if (data.stage === 'ready' && !didEnrichOnReady && query.value.trim()) {
+        didEnrichOnReady = true;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          runSearch(query.value);
+        }, 0);
+      }
     }
   });
 
   preloadSemantic(eng);
+  tryAutofocusInput();
 
   keyboardHandler = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -346,6 +374,7 @@ onBeforeUnmount(() => {
   }
   // Keep sharedEngine alive for HMR / v-if remount; only drop the local ref.
   engine = null;
+  didEnrichOnReady = false;
 });
 
 watch(
@@ -412,7 +441,7 @@ defineExpose({
         @focus="openDropdown"
       />
       <span v-if="showSemanticHint" class="vdl-neptune-hint" aria-hidden="true">
-        <kbd>Enter</kbd> AI
+        AI · fuzzy
       </span>
     </div>
 
@@ -579,14 +608,6 @@ defineExpose({
   color: var(--text-muted);
   font-size: 0.72rem;
   white-space: nowrap;
-}
-
-.vdl-neptune-hint kbd {
-  font: inherit;
-  border: 1px solid var(--border-color);
-  border-radius: 0.3rem;
-  padding: 0.05rem 0.3rem;
-  margin-right: 0.2rem;
 }
 
 .vdl-neptune-dropdown {

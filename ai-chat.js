@@ -39,6 +39,9 @@ export const MODEL_GROUPS = [
   { id: 'optional', label: 'Optional' },
 ];
 
+/** ~GiB helper for model size metadata (weights on disk / download). */
+const GiB = 1024 ** 3;
+
 export const MODEL_OPTIONS = [
   {
     id: 'gemma-4-E2B-it-web',
@@ -47,6 +50,7 @@ export const MODEL_OPTIONS = [
     group: 'gemma4',
     backend: 'litert',
     requires: ['shader-f16'],
+    approxBytes: 2.0 * GiB,
     modelFile: 'gemma-4-E2B-it-web.litertlm',
     modelUrl:
       'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm',
@@ -59,6 +63,7 @@ export const MODEL_OPTIONS = [
     backend: 'litert',
     requires: ['shader-f16'],
     experimental: true,
+    approxBytes: 2.5 * GiB,
     modelFile: 'gemma-4-E4B-it-web.litertlm',
     modelUrl:
       'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.litertlm',
@@ -71,6 +76,7 @@ export const MODEL_OPTIONS = [
     backend: 'webllm',
     requires: ['shader-f16'],
     experimental: true,
+    approxBytes: 2.7 * GiB,
     // WebLLM allows only one of context_window_size / sliding_window_size > 0.
     // mlc-chat-config ships both (4096 + 512); prefer fixed context for this build.
     // Native multi-turn context is unreliable on this community MLC package.
@@ -90,6 +96,7 @@ export const MODEL_OPTIONS = [
     backend: 'webllm',
     requires: ['shader-f16'],
     experimental: true,
+    approxBytes: 4.0 * GiB,
     overrides: {
       context_window_size: 4096,
       sliding_window_size: -1,
@@ -105,6 +112,7 @@ export const MODEL_OPTIONS = [
     group: 'optional',
     backend: 'webllm',
     requires: ['shader-f16'],
+    approxBytes: 0.3 * GiB,
     fallbackId: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
   },
   {
@@ -114,6 +122,7 @@ export const MODEL_OPTIONS = [
     group: 'optional',
     backend: 'webllm',
     requires: [],
+    approxBytes: 1.6 * GiB,
     fallbackId: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
   },
   {
@@ -123,6 +132,7 @@ export const MODEL_OPTIONS = [
     group: 'optional',
     backend: 'webllm',
     requires: [],
+    approxBytes: 2.3 * GiB,
     fallbackId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
   },
   {
@@ -132,9 +142,61 @@ export const MODEL_OPTIONS = [
     group: 'optional',
     backend: 'webllm',
     requires: [],
+    approxBytes: 1.6 * GiB,
     fallbackId: 'Qwen2.5-Coder-1.5B-Instruct-q4f32_1-MLC',
   },
 ];
+
+/** Suggested Tiny model when load-capacity heuristics say the device is weak. */
+export const TINY_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
+
+/**
+ * Soft copy for the freeze window during WASM/WebGPU init (unavoidable in-browser).
+ * Shown while weights upload / shaders compile after download.
+ */
+export const LOAD_FREEZE_HINT =
+  'Uploading weights to the GPU and compiling shaders — the tab may freeze for several seconds. This is normal for in-browser WebGPU.';
+
+/**
+ * Confirm-dialog copy when heuristics flag a constrained device.
+ * @param {{ approxGb: number, recommendedLabel?: string }} opts
+ */
+export function buildWeakDeviceConfirmCopy({ approxGb, recommendedLabel } = {}) {
+  const size = Number.isFinite(approxGb) ? `~${approxGb.toFixed(1)} GB` : 'a large';
+  const prefer = recommendedLabel
+    ? `Prefer “${recommendedLabel}” on older or low-RAM machines, close other heavy tabs, then continue.`
+    : 'Prefer a Tiny / smaller model on older or low-RAM machines, close other heavy tabs, then continue.';
+  return [
+    `This device looks constrained for ${size} local model.`,
+    '',
+    '• The tab may freeze while WebGPU loads weights into GPU memory',
+    '• Low-RAM systems can crash (Aw Snap) if the GPU runs out of memory',
+    `• ${prefer}`,
+    '',
+    'Load anyway?',
+  ].join('\n');
+}
+
+/**
+ * Whether the chat composer should receive keyboard focus.
+ * Prefer the composer after send/stream/load; avoid stealing from selects, modals, etc.
+ *
+ * @param {{
+ *   force?: boolean,
+ *   modalOpen?: boolean,
+ *   chatReady?: boolean,
+ *   activeIsComposer?: boolean,
+ *   activeIsOtherControl?: boolean,
+ * }} [opts]
+ */
+export function shouldFocusChatComposer(opts = {}) {
+  if (opts.modalOpen) return false;
+  if (!opts.chatReady) return false;
+  if (opts.force) return true;
+  if (opts.activeIsComposer) return true;
+  if (opts.activeIsOtherControl) return false;
+  return true;
+}
 
 const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
 const DEFAULT_GENERATION_CONFIG = {
@@ -204,6 +266,163 @@ export function getModelDisplayName(modelId) {
   const option = getModelOption(modelId);
   if (!option) return modelId;
   return option.label.split('(~')[0].replace(/\s+-\s+\w+$/, '').trim();
+}
+
+/**
+ * Yield to the browser so paint/input can run before a long sync stretch.
+ * Engine.create still does heavy WASM/WebGPU work we cannot slice ourselves.
+ */
+export async function yieldToMain() {
+  if (typeof globalThis.scheduler?.yield === 'function') {
+    await globalThis.scheduler.yield();
+    return;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Collect coarse device signals for load guardrails.
+ * Browsers do not expose free VRAM; deviceMemory is fingerprint-capped (often ≤8).
+ * @param {GPUAdapter | null} [adapter]
+ */
+export function collectDeviceSignals(adapter = null) {
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  const limits = adapter?.limits;
+  return {
+    deviceMemory: typeof nav?.deviceMemory === 'number' ? nav.deviceMemory : null,
+    hardwareConcurrency:
+      typeof nav?.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
+    maxStorageBufferBindingSize:
+      typeof limits?.maxStorageBufferBindingSize === 'number'
+        ? limits.maxStorageBufferBindingSize
+        : null,
+    maxBufferSize:
+      typeof limits?.maxBufferSize === 'number' ? limits.maxBufferSize : null,
+  };
+}
+
+/**
+ * LM Studio–style pre-load heuristic (browser-limited).
+ * Returns level: 'ok' | 'caution' | 'high' plus human reasons and a Tiny recommendation.
+ *
+ * @param {{ modelId?: string, systemInfo?: Record<string, unknown> }} [opts]
+ */
+export function assessLoadCapacity(opts = {}) {
+  const modelId = opts.modelId || MODEL_OPTIONS[0]?.id;
+  const option = getModelOption(modelId);
+  const systemInfo = opts.systemInfo || {};
+  const approxBytes = option?.approxBytes || 2 * GiB;
+  const approxGb = approxBytes / GiB;
+
+  const deviceMemory =
+    typeof systemInfo.deviceMemory === 'number'
+      ? systemInfo.deviceMemory
+      : collectDeviceSignals().deviceMemory;
+  const cores =
+    typeof systemInfo.hardwareConcurrency === 'number'
+      ? systemInfo.hardwareConcurrency
+      : collectDeviceSignals().hardwareConcurrency;
+  const maxStorage =
+    typeof systemInfo.maxStorageBufferBindingSize === 'number'
+      ? systemInfo.maxStorageBufferBindingSize
+      : null;
+
+  /** @type {'ok' | 'caution' | 'high'} */
+  let level = 'ok';
+  const reasons = [];
+
+  // WebLLM / Android pattern: ≤128 MiB storage binding ≈ very constrained GPU.
+  const LOW_STORAGE_CAP = 128 * 1024 * 1024;
+  if (maxStorage != null && maxStorage <= LOW_STORAGE_CAP && approxBytes > 0.5 * GiB) {
+    level = 'high';
+    reasons.push(
+      'GPU maxStorageBufferBindingSize is very low (typical of constrained mobile GPUs). Large models often crash the tab.',
+    );
+  }
+
+  // deviceMemory is intentionally coarse and capped; ≤4 is a strong weak-device signal.
+  if (deviceMemory != null && deviceMemory <= 4 && approxBytes >= 1 * GiB) {
+    level = 'high';
+    reasons.push(
+      `Browser reports ~${deviceMemory} GB RAM (approximate / capped). A ~${approxGb.toFixed(1)} GB model may freeze or OOM.`,
+    );
+  } else if (deviceMemory != null && deviceMemory <= 4) {
+    if (level === 'ok') level = 'caution';
+    reasons.push(`Browser reports ~${deviceMemory} GB RAM — expect longer freezes during WebGPU init.`);
+  }
+
+  // Largest catalog models on ambiguous 8 GB deviceMemory bucket.
+  if (deviceMemory != null && deviceMemory <= 8 && approxBytes >= 3.5 * GiB && level === 'ok') {
+    level = 'caution';
+    reasons.push(
+      `~${approxGb.toFixed(1)} GB model on a device reporting ≤8 GB RAM — close other tabs before loading.`,
+    );
+  }
+
+  if (cores != null && cores <= 2 && approxBytes >= 1 * GiB) {
+    if (level === 'ok') level = 'caution';
+    reasons.push(
+      `Only ${cores} logical CPU cores reported — download/compile may stall the UI longer.`,
+    );
+  } else if (cores != null && cores <= 4 && approxBytes >= 2.5 * GiB && level === 'ok') {
+    level = 'caution';
+    reasons.push(`Modest CPU (${cores} cores) with a ~${approxGb.toFixed(1)} GB model.`);
+  }
+
+  const recommended =
+    level === 'ok'
+      ? null
+      : getModelOption(TINY_MODEL_ID) || MODEL_OPTIONS.find((m) => m.tier === 'Tiny') || null;
+
+  return {
+    level,
+    reasons,
+    approxBytes,
+    approxGb,
+    deviceMemory,
+    hardwareConcurrency: cores,
+    maxStorageBufferBindingSize: maxStorage,
+    recommendedModelId: recommended?.id || null,
+    recommendedLabel: recommended ? getModelDisplayName(recommended.id) : null,
+    freezeHint: LOAD_FREEZE_HINT,
+  };
+}
+
+/**
+ * Fetch model bytes as a ReadableStream with download progress.
+ * Engine.create accepts URL | ReadableStream | Blob — streaming keeps UI updates alive during fetch.
+ * @param {string} url
+ * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ */
+async function openProgressModelStream(url, onProgress) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch model (${res.status} ${res.statusText || ''}).`.trim());
+  }
+  const totalBytes = Number(res.headers.get('content-length')) || 0;
+  let received = 0;
+
+  if (!res.body || typeof res.body.pipeThrough !== 'function') {
+    const blob = await res.blob();
+    received = blob.size;
+    onProgress?.({
+      loaded: 1,
+      received,
+      totalBytes: totalBytes || received,
+    });
+    return typeof blob.stream === 'function' ? blob.stream() : blob;
+  }
+
+  return res.body.pipeThrough(
+    new TransformStream({
+      transform(chunk, controller) {
+        received += chunk.byteLength;
+        const loaded = totalBytes > 0 ? Math.min(1, received / totalBytes) : 0;
+        onProgress?.({ loaded, received, totalBytes });
+        controller.enqueue(chunk);
+      },
+    }),
+  );
 }
 
 const localModelProbeCache = new Map();
@@ -554,14 +773,42 @@ export class AiChat {
     const option = getModelOption(this.modelId);
     const { Engine } = await loadLiteRT();
     this._emitProgress({ stage: 'init', message: 'Initializing LiteRT WebGPU engine…' });
+    await yieldToMain();
+
     const modelUrl = await resolveLiteRTModelUrl(option);
     this._emitProgress({
       stage: 'downloading',
-      message: 'Loading Gemma 4 (LiteRT)…',
+      message: 'Downloading / reading Gemma 4 (LiteRT)…',
       text: modelUrl,
+      loaded: 0,
     });
+
+    // Stream weights with progress (Engine accepts URL | ReadableStream | Blob).
+    // Progress updates only cover the fetch phase — WASM/WebGPU init still blocks afterward.
+    const modelSource = await openProgressModelStream(modelUrl, ({ loaded, received, totalBytes }) => {
+      const pct = totalBytes > 0
+        ? `${Math.round(loaded * 100)}%`
+        : `${(received / (1024 * 1024)).toFixed(1)} MB`;
+      this._emitProgress({
+        stage: 'downloading',
+        text: totalBytes > 0
+          ? `${pct} · ${(received / (1024 * 1024)).toFixed(0)} / ${(totalBytes / (1024 * 1024)).toFixed(0)} MB`
+          : pct,
+        loaded: totalBytes > 0 ? loaded : Math.min(0.95, received / (2 * GiB)),
+        message: 'Fetching model weights…',
+      });
+    });
+
+    this._emitProgress({
+      stage: 'compiling',
+      message: LOAD_FREEZE_HINT,
+      text: 'GPU upload / shader compile',
+      loaded: 1,
+    });
+    await yieldToMain();
+
     this.engine = await Engine.create({
-      model: modelUrl,
+      model: modelSource,
       mainExecutorSettings: { maxNumTokens: 4096 },
     });
     await this._ensureLiteRTConversation(true);
@@ -570,14 +817,20 @@ export class AiChat {
   async _loadWebLLM() {
     const { CreateMLCEngine } = await loadWebLLM();
     this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
+    await yieldToMain();
 
     const appConfig = await buildModelAppConfig(this.modelId);
     const engineConfig = {
       initProgressCallback: (progress) => {
+        const loaded = typeof progress.progress === 'number' ? progress.progress : 0;
+        const text = String(progress.text || '');
+        const compiling = loaded >= 0.98
+          || /compil|shader|finish loading|loading model to gpu/i.test(text);
         this._emitProgress({
-          stage: 'downloading',
+          stage: compiling ? 'compiling' : 'downloading',
           text: progress.text,
           loaded: progress.progress,
+          message: compiling ? LOAD_FREEZE_HINT : undefined,
         });
       }
     };
@@ -994,7 +1247,7 @@ export class AiChatUI {
           margin-top: 1.2rem;
         }
       </style>
-      <div class="vd-card-body vdl-ai-card-body" style="display: flex; flex-direction: column; min-height: 0; padding: 0; flex: 1 1 auto;">
+      <div class="vd-card-body vdl-ai-card-body" style="display: flex; flex-direction: column; min-height: 0; padding: 0; flex: 1 1 auto; position: relative;">
         <!-- Header -->
         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color, #e0e0e0); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -1051,6 +1304,7 @@ export class AiChatUI {
             <div class="vd-text-sm vd-text-muted">WebGPU: <span class="vdl-ai-sys-webgpu">Checking...</span></div>
             <div class="vd-text-sm vd-text-muted">GPU: <span class="vdl-ai-sys-gpu">Detecting...</span></div>
             <div class="vd-text-sm vd-text-muted">shader-f16: <span class="vdl-ai-sys-f16">Checking...</span></div>
+            <div class="vd-text-sm vd-text-muted">Device: <span class="vdl-ai-sys-device">Checking...</span></div>
             <div class="vd-text-sm vd-text-muted" style="margin-top: 0.5rem;">Compatible tiers:</div>
             <div class="vdl-ai-compatible-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem;"></div>
           </div>
@@ -1062,6 +1316,7 @@ export class AiChatUI {
             <em>FOSS guardrails are active. Injection patterns courtesy of LlmGuard, ai-guardian, and llm-prompt-guard.</em>
           </p>
           <p class="vdl-ai-cache-hint vd-text-muted vd-text-sm" style="max-width: 40rem; margin: 0 0 0.75rem; width: 100%;"></p>
+          <div class="vdl-ai-capacity-note vd-text-sm" role="status" style="display: none; max-width: 40rem; width: 100%; margin: 0 0 0.75rem; padding: 0.65rem 0.75rem; text-align: left; border-radius: var(--radius-sm, 0.5rem); border: 1px solid var(--vd-color-warning, #f59e0b); background: color-mix(in srgb, var(--vd-color-warning, #f59e0b) 12%, transparent); color: var(--text-primary);"></div>
           <div class="vdl-ai-setup-actions">
             <button type="button" class="vd-btn vd-btn-primary vdl-ai-load-btn">
               Load AI Model
@@ -1083,6 +1338,14 @@ export class AiChatUI {
             <div style="height: 6px; background: var(--bg-secondary, #f5f5f5); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color, #e0e0e0);">
               <div class="vdl-ai-progress-bar" style="height: 100%; width: 0%; background: var(--color-primary, #3b82f6); transition: width 0.1s ease;"></div>
             </div>
+            <p class="vdl-ai-freeze-hint vd-text-muted" style="display: none; margin: 0.55rem 0 0; font-size: 0.75rem; line-height: 1.4;"></p>
+          </div>
+        </div>
+
+        <div class="vdl-ai-load-overlay" hidden aria-hidden="true" style="display: none; position: absolute; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg-primary, #fff) 72%, transparent); backdrop-filter: blur(2px); align-items: center; justify-content: center; padding: 1.5rem; text-align: center; pointer-events: all;">
+          <div style="max-width: 22rem;">
+            <div class="vd-text-sm" style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Loading model…</div>
+            <div class="vd-text-sm vd-text-muted vdl-ai-load-overlay-text" style="line-height: 1.45;">Please wait — interaction is paused while WebGPU initializes.</div>
           </div>
         </div>
 
@@ -1159,11 +1422,16 @@ export class AiChatUI {
       sysWebGpu: wrapper.querySelector('.vdl-ai-sys-webgpu'),
       sysGpu: wrapper.querySelector('.vdl-ai-sys-gpu'),
       sysF16: wrapper.querySelector('.vdl-ai-sys-f16'),
+      sysDevice: wrapper.querySelector('.vdl-ai-sys-device'),
       compatibleBadges: wrapper.querySelector('.vdl-ai-compatible-badges'),
       cacheHint: wrapper.querySelector('.vdl-ai-cache-hint'),
+      capacityNote: wrapper.querySelector('.vdl-ai-capacity-note'),
       progressWrap: wrapper.querySelector('.vdl-ai-progress-wrap'),
       progressBar: wrapper.querySelector('.vdl-ai-progress-bar'),
       progressText: wrapper.querySelector('.vdl-ai-progress-text'),
+      freezeHint: wrapper.querySelector('.vdl-ai-freeze-hint'),
+      loadOverlay: wrapper.querySelector('.vdl-ai-load-overlay'),
+      loadOverlayText: wrapper.querySelector('.vdl-ai-load-overlay-text'),
       loadSourceBadges: wrapper.querySelectorAll('.vdl-ai-load-source-badge'),
       progressBadgeRow: wrapper.querySelector('.vdl-ai-progress-badge-row'),
       chatInterface: wrapper.querySelector('.vdl-ai-chat-interface'),
@@ -1257,10 +1525,12 @@ export class AiChatUI {
     this.chat.onProgress((data) => {
       if (data.stage === 'init') {
         this._applyLoadSourceBadges({ mode: 'unknown', fromDownload: false, message: data.message });
+        this._setLoadOverlay(true, data.message || 'Initializing…');
         if (this._elements.progressWrap?.style.display === 'block') {
           this._elements.progressText.textContent = data.message || 'Initializing...';
           this._elements.progressText.style.color = '';
         }
+        this._setFreezeHint(false);
       } else if (data.stage === 'downloading') {
         const source = this._inferLoadSource(data.text);
         const likelyCached = this._isModelLikelyCached(this.chat.modelId);
@@ -1287,8 +1557,18 @@ export class AiChatUI {
         this._elements.progressBar.style.width = `${(data.loaded || 0) * 100}%`;
         this._elements.statusIndicator.style.background = 'var(--vd-color-warning, #f59e0b)';
         this._elements.statusText.textContent = `Loading ${Math.round((data.loaded || 0) * 100)}%`;
+        this._setLoadOverlay(true, data.message || prefix);
+        this._setFreezeHint(false);
+      } else if (data.stage === 'compiling') {
+        this._elements.progressBar.style.width = '100%';
+        this._elements.progressText.textContent = data.message || LOAD_FREEZE_HINT;
+        this._elements.statusText.textContent = 'Compiling…';
+        this._setLoadOverlay(true, data.message || LOAD_FREEZE_HINT);
+        this._setFreezeHint(true, data.message || LOAD_FREEZE_HINT);
       } else if (data.stage === 'ready') {
         this._clearLoadSourceBadges();
+        this._setLoadOverlay(false);
+        this._setFreezeHint(false);
         this._markModelCached(this.chat.modelId);
         this._markModelCached(this._selectedModelId);
         this._renderModelOptions();
@@ -1303,6 +1583,8 @@ export class AiChatUI {
         this._showChatInterface();
       } else if (data.stage === 'error') {
         this._clearLoadSourceBadges();
+        this._setLoadOverlay(false);
+        this._setFreezeHint(false);
         this._elements.progressText.textContent = 'Error: ' + data.message;
         this._elements.progressText.style.color = 'var(--vd-color-danger, #ef4444)';
         this._elements.statusIndicator.style.background = 'var(--vd-color-danger, #ef4444)';
@@ -1417,8 +1699,57 @@ export class AiChatUI {
       this._clearModalKeyHandler = null;
     }
     this._clearModalOpen = false;
-    if (restoreFocus && this._elements.clearStorageBtn && !this._elements.clearStorageBtn.disabled) {
+    if (!restoreFocus) return;
+    // Prefer composer when chat is ready; otherwise restore the clear-storage control.
+    if (this.chat?.isLoaded?.() && this._elements.chatInput && !this._elements.chatInput.disabled) {
+      this._focusComposer({ force: true });
+      return;
+    }
+    if (this._elements.clearStorageBtn && !this._elements.clearStorageBtn.disabled) {
       this._elements.clearStorageBtn.focus();
+    }
+  }
+
+  /**
+   * @param {{ force?: boolean }} [opts]
+   */
+  _focusComposer(opts = {}) {
+    const force = !!opts.force;
+    const chatInput = this._elements.chatInput;
+    if (!chatInput) return;
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    const activeIsComposer = active === chatInput;
+    const tag = active?.tagName;
+    const activeIsOtherControl = !!(
+      active
+      && !activeIsComposer
+      && (
+        tag === 'SELECT'
+        || tag === 'BUTTON'
+        || tag === 'INPUT'
+        || tag === 'TEXTAREA'
+        || tag === 'A'
+        || active.isContentEditable
+        || (typeof active.closest === 'function' && active.closest('[role="dialog"], .vdl-ai-clear-modal-overlay'))
+      )
+    );
+    if (!shouldFocusChatComposer({
+      force,
+      modalOpen: !!this._clearModalOpen,
+      chatReady: !!this.chat?.isLoaded?.() && !chatInput.disabled,
+      activeIsComposer,
+      activeIsOtherControl,
+    })) {
+      return;
+    }
+    try {
+      chatInput.focus({ preventScroll: true });
+    } catch {
+      try {
+        chatInput.focus();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -1484,7 +1815,8 @@ export class AiChatUI {
       webgpuSupported: !!navigator.gpu,
       adapterName: null,
       shaderF16: false,
-      error: null
+      error: null,
+      ...collectDeviceSignals(null),
     };
 
     if (!navigator.gpu) return info;
@@ -1498,6 +1830,7 @@ export class AiChatUI {
 
       info.adapterName = adapter.name || 'Unknown adapter';
       info.shaderF16 = !!(adapter.features && adapter.features.has('shader-f16'));
+      Object.assign(info, collectDeviceSignals(adapter));
       return info;
     } catch (err) {
       info.error = err?.message || 'Adapter detection failed';
@@ -1598,6 +1931,7 @@ export class AiChatUI {
     const resolved = this._resolveModelForSystem(requestedModelId);
     this._renderFallbackNote(resolved);
     this._renderCacheHint(resolved.modelId);
+    this._renderCapacityNote(requestedModelId);
     this._syncModelSelectors();
 
     if (!resolved.unavailable && !this.chat.isLoaded() && !this.chat.isLoading()) {
@@ -1748,7 +2082,7 @@ export class AiChatUI {
   }
 
   _renderSystemInfo() {
-    const { sysWebGpu, sysGpu, sysF16, compatibleBadges } = this._elements;
+    const { sysWebGpu, sysGpu, sysF16, sysDevice, compatibleBadges } = this._elements;
     const info = this._systemInfo;
     if (!info) return;
 
@@ -1779,6 +2113,16 @@ export class AiChatUI {
       }
     }
 
+    if (sysDevice) {
+      const mem = info.deviceMemory != null ? `~${info.deviceMemory} GB RAM*` : 'RAM n/a';
+      const cores = info.hardwareConcurrency != null ? `${info.hardwareConcurrency} cores` : 'cores n/a';
+      const buf = info.maxStorageBufferBindingSize != null
+        ? `buf ${(info.maxStorageBufferBindingSize / (1024 * 1024)).toFixed(0)} MB`
+        : '';
+      sysDevice.textContent = [mem, cores, buf].filter(Boolean).join(' · ');
+      sysDevice.title = 'deviceMemory is browser-capped/approximate; GPU VRAM is not exposed to web pages.';
+    }
+
     if (compatibleBadges) {
       compatibleBadges.innerHTML = MODEL_OPTIONS.map((model) => {
         const resolved = this._resolveModelForSystem(model.id);
@@ -1797,6 +2141,65 @@ export class AiChatUI {
         `;
       }).join('');
     }
+
+    this._renderCapacityNote();
+  }
+
+  _renderCapacityNote(modelId = null) {
+    const note = this._elements.capacityNote;
+    if (!note) return;
+    const id = modelId
+      || this._elements.modelSelect?.value
+      || this._selectedModelId
+      || this.chat.modelId
+      || MODEL_OPTIONS[0].id;
+    const resolved = this._resolveModelForSystem(id);
+    const assessment = assessLoadCapacity({
+      modelId: resolved.modelId,
+      systemInfo: this._systemInfo || {},
+    });
+    if (assessment.level === 'ok') {
+      note.style.display = 'none';
+      note.textContent = '';
+      return;
+    }
+    const prefer = assessment.recommendedLabel
+      ? ` Prefer ${assessment.recommendedLabel} on weaker devices.`
+      : '';
+    note.style.display = 'block';
+    note.textContent = `${assessment.level === 'high' ? 'Warning' : 'Caution'}: ${assessment.reasons[0] || 'This device may struggle with the selected model.'}${prefer}`;
+  }
+
+  _setLoadOverlay(visible, message = '') {
+    const { loadOverlay, loadOverlayText, wrapper } = this._elements;
+    if (wrapper) {
+      wrapper.setAttribute('aria-busy', visible ? 'true' : 'false');
+    }
+    if (!loadOverlay) return;
+    if (visible) {
+      loadOverlay.hidden = false;
+      loadOverlay.style.display = 'flex';
+      loadOverlay.setAttribute('aria-hidden', 'false');
+      if (loadOverlayText && message) {
+        loadOverlayText.textContent = message;
+      }
+    } else {
+      loadOverlay.hidden = true;
+      loadOverlay.style.display = 'none';
+      loadOverlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  _setFreezeHint(visible, message = LOAD_FREEZE_HINT) {
+    const hint = this._elements.freezeHint;
+    if (!hint) return;
+    if (visible) {
+      hint.style.display = 'block';
+      hint.textContent = message;
+    } else {
+      hint.style.display = 'none';
+      hint.textContent = '';
+    }
   }
 
   async _handleLoadModel() {
@@ -1814,6 +2217,21 @@ export class AiChatUI {
       this._updateSwitchButtonState();
       return;
     }
+
+    const assessment = assessLoadCapacity({
+      modelId: resolved.modelId,
+      systemInfo: this._systemInfo || {},
+    });
+    if (assessment.level === 'high' || assessment.level === 'caution') {
+      const ok = window.confirm(
+        buildWeakDeviceConfirmCopy({
+          approxGb: assessment.approxGb,
+          recommendedLabel: assessment.recommendedLabel,
+        }),
+      );
+      if (!ok) return;
+    }
+
     await this.chat.setModelId(resolved.modelId);
     this._renderFallbackNote(resolved);
     this._updateModelTitle(selectedModel);
@@ -1821,6 +2239,7 @@ export class AiChatUI {
 
     progressWrap.style.display = 'block';
     this._elements.progressText.style.color = '';
+    this._setLoadOverlay(true, 'Starting model load…');
 
     const loadPromise = this.chat.load();
     this._updateSwitchButtonState();
@@ -1828,6 +2247,7 @@ export class AiChatUI {
       await loadPromise;
     } catch (err) {
       console.error(err);
+      this._setLoadOverlay(false);
     } finally {
       this._updateSwitchButtonState();
     }
@@ -1893,7 +2313,7 @@ export class AiChatUI {
     chatInput.disabled = false;
     sendBtn.disabled = false;
     this._updateSwitchButtonState();
-    chatInput.focus();
+    this._focusComposer({ force: true });
   }
 
   _resetMessagesUi() {
@@ -2042,7 +2462,7 @@ export class AiChatUI {
       this._appendMessage('assistant', `<span style="color: var(--vd-color-danger, #ef4444);"><i class="ph ph-shield-warning" style="vertical-align: middle; margin-right: 4px;"></i> Guardrail blocked request: ${guardrailCheck.reason}</span>`);
       chatInput.disabled = false;
       sendBtn.disabled = false;
-      chatInput.focus();
+      this._focusComposer({ force: true });
       return;
     }
 
@@ -2078,7 +2498,7 @@ export class AiChatUI {
     } finally {
       chatInput.disabled = false;
       sendBtn.disabled = false;
-      chatInput.focus();
+      this._focusComposer({ force: true });
       this._scrollMessagesToLatest(true);
     }
   }

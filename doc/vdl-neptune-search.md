@@ -16,14 +16,14 @@ Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://v
                 ▼                               ▼
 ┌───────────────────────────┐   ┌─────────────────────────────────────┐
 │  LAYER 1: Fuse.js         │   │  LAYER 2: Transformers.js           │
-│  (triggers on keystroke)  │   │  (triggers on Enter / submit)       │
-│                           │   │                                     │
-│  • Lazy-loads on first    │   │  • Lazy-loads vectors.json + model  │
-│    keystroke              │   │    on first submit (~23MB once)     │
-│  • Fuzzy match across:    │   │  • Embeds query with MiniLM-L6-v2   │
-│    title (2.5), headings  │   │  • Cosine similarity vs all docs    │
-│    (2.0), keywords (2.5), │   │  • Returns top 10 (score > 0.30)    │
-│    bodyText (1.0),        │   │  • Computation: <10ms for 500 docs  │
+│  (debounced keystroke)    │   │  (debounced keystroke when ready;   │
+│                           │   │   Enter submits immediately)        │
+│  • Lazy-loads on first    │   │  • Preloads on UI mount (~23MB once)│
+│    keystroke              │   │  • Embeds query with MiniLM-L6-v2   │
+│  • Fuzzy match across:    │   │  • Cosine similarity vs all docs    │
+│    title (2.5), headings  │   │  • Returns top 10 (score > 0.30)    │
+│    (2.0), keywords (2.5), │   │  • Computation: <10ms for 500 docs  │
+│    bodyText (1.0),        │   │                                     │
 │    classes (1.5),         │   │                                     │
 │    chunks.text (0.8)      │   │                                     │
 │  • Threshold: 0.45        │   │                                     │
@@ -94,7 +94,7 @@ const search = new NeptuneSearch();
 const fuzzy = await search.search('button', { mode: 'fuzzy' });
 console.log(fuzzy.merged); // [{ doc, score, source: 'fuzzy' }]
 
-// Hybrid search (fuzzy + semantic, Enter-key behavior)
+// Hybrid search (fuzzy + semantic)
 const hybrid = await search.search('how do I make a button', { mode: 'hybrid' });
 console.log(hybrid.merged); // [{ doc, score, source: 'semantic'|'fuzzy' }]
 ```
@@ -123,14 +123,14 @@ ui.mount();
 
 | Layer | Trigger | Engine | Data |
 |-------|---------|--------|------|
-| **Fuzzy** | Every keystroke (debounced 150ms) | Fuse.js v7 (CDN) | `data/search-index.json` |
-| **Semantic** | Enter key / form submit (model preloaded on UI mount) | Transformers.js v3 + `Xenova/all-MiniLM-L6-v2` (CDN, ~23MB) | `data/vectors.json` |
+| **Fuzzy** | Debounced keystroke while semantic model is still loading | Fuse.js v7 (CDN) | `data/search-index.json` |
+| **Semantic / hybrid** | Debounced keystroke once model is ready (Enter submits immediately) | Transformers.js v3 + `Xenova/all-MiniLM-L6-v2` (CDN, ~23MB) | `data/vectors.json` |
 | **Merge** | After both complete | Custom ranker | Score-sorted interleave across semantic + fuzzy, deduped, capped |
 
 ### Eager Semantic Preload + Lazy Fuzzy
 
 - **Fuzzy (Fuse.js)** loads on first use (`initFuzzy()` / first keystroke). The Vue UI also warms fuzzy on mount so category chips are ready.
-- **Transformers.js + MiniLM** (`Xenova/all-MiniLM-L6-v2`, ~23MB quantized) starts loading as soon as the search UI mounts (`NeptuneSearchUI` / `VdlNeptuneSearchUI`), in the background. Fuzzy typing stays available while it downloads.
+- **Transformers.js + MiniLM** (`Xenova/all-MiniLM-L6-v2`, ~23MB quantized) starts loading as soon as the search UI mounts (`NeptuneSearchUI` / `VdlNeptuneSearchUI`), in the background. Fuzzy typing stays available while it downloads; when the model becomes ready, the current query is re-run as hybrid automatically.
 - Progress is shown via a non-blocking progress strip (`onSemanticProgress`), not by freezing the input.
 - The model download happens once per browser session; subsequent visits/uses hit the browser cache. `initSemantic()` is promise-cached per `NeptuneSearch` instance (and the Vue UI reuses a module singleton across HMR / `v-if` remounts).
 - Headless callers can still call `await search.initSemantic()` explicitly; UI mount already does this fire-and-forget.
@@ -141,7 +141,7 @@ ui.mount();
 |--------------|----------|
 | CDN blocked / network error (Fuse.js) | `search()` throws; caller handles |
 | CDN blocked / network error (Transformers.js) | `_semanticFailed` flag set; `search()` falls back to fuzzy-only with `console.warn` |
-| Model download fails mid-stream | Same as above; subsequent Enter presses use fuzzy-only |
+| Model download fails mid-stream | Same as above; subsequent searches use fuzzy-only |
 | Query < 2 characters | Returns empty results immediately |
 | Malformed index/vector payloads | Deterministically rejected during initialization |
 | Unsafe route/base URL or icon payload | Sanitized/fallback handling in render path |
@@ -255,7 +255,7 @@ await search.initSemantic();
 
 ##### `semanticSearch(query: string): Promise<SemanticResult[]>`
 
-Performs a semantic search query. Embeds the query using MiniLM-L6-v2 and computes cosine similarity against all document vectors. Returns top 10 results above `semanticThreshold`. Awaits `initSemantic()` internally (no need to pre-call). UI components call `initSemantic()` on mount so the model is usually warm before the first Enter; use `onSemanticProgress()` to show download progress.
+Performs a semantic search query. Embeds the query using MiniLM-L6-v2 and computes cosine similarity against all document vectors. Returns top 10 results above `semanticThreshold`. Awaits `initSemantic()` internally (no need to pre-call). UI components call `initSemantic()` on mount so the model is usually warm before the first auto-hybrid search; use `onSemanticProgress()` to show download progress.
 
 ```javascript
 const results = await search.semanticSearch('how do I style cards');
@@ -369,8 +369,9 @@ new NeptuneSearchUI(options: NeptuneSearchUIOptions)
 | `search` | `NeptuneSearch` | *(required)* | Headless search instance |
 | `onResultClick` | `(result: MergedResult) => void` | `() => {}` | Callback fired when a result is clicked or selected via Enter |
 | `placeholder` | `string` | `'Search docs…'` | Input placeholder text |
-| `debounceMs` | `number` | `150` | Debounce delay for fuzzy search on keystroke |
-| `showSemanticHint` | `boolean` | `true` | Show "Enter for AI search" hint in the input |
+| `debounceMs` | `number` | `350` | Debounce delay for auto hybrid/fuzzy search on keystroke |
+| `showSemanticHint` | `boolean` | `true` | Show "AI · fuzzy" capability hint in the input |
+| `autofocus` | `boolean` | `true` | Focus the input on mount when safe (skips modals / other fields) |
 | `baseUrl` | `string` | `'https://vanduo-oss.github.io/vd3-docs'` | Base URL for result card "Open docs" path links |
 | `emptyMessage` | `string` | `'No docs found. Try another query or pick a category filter.'` | Message shown when search returns no results |
 
@@ -378,7 +379,7 @@ new NeptuneSearchUI(options: NeptuneSearchUIOptions)
 
 ##### `mount(): void`
 
-Builds the DOM, binds event listeners, and injects default styles. Starts a background `initSemantic()` preload (non-blocking). Idempotent — calling `mount()` on an already-mounted instance is a no-op.
+Builds the DOM, binds event listeners, and injects default styles. Starts a background `initSemantic()` preload (non-blocking) and autofocuses the input when safe. Idempotent — calling `mount()` on an already-mounted instance is a no-op.
 
 ```javascript
 ui.mount();
@@ -399,8 +400,7 @@ ui.destroy();
 | `ArrowDown` | Dropdown open with results | Move selection down |
 | `ArrowUp` | Dropdown open with results | Move selection up (or deselect) |
 | `Enter` | Result selected | Trigger `onResultClick` for selected result |
-| `Enter` | No selection, results visible | Run hybrid (semantic) search |
-| `Enter` | No results, input focused | Run hybrid (semantic) search |
+| `Enter` | No selection | Cancel debounce and run hybrid search immediately |
 | `Escape` | Dropdown open | Close dropdown and blur input |
 | `Cmd+K` / `Ctrl+K` | Anywhere on page | Focus search input |
 

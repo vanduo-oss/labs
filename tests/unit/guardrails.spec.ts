@@ -422,4 +422,101 @@ test.describe('Guardrails Unit', () => {
     expect(result.payloads[0].system).toContain('Vanduo Labs');
     expect(result.messages).toEqual(['user', 'assistant', 'user', 'assistant']);
   });
+
+  test('assessLoadCapacity flags low RAM and low GPU storage limits', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const high = mod.assessLoadCapacity({
+        modelId: 'gemma-4-E2B-it-web',
+        systemInfo: {
+          deviceMemory: 4,
+          hardwareConcurrency: 8,
+          maxStorageBufferBindingSize: 256 * 1024 * 1024,
+        },
+      });
+      const mobileGpu = mod.assessLoadCapacity({
+        modelId: 'gemma-4-E2B-it-web',
+        systemInfo: {
+          deviceMemory: 8,
+          hardwareConcurrency: 8,
+          maxStorageBufferBindingSize: 128 * 1024 * 1024,
+        },
+      });
+      const ok = mod.assessLoadCapacity({
+        modelId: 'gemma-4-E2B-it-web',
+        systemInfo: {
+          deviceMemory: 8,
+          hardwareConcurrency: 10,
+          maxStorageBufferBindingSize: 1024 * 1024 * 1024,
+        },
+      });
+      const tinyOk = mod.assessLoadCapacity({
+        modelId: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+        systemInfo: {
+          deviceMemory: 4,
+          hardwareConcurrency: 4,
+          maxStorageBufferBindingSize: 256 * 1024 * 1024,
+        },
+      });
+      return {
+        high: { level: high.level, recommendedModelId: high.recommendedModelId },
+        mobileGpu: { level: mobileGpu.level },
+        ok: { level: ok.level },
+        tinyOk: { level: tinyOk.level },
+        copy: mod.buildWeakDeviceConfirmCopy({ approxGb: 2, recommendedLabel: 'SmolLM2 360M' }),
+        freezeHint: mod.LOAD_FREEZE_HINT,
+      };
+    });
+
+    expect(result.high.level).toBe('high');
+    expect(result.high.recommendedModelId).toBe('SmolLM2-360M-Instruct-q4f16_1-MLC');
+    expect(result.mobileGpu.level).toBe('high');
+    expect(result.ok.level).toBe('ok');
+    expect(result.tinyOk.level).toBe('caution');
+    expect(result.copy).toContain('Load anyway?');
+    expect(result.copy).toContain('SmolLM2 360M');
+    expect(result.freezeHint).toMatch(/freeze/i);
+  });
+
+  test('shouldFocusChatComposer respects modal and other controls', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      return {
+        afterSend: mod.shouldFocusChatComposer({
+          force: true,
+          modalOpen: false,
+          chatReady: true,
+          activeIsOtherControl: true,
+        }),
+        modalBlocks: mod.shouldFocusChatComposer({
+          force: true,
+          modalOpen: true,
+          chatReady: true,
+        }),
+        notReady: mod.shouldFocusChatComposer({
+          force: true,
+          modalOpen: false,
+          chatReady: false,
+        }),
+        softSkipSelect: mod.shouldFocusChatComposer({
+          force: false,
+          modalOpen: false,
+          chatReady: true,
+          activeIsOtherControl: true,
+        }),
+        softOkBody: mod.shouldFocusChatComposer({
+          force: false,
+          modalOpen: false,
+          chatReady: true,
+          activeIsOtherControl: false,
+        }),
+      };
+    });
+
+    expect(result.afterSend).toBe(true);
+    expect(result.modalBlocks).toBe(false);
+    expect(result.notReady).toBe(false);
+    expect(result.softSkipSelect).toBe(false);
+    expect(result.softOkBody).toBe(true);
+  });
 });
