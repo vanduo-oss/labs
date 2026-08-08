@@ -264,54 +264,13 @@ watch(demoSlug, (slug) => {
           style="color: var(--color-primary); display: flex; align-items: center; justify-content: center"
         >
           <svg
+            class="hero-atom-icon"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 100 100"
             width="2.2em"
             height="2.2em"
-            style="margin-right: 0.2em; flex-shrink: 0; transform: translateY(-0.05em)"
+            aria-hidden="true"
           >
-            <style>
-              .hero-atom-orbit {
-                fill: none;
-                stroke: var(--vd-color-primary);
-                stroke-width: 6;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-                opacity: 0.9;
-              }
-              .hero-atom-core {
-                fill: var(--vd-color-primary);
-              }
-              .hero-atom-core-ring {
-                fill: rgba(var(--vd-color-primary-rgb), 0.18);
-                stroke: var(--vd-color-primary);
-                stroke-width: 3;
-              }
-              .hero-atom-spin {
-                transform-origin: 50px 50px;
-                animation: hero-atom-spin 12s linear infinite;
-              }
-              .hero-atom-spin-reverse {
-                transform-origin: 50px 50px;
-                animation: hero-atom-spin-reverse 9s linear infinite;
-              }
-              @keyframes hero-atom-spin {
-                from {
-                  transform: rotate(0deg);
-                }
-                to {
-                  transform: rotate(360deg);
-                }
-              }
-              @keyframes hero-atom-spin-reverse {
-                from {
-                  transform: rotate(360deg);
-                }
-                to {
-                  transform: rotate(0deg);
-                }
-              }
-            </style>
             <g class="hero-atom-spin">
               <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
             </g>
