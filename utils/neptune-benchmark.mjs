@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Fuse from 'fuse.js';
-import { pipeline } from '@xenova/transformers';
+import { pipeline } from '@huggingface/transformers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -167,7 +167,7 @@ let extractor = null;
 async function initSemantic() {
   if (extractor) return;
   console.log('🧠 Loading embedding model (one-time)...');
-  extractor = await pipeline('feature-extraction', config.modelName, { quantized: true });
+  extractor = await pipeline('feature-extraction', config.modelName, { dtype: 'q8' });
   console.log('🧠 Model ready.\n');
 }
 

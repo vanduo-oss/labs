@@ -370,9 +370,9 @@ async function main() {
   console.log(`📝 search-index.json written (${(fs.statSync(indexPath).size / 1024).toFixed(1)} KB)`);
 
   console.log('\n🧠 Loading embedding model...');
-  const { pipeline } = await import('@xenova/transformers');
+  const { pipeline } = await import('@huggingface/transformers');
   const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-    quantized: true,
+    dtype: 'q8',
   });
 
   console.log('🧠 Generating embeddings...');

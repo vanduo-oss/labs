@@ -7,7 +7,11 @@ allowBuilds:
   s: true
   sharp: true
   esbuild: true
+  onnxruntime-node: true
 
-# Pin away from brand-new nanoid@3.3.18 (blocked by Safe-chain minimumReleaseAge).
+# Security pins (Dependabot): nanoid DoS fix, sharp/libvips, protobufjs RCE/DoS cluster.
+# Prefer patched 3.3.17 over brand-new 3.3.18+ (Safe-chain minimumReleaseAge).
 overrides:
-  nanoid@^3.0.0: 3.3.16
+  nanoid@^3.0.0: 3.3.17
+  sharp: '>=0.35.3'
+  protobufjs: '>=7.6.3'
