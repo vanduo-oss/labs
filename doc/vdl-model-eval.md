@@ -1,0 +1,49 @@
+# vdl-model-eval
+
+**Version:** {{COMPONENT_VERSION}}
+
+Local on-computer helper to evaluate in-browser chat models against a curated suite (branding, honesty, instruction-following), emit Playwright-style HTML/JSON reports, and publish results on the Labs **Tools** page.
+
+This is **not** an Interactive Demo — it lives under `#tools/model-eval`.
+
+## Quick start
+
+```bash
+pnpm models:fetch -- --model gemma-4-E2B-it-web
+pnpm models:fetch -- --model qwen3-0.6B-litert
+pnpm dev   # terminal A
+pnpm model-eval -- --models gemma-4-E2B-it-web,qwen3-0.6B-litert   # terminal B
+```
+
+Writes:
+
+- `data/model-eval-reports/latest/report.json`
+- `data/model-eval-reports/latest/index.html`
+
+## Headless API
+
+```js
+import {
+  scoreBranding,
+  scoreHonesty,
+  planConcurrency,
+  buildReportDocument,
+  renderReportHtml,
+} from './model-eval.js';
+```
+
+- **Scorers** run offline (unit-tested with fixtures).
+- **Concurrency planner** schedules waves from `approxBytes` + RAM heuristic (default 24GB × 45%).
+- **Harness** (`demo/model-eval-harness.html`) loads models via `AiChat` on WebGPU.
+
+## Chromium runner notes
+
+`pnpm model-eval` launches headed Chromium via `utils/model-eval-runner.mjs` with an isolated user profile under `.models/.model-eval-profile`. The runner passes `--disable-web-security` so local WebGPU/model asset fetches are not blocked by CORS — this is **eval tooling only**, not a production web setting. Do not reuse that flag for the Labs site itself.
+
+## Suite
+
+See [`utils/model-eval-suite.json`](../utils/model-eval-suite.json). Cases include the known Tiny failure mode: inventing “Vandouno” fails branding.
+
+## CI note
+
+CI validates scorers only. Full WebGPU eval is local/manual (same constraint as Gemma smoke).

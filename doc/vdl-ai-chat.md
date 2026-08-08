@@ -39,6 +39,8 @@ For faster local loads of the default **Gemma 4 E2B** LiteRT package (~2.0GB), p
 
 ```bash
 pnpm models:fetch          # downloads into .models/gemma-4-E2B-it-web/
+pnpm models:fetch -- --model qwen3-0.6B-litert
+pnpm models:fetch -- --model ministral-3-3B-litert   # experimental spike
 pnpm models:fetch -- --dry-run
 pnpm models:fetch -- --model gemma-4-E2B-it-q4f16_1-MLC   # optional legacy WebLLM package
 pnpm dev                   # serves mirror at /models/<id>/
@@ -49,10 +51,27 @@ pnpm dev                   # serves mirror at /models/<id>/
 ### Features
 
 - Default model is **Gemma 4 E2B** (`gemma-4-E2B-it-web`) via Google **LiteRT-LM** (`@litert-lm/core`) with real multi-turn conversation context.
+- **Multi-architecture intent:** Gemma stays on LiteRT web-official; Tiny is **WebLLM Qwen3 0.6B** (SmolLM2 removed). LiteRT Qwen3 / Ministral remain experimental spikes.
 - Legacy community **WebLLM/MLC** Gemma packages remain available but experimental: native multi-turn context is unreliable there (latest-turn-only workaround).
 - Model picker is grouped:
-  - **Gemma 4 (primary):** E2B (Fast / default), E4B (Quality)
-  - **Optional:** SmolLM2 360M (Tiny), Qwen2.5 1.5B (Balanced), Llama 3.2 3B (Alt Quality), Qwen2.5 Coder 1.5B (Coder)
+  - **Gemma 4:** E2B (Fast / default, web-official), E4B (Quality)
+  - **Qwen 3:** 0.6B MLC (Tiny) — replaces SmolLM2
+  - **Experimental:** LiteRT Qwen3 / Ministral spikes (see below), Gemma 4 MLC peers
+  - **Optional (WebLLM):** Qwen3 1.7B (Balanced), Phi-4 mini (Alt Quality), Qwen2.5 Coder 1.5B
+
+### LiteRT spike notes (Labs) — observed 2026-08-08
+
+| Artifact | HF resolve | Browser status with `@litert-lm/core` (CDN) |
+|----------|------------|-----------------------------------------------|
+| Gemma `*-it-web.litertlm` | public | **Works** (WebGPU / gpu_artisan stream load) |
+| `Qwen3-0.6B.litertlm` | public | **Fails** — runtime converts Blob/URL → ReadableStream; PrefillDecode hits `Streaming … not supported yet` / `JS Stream Error [TypeError]: network error` |
+| Ministral `model.litertlm` | public | Same PrefillDecode class — left as spike; not Tiny |
+
+Google’s JS docs still list only Gemma web builds as supported. Community “portable Qwen3 in Chrome” claims do not hold on current LiteRT-LM.js stream loader.
+
+SmolLM2-360M was removed: it hallucinated Labs branding (e.g. “Vandouno”) and is unsuitable as Tiny.
+
+For architecture A/B reports, see [vdl-model-eval](./vdl-model-eval.md) (`#tools/model-eval`).
 - Displays **System Info** at runtime (WebGPU support, adapter name, `shader-f16` support).
 - Shows compatibility badges per tier (`native`, `fallback`, `unavailable`, `experimental`) to set user expectations.
 - Automatically applies model fallbacks (typically `q4f32_1`) for optional built-in WebLLM models when required features are unavailable. Gemma 4 variants require `shader-f16`.
@@ -94,8 +113,8 @@ Building a fully private, in-browser AI chat with robust guardrails is only poss
 
 #### Core AI & Inference
 - **[WebLLM (@mlc-ai/web-llm)](https://webllm.mlc.ai/)**: The core inference engine powering this component. WebLLM brings large language model chat directly to web browsers using WebGPU acceleration and WebAssembly, enabling completely private, local execution.
-- **[Gemma 4 (Google DeepMind)](https://ai.google.dev/gemma)**: Primary local models (E2B / E4B) via community MLC/WebLLM packages.
-- **[SmolLM2](https://huggingface.co/HuggingFaceTB)**, **[Llama (Meta)](https://www.llama.com/)**, and **[Qwen (Alibaba Cloud)](https://qwenlm.github.io/)**: Optional small/fast MLC-compiled variants for lighter or specialized local runs.
+- **[Gemma 4 (Google DeepMind)](https://ai.google.dev/gemma)**: Primary LiteRT web models (E2B / E4B) plus experimental MLC peers.
+- **[Qwen3](https://qwenlm.github.io/)**, **[Phi-4 (Microsoft)](https://huggingface.co/microsoft)**, **[Ministral (Mistral)](https://mistral.ai/)**: Multi-architecture LiteRT / WebLLM peers for Labs experimentation.
 - **[WebGPU API](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API)**: The modern web standard that allows web applications to access the device's underlying graphics processing unit (GPU) for highly parallelized computation.
 
 #### Security & Guardrails

@@ -141,6 +141,9 @@ function resolveModelForSystem(modelId) {
 
 function buildOptionLabel(model, resolved) {
   const flags = [];
+  if (model.litertKind === 'web-official') flags.push('LiteRT official web');
+  else if (model.litertKind === 'portable') flags.push('LiteRT portable');
+  else if (model.litertKind === 'spike') flags.push('LiteRT spike');
   if (model.experimental) flags.push('Experimental');
   if (isModelLikelyCached(model.id)) flags.push('Cached');
   if (resolved.unavailable) flags.push('Unavailable');
@@ -957,9 +960,14 @@ watch(loaded, async (isLoaded, wasLoaded) => {
 .vdl-ai-model-select {
   width: 100%;
   padding: 0.55rem 0.65rem;
+  /* Keep padding-right room for the vd3 native-select chevron. */
+  padding-right: calc(0.65rem + var(--vd-select-arrow-size, 16px) + 0.5rem);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  /* Use background-color only — `background` shorthand resets
+     background-repeat/size/position and tiles the vd3 chevron SVG
+     when dark-theme select:focus re-applies background-image alone. */
+  background-color: var(--bg-primary);
   color: var(--text-primary);
 }
 

@@ -4,6 +4,9 @@
   "description": "vdl-neptune-search — in-browser hybrid fuzzy + semantic search for Vanduo Docs (ES modules)",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/vanduo-oss/labs.git"
@@ -20,6 +23,7 @@
     ".": "./neptune-search.js",
     "./neptune-search.js": "./neptune-search.js",
     "./ai-chat.js": "./ai-chat.js",
+    "./model-eval.js": "./model-eval.js",
     "./guardrails/core.js": "./guardrails/core.js",
     "./guardrails/llm.js": "./guardrails/llm.js",
     "./guardrails/search.js": "./guardrails/search.js"
@@ -27,11 +31,13 @@
   "files": [
     "neptune-search.js",
     "ai-chat.js",
+    "model-eval.js",
     "guardrails/core.js",
     "guardrails/llm.js",
     "guardrails/search.js",
     "data/search-index.json",
     "data/vectors.json",
+    "data/model-eval-reports",
     "README.md",
     "NEPTUNE-SEARCH.md",
     "LICENSE"
@@ -43,6 +49,7 @@
     "demo:serve": "vite",
     "index": "node utils/neptune-indexer.mjs",
     "models:fetch": "node utils/fetch-ai-models.mjs",
+    "model-eval": "node utils/model-eval-runner.mjs",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
@@ -58,6 +65,7 @@
   },
   "dependencies": {
     "@vanduo-oss/vd3": "^1.2.1",
+    "@vanduo-oss/vd3-cbun": "^1.3.1",
     "vue": "^3.5.41"
   }
 }

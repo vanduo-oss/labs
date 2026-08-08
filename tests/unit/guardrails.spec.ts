@@ -152,7 +152,7 @@ test.describe('Guardrails Unit', () => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
       // Use a WebLLM-backed option — default Gemma is LiteRT.
-      const chat = new mod.AiChat({ modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC' });
+      const chat = new mod.AiChat({ modelId: 'Qwen3-1.7B-q4f16_1-MLC' });
       chat._isLoaded = true;
       let request = null;
       chat.engine = {
@@ -362,7 +362,7 @@ test.describe('Guardrails Unit', () => {
           order.push('engine-delete');
         },
       };
-      await chat.setModelId('Qwen2.5-1.5B-Instruct-q4f16_1-MLC', { resetMessages: true });
+      await chat.setModelId('Qwen3-1.7B-q4f16_1-MLC', { resetMessages: true });
       order.push(`model:${chat.modelId}`);
       return {
         order,
@@ -376,7 +376,7 @@ test.describe('Guardrails Unit', () => {
     expect(result.order).toEqual([
       'conversation-delete',
       'engine-delete',
-      'model:Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+      'model:Qwen3-1.7B-q4f16_1-MLC',
     ]);
     expect(result.isLoaded).toBe(false);
     expect(result.engine).toBeNull();
@@ -388,7 +388,7 @@ test.describe('Guardrails Unit', () => {
     const result = await page.evaluate(async () => {
       const chatMod = await import('/ai-chat.js');
       const llmMod = await import('/guardrails/llm.js');
-      const chat = new chatMod.AiChat({ modelId: 'SmolLM2-360M-Instruct-q4f16_1-MLC' });
+      const chat = new chatMod.AiChat({ modelId: 'Qwen3-1.7B-q4f16_1-MLC' });
       chat._isLoaded = true;
       const payloads = [];
       chat.engine = {
@@ -413,6 +413,10 @@ test.describe('Guardrails Unit', () => {
         payloads,
         messages: chat.messages.map((m) => m.role),
         expectedSystem: llmMod.buildChatSystemPrompt(),
+        tinyId: chatMod.TINY_MODEL_ID,
+        hasSmol: chatMod.MODEL_OPTIONS.some((m) => m.id.includes('SmolLM2')),
+        qwenTiny: chatMod.MODEL_OPTIONS.find((m) => m.id === 'Qwen3-0.6B-q4f16_1-MLC'),
+        qwenLiteRT: chatMod.MODEL_OPTIONS.find((m) => m.id === 'qwen3-0.6B-litert'),
       };
     });
 
@@ -421,6 +425,11 @@ test.describe('Guardrails Unit', () => {
     expect(result.payloads[0].system).toBe(result.expectedSystem);
     expect(result.payloads[0].system).toContain('Vanduo Labs');
     expect(result.messages).toEqual(['user', 'assistant', 'user', 'assistant']);
+    expect(result.tinyId).toBe('Qwen3-0.6B-q4f16_1-MLC');
+    expect(result.hasSmol).toBe(false);
+    expect(result.qwenTiny?.tier).toBe('Tiny');
+    expect(result.qwenTiny?.backend).toBe('webllm');
+    expect(result.qwenLiteRT?.litertKind).toBe('spike');
   });
 
   test('assessLoadCapacity flags low RAM and low GPU storage limits', async ({ page }) => {
@@ -451,7 +460,7 @@ test.describe('Guardrails Unit', () => {
         },
       });
       const tinyOk = mod.assessLoadCapacity({
-        modelId: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+        modelId: 'Qwen3-0.6B-q4f16_1-MLC',
         systemInfo: {
           deviceMemory: 4,
           hardwareConcurrency: 4,
@@ -463,18 +472,18 @@ test.describe('Guardrails Unit', () => {
         mobileGpu: { level: mobileGpu.level },
         ok: { level: ok.level },
         tinyOk: { level: tinyOk.level },
-        copy: mod.buildWeakDeviceConfirmCopy({ approxGb: 2, recommendedLabel: 'SmolLM2 360M' }),
+        copy: mod.buildWeakDeviceConfirmCopy({ approxGb: 2, recommendedLabel: 'Qwen3 0.6B MLC' }),
         freezeHint: mod.LOAD_FREEZE_HINT,
       };
     });
 
     expect(result.high.level).toBe('high');
-    expect(result.high.recommendedModelId).toBe('SmolLM2-360M-Instruct-q4f16_1-MLC');
+    expect(result.high.recommendedModelId).toBe('Qwen3-0.6B-q4f16_1-MLC');
     expect(result.mobileGpu.level).toBe('high');
     expect(result.ok.level).toBe('ok');
     expect(result.tinyOk.level).toBe('caution');
     expect(result.copy).toContain('Load anyway?');
-    expect(result.copy).toContain('SmolLM2 360M');
+    expect(result.copy).toContain('Qwen3 0.6B MLC');
     expect(result.freezeHint).toMatch(/freeze/i);
   });
 
@@ -518,5 +527,30 @@ test.describe('Guardrails Unit', () => {
     expect(result.notReady).toBe(false);
     expect(result.softSkipSelect).toBe(false);
     expect(result.softOkBody).toBe(true);
+  });
+
+  test('sanitizeModelReply strips closed think blocks without wiping unclosed streaming suffixes', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const s = mod.sanitizeModelReply;
+      return {
+        closedHtml: s('<think>hidden</think>Visible answer'),
+        closedChannel: s('<|think|>hidden<|/think|>Visible answer'),
+        prefixUnclosedHtml: s('Visible then <think>still streaming answer'),
+        prefixUnclosedChannel: s('Prefix <|think|>partial stream continues'),
+        onlyUnclosedHtml: s('<think>partial'),
+        onlyUnclosedChannel: s('<|think|>partial'),
+        emptyFallback: s('<think>partial') || '<think>partial',
+      };
+    });
+
+    expect(result.closedHtml).toBe('Visible answer');
+    expect(result.closedChannel).toBe('Visible answer');
+    expect(result.prefixUnclosedHtml).toBe('Visible then still streaming answer');
+    expect(result.prefixUnclosedChannel).toBe('Prefix partial stream continues');
+    expect(result.onlyUnclosedHtml).toBe('partial');
+    expect(result.onlyUnclosedChannel).toBe('partial');
+    // Callers use `sanitize(...) || reply`; non-empty orphan strip means no raw-tag fallback.
+    expect(result.emptyFallback).toBe('partial');
   });
 });
