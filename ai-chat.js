@@ -29,7 +29,7 @@ const CDN = {
   litert: 'https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm',
 };
 
-export const VDL_AI_CHAT_VERSION = '0.0.9';
+export const VDL_AI_CHAT_VERSION = '0.0.10';
 
 let _webllmModule = null;
 let _litertModule = null;
@@ -83,9 +83,8 @@ export const MODEL_OPTIONS = [
       'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.litertlm',
   },
   {
-    // Spike: artifact downloads, but @litert-lm/core turns Blob/URL into a ReadableStream
-    // and PrefillDecode builds throw "Streaming … not supported yet" / JS Stream network error.
-    // Kept for Labs probing — not the Tiny recommendation.
+    // PrefillDecode spike: kept in the catalog for honesty / eval probing, but load is
+    // blocked — see LITERT_PREFILLDECODE_UNSUPPORTED_REASON.
     id: 'qwen3-0.6B-litert',
     label: 'Qwen3 0.6B LiteRT (~0.6GB) - Spike',
     tier: 'Explorer',
@@ -93,6 +92,7 @@ export const MODEL_OPTIONS = [
     family: 'qwen3',
     backend: 'litert',
     litertKind: 'spike',
+    litertRuntime: 'prefilldecode-unsupported',
     requires: [],
     experimental: true,
     approxBytes: 0.6 * GiB,
@@ -110,6 +110,7 @@ export const MODEL_OPTIONS = [
     family: 'ministral',
     backend: 'litert',
     litertKind: 'spike',
+    litertRuntime: 'prefilldecode-unsupported',
     requires: ['shader-f16'],
     experimental: true,
     approxBytes: 2.2 * GiB,
@@ -214,6 +215,52 @@ export const TINY_MODEL_ID = 'Qwen3-0.6B-q4f16_1-MLC';
  */
 export const LOAD_FREEZE_HINT =
   'Uploading weights to the GPU and compiling shaders — the tab may freeze for several seconds. This is normal for in-browser WebGPU.';
+
+/**
+ * PrefillDecode `.litertlm` spikes (Qwen3 / Ministral) cannot load in current
+ * `@litert-lm/core` web runtime:
+ * - default `Backend.GPU_ARTISAN` always uses streaming ModelAssets →
+ *   "Streaming kTfLitePrefillDecode models is not supported yet."
+ * - `Backend.GPU` uses non-streaming `createEngine`, but web wasm fails with
+ *   "null function" on these artifacts (probed 2026-08-08).
+ * Google’s JS docs still list only Gemma `*-it-web` builds.
+ */
+export const LITERT_PREFILLDECODE_UNSUPPORTED_REASON =
+  'Unsupported in the current LiteRT-LM.js runtime: PrefillDecode .litertlm models cannot load (GPU_ARTISAN streaming rejected; Backend.GPU non-stream create fails). Use Gemma 4 LiteRT (web-official) or Qwen3 0.6B WebLLM (Tiny).';
+
+/**
+ * @param {string | { backend?: string, litertKind?: string, litertRuntime?: string } | null | undefined} modelOrId
+ */
+export function isLiteRTPrefillDecodeUnsupported(modelOrId) {
+  const option = typeof modelOrId === 'string' || modelOrId == null
+    ? getModelOption(modelOrId)
+    : modelOrId;
+  if (!option || option.backend !== 'litert') return false;
+  if (option.litertKind === 'web-official') return false;
+  return option.litertRuntime === 'prefilldecode-unsupported';
+}
+
+/**
+ * @param {string | object | null | undefined} modelOrId
+ * @returns {string} empty when load is not blocked for LiteRT runtime reasons
+ */
+export function getLiteRTRuntimeBlockReason(modelOrId) {
+  return isLiteRTPrefillDecodeUnsupported(modelOrId)
+    ? LITERT_PREFILLDECODE_UNSUPPORTED_REASON
+    : '';
+}
+
+/**
+ * Rewrite raw LiteRT PrefillDecode / streaming errors into the Labs catalog message.
+ * @param {unknown} err
+ */
+export function rewriteLiteRTLoadError(err) {
+  const msg = String(err?.message || err || '');
+  if (/PrefillDecode|Streaming kTfLite/i.test(msg)) {
+    return new Error(LITERT_PREFILLDECODE_UNSUPPORTED_REASON);
+  }
+  return err instanceof Error ? err : new Error(msg || 'Failed to load model.');
+}
 
 /**
  * Confirm-dialog copy when heuristics flag a constrained device.
@@ -905,6 +952,13 @@ export class AiChat {
     if (this._isLoaded) return;
     if (this._isLoading) throw new Error('Model is already loading.');
 
+    const runtimeBlock = getLiteRTRuntimeBlockReason(this.modelId);
+    if (runtimeBlock) {
+      const err = new Error(runtimeBlock);
+      this._emitProgress({ stage: 'error', message: err.message });
+      throw err;
+    }
+
     this._isLoading = true;
     try {
       // Clear any partial engine left by a previous failed load attempt.
@@ -922,6 +976,7 @@ export class AiChat {
       this._needsEngineReload = false;
       this._emitProgress({ stage: 'ready', message: 'Model loaded and ready!' });
     } catch (err) {
+      const normalized = isLiteRTModel(this.modelId) ? rewriteLiteRTLoadError(err) : err;
       try {
         await this._disposeEngine();
       } catch {
@@ -930,8 +985,11 @@ export class AiChat {
       this.engine = null;
       this._conversation = null;
       this._isLoaded = false;
-      this._emitProgress({ stage: 'error', message: err.message || 'Failed to load model.' });
-      throw err;
+      this._emitProgress({
+        stage: 'error',
+        message: normalized?.message || 'Failed to load model.',
+      });
+      throw normalized;
     } finally {
       this._isLoading = false;
     }
@@ -939,6 +997,11 @@ export class AiChat {
 
   async _loadLiteRT() {
     const option = getModelOption(this.modelId);
+    const runtimeBlock = getLiteRTRuntimeBlockReason(option);
+    if (runtimeBlock) {
+      throw new Error(runtimeBlock);
+    }
+
     const { Engine } = await loadLiteRT();
     this._emitProgress({ stage: 'init', message: 'Initializing LiteRT WebGPU engine…' });
     await yieldToMain();
@@ -953,9 +1016,9 @@ export class AiChat {
     });
 
     // Engine accepts URL | ReadableStream | Blob.
-    // Official Gemma web builds accept streamed loads. Portable/spike PrefillDecode
-    // artifacts reject ReadableStream ("Streaming … not supported yet") — pass a URL
-    // (or Blob) so LiteRT performs a non-stream load.
+    // Official Gemma web builds use the default GPU_ARTISAN streaming loader.
+    // Non-web-official PrefillDecode artifacts are blocked earlier via litertRuntime;
+    // Blob buffering alone does not help — the runtime always streams GPU_ARTISAN loads.
     const streamOk = option?.litertKind === 'web-official';
     const onFetchProgress = ({ loaded, received, totalBytes }) => {
       const pct = totalBytes > 0
@@ -974,8 +1037,6 @@ export class AiChat {
     if (streamOk) {
       modelSource = await openProgressModelStream(modelUrl, onFetchProgress);
     } else {
-      // Must be a fully buffered Blob — URL/ReadableStream both hit
-      // "Streaming kTfLitePrefillDecode models is not supported yet."
       console.info(`[AiChat] Buffering portable LiteRT model as Blob: ${option.id}`);
       modelSource = await openProgressModelBlob(modelUrl, onFetchProgress);
     }
@@ -988,12 +1049,16 @@ export class AiChat {
     });
     await yieldToMain();
 
-    this.engine = await Engine.create({
-      model: modelSource,
-      mainExecutorSettings: {
-        maxNumTokens: option?.maxNumTokens || 4096,
-      },
-    });
+    try {
+      this.engine = await Engine.create({
+        model: modelSource,
+        mainExecutorSettings: {
+          maxNumTokens: option?.maxNumTokens || 4096,
+        },
+      });
+    } catch (err) {
+      throw rewriteLiteRTLoadError(err);
+    }
     await this._ensureLiteRTConversation(true);
   }
 
@@ -1780,8 +1845,11 @@ export class AiChatUI {
         this._clearLoadSourceBadges();
         this._setLoadOverlay(false);
         this._setFreezeHint(false);
-        this._elements.progressText.textContent = 'Error: ' + data.message;
-        this._elements.progressText.style.color = 'var(--vd-color-danger, #ef4444)';
+        // Single error surface (avoid muted progress + red duplicate).
+        if (this._elements.progressText) {
+          this._elements.progressText.textContent = data.message || 'Error';
+          this._elements.progressText.style.color = 'var(--vd-color-danger, #ef4444)';
+        }
         this._elements.statusIndicator.style.background = 'var(--vd-color-danger, #ef4444)';
         this._elements.statusText.textContent = 'Error';
         this._updateSwitchButtonState();
@@ -1799,7 +1867,7 @@ export class AiChatUI {
     const requested = modelSelect.value || this._selectedModelId || MODEL_OPTIONS[0].id;
     const resolved = this._resolveModelForSystem(requested);
     this._renderModelOptions();
-    if (!resolved.unavailable) {
+    if (!resolved.unavailable && !resolved.loadBlocked) {
       await this.chat.setModelId(resolved.modelId);
     }
     this._renderFallbackNote(resolved);
@@ -1958,6 +2026,7 @@ export class AiChatUI {
     else if (option.litertKind === 'portable') flags.push('LiteRT portable');
     else if (option.litertKind === 'spike') flags.push('LiteRT spike');
     if (option.experimental) flags.push('Experimental');
+    if (resolved.loadBlocked) flags.push('Runtime unsupported');
     if (cached) flags.push('Cached');
     if (resolved.unavailable) flags.push('Unavailable');
     return `${option.label}${flags.length ? ` - ${flags.join(' - ')}` : ''}`;
@@ -2038,8 +2107,24 @@ export class AiChatUI {
 
   _resolveModelForSystem(modelId) {
     const option = getModelOption(modelId);
-    if (!option) return { modelId, changed: false, unavailable: false, reason: '' };
-    if (!this._systemInfo) return { modelId, changed: false, unavailable: false, reason: '' };
+    if (!option) {
+      return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
+    }
+
+    const runtimeBlock = getLiteRTRuntimeBlockReason(option);
+    if (runtimeBlock) {
+      return {
+        modelId,
+        changed: false,
+        unavailable: false,
+        loadBlocked: true,
+        reason: runtimeBlock,
+      };
+    }
+
+    if (!this._systemInfo) {
+      return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
+    }
 
     const missingFeatures = (option.requires || []).filter((feature) => {
       if (feature === 'shader-f16') return !this._systemInfo.shaderF16;
@@ -2051,6 +2136,7 @@ export class AiChatUI {
         modelId: option.fallbackId,
         changed: true,
         unavailable: false,
+        loadBlocked: false,
         reason: `Using compatibility fallback (${option.fallbackId}) because shader-f16 is not available on this device.`
       };
     }
@@ -2060,18 +2146,19 @@ export class AiChatUI {
         modelId,
         changed: false,
         unavailable: true,
+        loadBlocked: false,
         reason: `This model requires ${missingFeatures.join(', ')} support on your GPU. Choose another model on this device.`
       };
     }
 
-    return { modelId, changed: false, unavailable: false, reason: '' };
+    return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
   }
 
   _renderFallbackNote(resolved) {
     const note = this._elements.fallbackNote;
     if (!note) return;
 
-    if (resolved.changed || resolved.unavailable) {
+    if (resolved.changed || resolved.unavailable || resolved.loadBlocked) {
       note.textContent = resolved.reason;
       note.style.display = 'block';
     } else {
@@ -2132,7 +2219,7 @@ export class AiChatUI {
     this._renderCapacityNote(requestedModelId);
     this._syncModelSelectors();
 
-    if (!resolved.unavailable && !this.chat.isLoaded() && !this.chat.isLoading()) {
+    if (!resolved.unavailable && !resolved.loadBlocked && !this.chat.isLoaded() && !this.chat.isLoading()) {
       try {
         await this.chat.setModelId(resolved.modelId);
         this._updateModelTitle(requestedModelId);
@@ -2177,9 +2264,9 @@ export class AiChatUI {
     }
     const selectedModel = this._elements.modelSelect?.value || this._selectedModelId || MODEL_OPTIONS[0].id;
     const resolved = this._resolveModelForSystem(selectedModel);
-    if (resolved.unavailable) {
+    if (resolved.unavailable || resolved.loadBlocked) {
       loadBtn.disabled = true;
-      loadBtn.textContent = 'Unsupported model';
+      loadBtn.textContent = resolved.loadBlocked ? 'Runtime unsupported' : 'Unsupported model';
       return;
     }
     loadBtn.disabled = false;
@@ -2200,7 +2287,11 @@ export class AiChatUI {
     const sameAsActive = resolvedSelectedModelId === this.chat.modelId;
 
     modelSelect.disabled = loading;
-    button.disabled = !hasLoadedModel || loading || sameAsActive || resolvedSelected.unavailable;
+    button.disabled = !hasLoadedModel
+      || loading
+      || sameAsActive
+      || resolvedSelected.unavailable
+      || resolvedSelected.loadBlocked;
 
     const buttonLabel = button.querySelector('span');
     if (buttonLabel) {
@@ -2324,10 +2415,12 @@ export class AiChatUI {
     if (compatibleBadges) {
       compatibleBadges.innerHTML = MODEL_OPTIONS.map((model) => {
         const resolved = this._resolveModelForSystem(model.id);
-        const isNative = !resolved.changed && !resolved.unavailable;
-        const statusLabel = resolved.unavailable
-          ? 'unavailable'
-          : (resolved.changed ? 'fallback' : (model.experimental ? 'experimental' : 'native'));
+        const isNative = !resolved.changed && !resolved.unavailable && !resolved.loadBlocked;
+        const statusLabel = resolved.loadBlocked
+          ? 'unsupported'
+          : resolved.unavailable
+            ? 'unavailable'
+            : (resolved.changed ? 'fallback' : (model.experimental ? 'experimental' : 'native'));
         const color = isNative
           ? 'var(--vd-color-success, #22c55e)'
           : (resolved.changed ? 'var(--vd-color-warning, #f59e0b)' : 'var(--vd-color-danger, #ef4444)');
@@ -2410,7 +2503,7 @@ export class AiChatUI {
     const { progressWrap } = this._elements;
     const selectedModel = this._elements.modelSelect?.value || this._selectedModelId || MODEL_OPTIONS[0].id;
     const resolved = this._resolveModelForSystem(selectedModel);
-    if (resolved.unavailable) {
+    if (resolved.unavailable || resolved.loadBlocked) {
       this._renderFallbackNote(resolved);
       this._updateSwitchButtonState();
       return;

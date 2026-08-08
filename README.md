@@ -151,7 +151,7 @@ pnpm dev
 
 ### Notes
 
-- Defaults to **Gemma 4 E2B** (LiteRT web-official); Tiny is **Qwen3 0.6B WebLLM** (SmolLM2 removed). LiteRT Qwen3/Ministral kept as documented spikes (PrefillDecode load blocked in current LiteRT-LM.js).
+- Defaults to **Gemma 4 E2B** (LiteRT web-official); Tiny is **Qwen3 0.6B WebLLM** (SmolLM2 removed). LiteRT Qwen3/Ministral PrefillDecode spikes stay in the catalog but Load is blocked until LiteRT-LM.js supports them.
 - Local eval helper: `pnpm model-eval` → Tools page `#tools/model-eval` ([doc/vdl-model-eval.md](./doc/vdl-model-eval.md)).
 - Detects runtime hardware capabilities (WebGPU + `shader-f16`) and shows system compatibility info in setup UI.
 - Automatically applies compatible fallback variants on lower-capability devices when needed (optional built-ins).
