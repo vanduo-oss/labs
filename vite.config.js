@@ -20,7 +20,7 @@ function localModelsPlugin() {
           const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
           let rel = urlPath.replace(/^\/+/, '');
           // WebLLM HF URL helper: {model}/resolve/main/<file>
-          rel = rel.replace(/\/resolve\/main(?=\/|$)/, '');
+          rel = rel.replace(/\/resolve\/main(?=\/|$)/g, '');
           if (!rel || rel.includes('..')) {
             res.statusCode = 400;
             res.end('Bad path');
