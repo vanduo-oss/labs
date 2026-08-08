@@ -224,8 +224,20 @@ function formatBytes(bytes) {
 
 async function loadWebLLM() {
   if (_webllmModule) return _webllmModule;
+  if (typeof window !== 'undefined' && window.__vdWebLLMModule) {
+    _webllmModule = window.__vdWebLLMModule;
+    return _webllmModule;
+  }
   try {
     _webllmModule = await import(/* @vite-ignore */ CDN.webllm);
+    if (typeof window !== 'undefined') {
+      if (window.__vdWebLLMModule && window.__vdWebLLMModule !== _webllmModule) {
+        console.warn(
+          '[AiChat] Multiple WebLLM module instances detected; Tokenizer bindings may fail. Hard-refresh the tab.',
+        );
+      }
+      window.__vdWebLLMModule = _webllmModule;
+    }
     return _webllmModule;
   } catch (err) {
     console.error('[AiChat] Failed to load WebLLM from CDN:', err);
