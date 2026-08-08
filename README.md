@@ -11,7 +11,8 @@ Current component versions:
 | Component | Version | Module |
 |------|------|------|
 | `vdl-neptune-search` | `0.0.3` | [`neptune-search.js`](./neptune-search.js) |
-| `vdl-ai-chat` | `0.0.5` | [`ai-chat.js`](./ai-chat.js) |
+| `vdl-ai-chat` | `0.0.9` | [`ai-chat.js`](./ai-chat.js) |
+| `vdl-model-eval` | `0.0.1` | [`model-eval.js`](./model-eval.js) |
 
 ### Shared Guardrails Modules
 
@@ -112,6 +113,8 @@ Then open:
 - `http://localhost:3000/demo/neptune-demo.html` for the focused Neptune demo page
 - `http://localhost:3000/demo/ai-chat-demo.html` for the focused AI Chat demo page
 
+Theme controls live in the navbar (`VdThemeSwitcher` + `VdThemeCustomizer` with palette selector hidden — Open Color only). Labs remaps vd3 theme `localStorage` keys to a `vdl-` prefix (`vdl-theme-preference`, `vdl-palette`, …) so preferences do not collide with Vanduo docs on the shared GitHub Pages origin. Global defaults for new visitors (when no `vdl-*` preference is stored): font Open Sans (`open-sans`), neutral Neutral (`neutral`), radius `0.25`, Open Color palette. Existing `vdl-*` preferences are preserved.
+
 Production build / preview:
 
 ```bash
@@ -148,7 +151,8 @@ pnpm dev
 
 ### Notes
 
-- Defaults to **Gemma 4 E2B**, with Gemma 4 E4B as the quality tier; optional small/fast models (SmolLM2, Qwen2.5, Llama 3.2, Qwen Coder) remain available.
+- Defaults to **Gemma 4 E2B** (LiteRT web-official); Tiny is **Qwen3 0.6B WebLLM** (SmolLM2 removed). LiteRT Qwen3/Ministral kept as documented spikes (PrefillDecode load blocked in current LiteRT-LM.js).
+- Local eval helper: `pnpm model-eval` → Tools page `#tools/model-eval` ([doc/vdl-model-eval.md](./doc/vdl-model-eval.md)).
 - Detects runtime hardware capabilities (WebGPU + `shader-f16`) and shows system compatibility info in setup UI.
 - Automatically applies compatible fallback variants on lower-capability devices when needed (optional built-ins).
 - Model download is user-triggered and cached by the browser.

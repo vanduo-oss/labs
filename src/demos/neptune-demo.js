@@ -140,7 +140,7 @@ createApp(DemoApp)
       PRIMARY_DARK: 'sky',
       NEUTRAL: 'neutral',
       RADIUS: '0.25',
-      FONT: 'jetbrains-mono',
+      FONT: 'open-sans',
       THEME: 'dark',
     },
   })

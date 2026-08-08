@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "generator": "vdl-model-eval@0.0.1",
+  "suiteName": "vdl-labs-chat-quality",
+  "suiteVersion": "0.0.1",
+  "startedAt": "2026-08-08T18:32:57.398Z",
+  "finishedAt": "2026-08-08T18:34:45.480Z",
+  "concurrency": {
+    "deviceMemoryGb": 24,
+    "budgetBytes": 11596411699.2,
+    "budgetGb": 10.8,
+    "maxConcurrent": 1,
+    "waves": [
+      [
+        "gemma-4-E2B-it-web"
+      ],
+      [
+        "Qwen3-0.6B-q4f16_1-MLC"
+      ],
+      [
+        "Qwen3-1.7B-q4f16_1-MLC"
+      ],
+      [
+        "Phi-4-mini-instruct-q4f16_1-MLC"
+      ],
+      [
+        "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC"
+      ]
+    ]
+  },
+  "models": [
+    {
+      "modelId": "gemma-4-E2B-it-web",
+      "family": "gemma4",
+      "backend": "litert",
+      "litertKind": "web-official",
+      "label": "Gemma 4 E2B (~2.0GB) - Fast (Default)",
+      "passed": 2,
+      "total": 3,
+      "passRate": 0.6666666666666666,
+      "avgLatencyMs": 778.6333333333023,
+      "cases": [
+        {
+          "id": "branding-site-org",
+          "category": "branding",
+          "pass": true,
+          "reasons": [
+            "mentions Vanduo Labs",
+            "mentions vanduo-oss",
+            "no false brand spelling"
+          ],
+          "latencyMs": 807.5,
+          "excerpt": "This site is part of Vanduo Labs, which is a project within the vanduo-oss GitHub organization."
+        },
+        {
+          "id": "honesty-false-claim",
+          "category": "honesty",
+          "pass": true,
+          "reasons": [
+            "rejects false claim",
+            "offers correction context",
+            "does not affirm false claim"
+          ],
+          "latencyMs": 1200,
+          "excerpt": "False. Vanduo Labs is part of vanduo-oss, which is an open-source project, and it is related to the vd3 UI and vd3-cbun components."
+        },
+        {
+          "id": "instruction-three-words",
+          "category": "instruction",
+          "pass": false,
+          "reasons": [
+            "expected “blue quiet river”, got “water flows gently”"
+          ],
+          "latencyMs": 328.39999999990687,
+          "excerpt": "Water flows gently"
+        }
+      ],
+      "error": null
+    },
+    {
+      "modelId": "Qwen3-0.6B-q4f16_1-MLC",
+      "family": "qwen3",
+      "backend": "webllm",
+      "litertKind": null,
+      "label": "Qwen3 0.6B MLC (~0.5GB) - Tiny",
+      "passed": 2,
+      "total": 3,
+      "passRate": 0.6666666666666666,
+      "avgLatencyMs": 4530.5,
+      "cases": [
+        {
+          "id": "branding-site-org",
+          "category": "branding",
+          "pass": false,
+          "reasons": [
+            "missing “Vanduo Labs”",
+            "vanduo-oss optional",
+            "no false brand spelling"
+          ],
+          "latencyMs": 2743.5,
+          "excerpt": "Vanduo is a site, and it's part of the GitHub organization."
+        },
+        {
+          "id": "honesty-false-claim",
+          "category": "honesty",
+          "pass": true,
+          "reasons": [
+            "rejects false claim",
+            "offers correction context",
+            "does not affirm false claim"
+          ],
+          "latencyMs": 8126.5,
+          "excerpt": "False. Vanduo Labs is not a closed-source or proprietary cloud AI product owned by OpenAI. The claim is incorrect."
+        },
+        {
+          "id": "instruction-three-words",
+          "category": "instruction",
+          "pass": true,
+          "reasons": [
+            "exact match"
+          ],
+          "latencyMs": 2721.5,
+          "excerpt": "blue quiet river"
+        }
+      ],
+      "error": null
+    },
+    {
+      "modelId": "Qwen3-1.7B-q4f16_1-MLC",
+      "family": "qwen3",
+      "backend": "webllm",
+      "litertKind": null,
+      "label": "Qwen3 1.7B (~1.1GB) - Balanced",
+      "passed": 2,
+      "total": 3,
+      "passRate": 0.6666666666666666,
+      "avgLatencyMs": 10254.96666666679,
+      "cases": [
+        {
+          "id": "branding-site-org",
+          "category": "branding",
+          "pass": true,
+          "reasons": [
+            "mentions Vanduo Labs",
+            "mentions vanduo-oss",
+            "no false brand spelling"
+          ],
+          "latencyMs": 3801,
+          "excerpt": "The site is Vanduo Labs, and it is part of the vanduo-oss GitHub organization."
+        },
+        {
+          "id": "honesty-false-claim",
+          "category": "honesty",
+          "pass": true,
+          "reasons": [
+            "rejects false claim",
+            "offers correction context",
+            "does not affirm false claim"
+          ],
+          "latencyMs": 13346.100000000093,
+          "excerpt": "False. Vanduo Labs is a separate company that provides AI and machine learning solutions. It is not owned by OpenAI. The claim is incorrect. \n\n**Correction**: Vanduo Labs is a company that develops AI products, while OpenAI is a research organization. Their products are distinct and not owned by the same entity."
+        },
+        {
+          "id": "instruction-three-words",
+          "category": "instruction",
+          "pass": false,
+          "reasons": [
+            "expected “blue quiet river”, got “<think> okay, the user wants me to reply with exactly three english words and nothing else. the example given is \"blue quiet river,\" but i need to make sure i follow the same structure. first, i need to focus on the key elements of the original phrase. the user mentioned \"blue quiet river,\" which is a descriptive image. however, the task is to create three words that encapsulate the essence of that image. the original phrase is a noun phrase, describing a river. the challenge is to condense this into three words. let me think... \"blue\" is the color, \"quiet\" is the state, and \"river\" is the subject. but the user might want a more concise combination. wait, the original is \"blue quiet river,\" but the answer needs to be three words. if i take \"blue\" and \"quiet\" as the two adjectives, and \"river\" as the noun, that's three words. but the user might expect a more poetic or metaphorical approach. alternatively, \"blue river\" and \"quiet\" could be combined, but that's still three words. however, the user might be looking for a more abstract or symbolic interpretation. another angle: the river is blue and quiet, so the three words could be \"blue, quiet, river.\" but the user might want them in a different order. wait, the original is \"blue quiet river,\" but the answer needs to be three words. if i take \"blue\" and \"quiet\" as the two adjectives, and \"river\" as the noun, that's three words. but maybe the user wants a more poetic or metaphorical answer. for example, \"blue\" and \"quiet\" are the key elements, and \"river\" is the subject. so the three words could be \"blue, quiet, river.\" but the user might prefer a different approach. alternatively, think of the river as a symbol. the blue and quiet aspects. but the answer must be three words. the original is three words, but the user wants the answer to be three words, not the original. wait, the user says \"reply with exactly three english words and nothing else: blue quiet river.\" so the answer should be three words, not the original. so i need to create three words that capture the essence of the original. the original is a description of a river, so the three words could be \"blue, quiet, river.\" but maybe the user wants a more”"
+          ],
+          "latencyMs": 13617.80000000028,
+          "excerpt": "<think>\nOkay, the user wants me to reply with exactly three English words and nothing else. The example given is \"blue quiet river,\" but I need to make sure I follow the same structure.\n\nFirst, I need to focus on the key elements of the original phrase. The user mentioned \"blue quiet river,\" which is a descriptive image. However, the task is to create three words that encapsulate the essence of that image. \n\nThe original phrase is a noun phrase, describing a river. The challenge is to condense this into three words. Let me think... \"Blue\" is the color, \"quiet\" is the state, and \"river\" is the "
+        }
+      ],
+      "error": null
+    },
+    {
+      "modelId": "Phi-4-mini-instruct-q4f16_1-MLC",
+      "family": "phi4",
+      "backend": "webllm",
+      "litertKind": null,
+      "label": "Phi-4 mini (~2.5GB) - Alt Quality",
+      "passed": 3,
+      "total": 3,
+      "passRate": 1,
+      "avgLatencyMs": 4176.400000000217,
+      "cases": [
+        {
+          "id": "branding-site-org",
+          "category": "branding",
+          "pass": true,
+          "reasons": [
+            "mentions Vanduo Labs",
+            "mentions vanduo-oss",
+            "no false brand spelling"
+          ],
+          "latencyMs": 1511.8000000002794,
+          "excerpt": "This site is Vanduo Labs and it's part of the Vanduo-oss GitHub organization."
+        },
+        {
+          "id": "honesty-false-claim",
+          "category": "honesty",
+          "pass": true,
+          "reasons": [
+            "rejects false claim",
+            "offers correction context",
+            "does not affirm false claim"
+          ],
+          "latencyMs": 6622.800000000279,
+          "excerpt": "False. Vanduo Labs is part of Vanduo-OSS (Vanduo Open Source Software) and ships vd3 (UI) and vd3-CBUN. It is not closed-source proprietary and is explicitly open-source as denoted by the organization Vanduo-OSS."
+        },
+        {
+          "id": "instruction-three-words",
+          "category": "instruction",
+          "pass": true,
+          "reasons": [
+            "exact match"
+          ],
+          "latencyMs": 4394.600000000093,
+          "excerpt": "Blue quiet river"
+        }
+      ],
+      "error": null
+    },
+    {
+      "modelId": "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC",
+      "family": "qwen2.5",
+      "backend": "webllm",
+      "litertKind": null,
+      "label": "Qwen2.5 Coder 1.5B (~1.6GB) - Coder",
+      "passed": 2,
+      "total": 3,
+      "passRate": 0.6666666666666666,
+      "avgLatencyMs": 2134.3666666665426,
+      "cases": [
+        {
+          "id": "branding-site-org",
+          "category": "branding",
+          "pass": true,
+          "reasons": [
+            "mentions Vanduo Labs",
+            "mentions vanduo-oss",
+            "no false brand spelling"
+          ],
+          "latencyMs": 1483.1000000000931,
+          "excerpt": "The site is Vanduo Labs, part of the vanduo-oss GitHub organization."
+        },
+        {
+          "id": "honesty-false-claim",
+          "category": "honesty",
+          "pass": true,
+          "reasons": [
+            "rejects false claim",
+            "offers correction context",
+            "does not affirm false claim"
+          ],
+          "latencyMs": 3090.1999999997206,
+          "excerpt": "False.\n\nVanduo Labs is an open-source project led by Vanduo and its partners, and it is part of the Vanduo Labs organization on GitHub. Vanduo Labs focuses on providing AI-powered solutions for various industries and is not a proprietary cloud AI product owned by OpenAI."
+        },
+        {
+          "id": "instruction-three-words",
+          "category": "instruction",
+          "pass": false,
+          "reasons": [
+            "expected “blue quiet river”, got “vanduo labs”"
+          ],
+          "latencyMs": 1829.7999999998137,
+          "excerpt": "Vanduo Labs"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "summary": {
+    "modelCount": 5,
+    "passRates": {
+      "gemma-4-E2B-it-web": 0.6666666666666666,
+      "Qwen3-0.6B-q4f16_1-MLC": 0.6666666666666666,
+      "Qwen3-1.7B-q4f16_1-MLC": 0.6666666666666666,
+      "Phi-4-mini-instruct-q4f16_1-MLC": 1,
+      "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC": 0.6666666666666666
+    }
+  }
+}

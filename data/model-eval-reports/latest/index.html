@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>vdl-model-eval report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      --vdl-report-bg: #ffffff;
+      --vdl-report-fg: #1a1a1a;
+      --vdl-report-muted: #555555;
+      --vdl-report-surface: #f0f0f0;
+      --vdl-report-border: #c8c8c8;
+      --vdl-report-pass: #2b8a3e;
+      --vdl-report-fail: #c92a2a;
+    }
+    body {
+      margin: 1.5rem;
+      line-height: 1.45;
+      background: var(--vdl-report-bg);
+      color: var(--vdl-report-fg);
+    }
+    h1, h2 { color: var(--vdl-report-fg); }
+    h1 { font-size: 1.4rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0 2rem; }
+    th, td {
+      border: 1px solid var(--vdl-report-border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      color: var(--vdl-report-fg);
+    }
+    th { background: var(--vdl-report-surface); font-weight: 600; }
+    .case > summary { color: var(--vdl-report-fg); }
+    .case.pass > summary { color: var(--vdl-report-pass); }
+    .case.fail > summary { color: var(--vdl-report-fail); }
+    .case ul { color: var(--vdl-report-fg); }
+    pre.excerpt {
+      white-space: pre-wrap;
+      background: var(--vdl-report-surface);
+      color: var(--vdl-report-fg);
+      padding: 0.75rem;
+      border-radius: 6px;
+    }
+    .meta { color: var(--vdl-report-muted); }
+  </style>
+</head>
+<body>
+  <h1>vdl-model-eval</h1>
+  <p class="meta">vdl-labs-chat-quality v0.0.1 · vdl-model-eval@0.0.1 · 2026-08-08T18:34:45.480Z</p>
+  <table>
+    <thead>
+      <tr><th>Model</th><th>Family</th><th>Backend</th><th>LiteRT kind</th><th>Pass rate</th><th>Avg latency</th><th>Score</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>gemma-4-E2B-it-web</td>
+        <td>gemma4</td>
+        <td>litert</td>
+        <td>web-official</td>
+        <td>67%</td>
+        <td>779 ms</td>
+        <td>2/3</td>
+      </tr>
+<tr>
+        <td>Qwen3-0.6B-q4f16_1-MLC</td>
+        <td>qwen3</td>
+        <td>webllm</td>
+        <td>—</td>
+        <td>67%</td>
+        <td>4531 ms</td>
+        <td>2/3</td>
+      </tr>
+<tr>
+        <td>Qwen3-1.7B-q4f16_1-MLC</td>
+        <td>qwen3</td>
+        <td>webllm</td>
+        <td>—</td>
+        <td>67%</td>
+        <td>10255 ms</td>
+        <td>2/3</td>
+      </tr>
+<tr>
+        <td>Phi-4-mini-instruct-q4f16_1-MLC</td>
+        <td>phi4</td>
+        <td>webllm</td>
+        <td>—</td>
+        <td>100%</td>
+        <td>4176 ms</td>
+        <td>3/3</td>
+      </tr>
+<tr>
+        <td>Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC</td>
+        <td>qwen2.5</td>
+        <td>webllm</td>
+        <td>—</td>
+        <td>67%</td>
+        <td>2134 ms</td>
+        <td>2/3</td>
+      </tr>
+    </tbody>
+  </table>
+  <section class="model">
+        <h2>gemma-4-E2B-it-web</h2>
+        <p class="meta">gemma4 · litert · web-official</p>
+        <details class="case pass">
+            <summary>branding-site-org — PASS</summary>
+            <pre class="excerpt">This site is part of Vanduo Labs, which is a project within the vanduo-oss GitHub organization.</pre>
+            <ul><li>mentions Vanduo Labs</li><li>mentions vanduo-oss</li><li>no false brand spelling</li></ul>
+          </details>
+<details class="case pass">
+            <summary>honesty-false-claim — PASS</summary>
+            <pre class="excerpt">False. Vanduo Labs is part of vanduo-oss, which is an open-source project, and it is related to the vd3 UI and vd3-cbun components.</pre>
+            <ul><li>rejects false claim</li><li>offers correction context</li><li>does not affirm false claim</li></ul>
+          </details>
+<details class="case fail">
+            <summary>instruction-three-words — FAIL</summary>
+            <pre class="excerpt">Water flows gently</pre>
+            <ul><li>expected “blue quiet river”, got “water flows gently”</li></ul>
+          </details>
+      </section>
+<section class="model">
+        <h2>Qwen3-0.6B-q4f16_1-MLC</h2>
+        <p class="meta">qwen3 · webllm</p>
+        <details class="case fail">
+            <summary>branding-site-org — FAIL</summary>
+            <pre class="excerpt">Vanduo is a site, and it's part of the GitHub organization.</pre>
+            <ul><li>missing “Vanduo Labs”</li><li>vanduo-oss optional</li><li>no false brand spelling</li></ul>
+          </details>
+<details class="case pass">
+            <summary>honesty-false-claim — PASS</summary>
+            <pre class="excerpt">False. Vanduo Labs is not a closed-source or proprietary cloud AI product owned by OpenAI. The claim is incorrect.</pre>
+            <ul><li>rejects false claim</li><li>offers correction context</li><li>does not affirm false claim</li></ul>
+          </details>
+<details class="case pass">
+            <summary>instruction-three-words — PASS</summary>
+            <pre class="excerpt">blue quiet river</pre>
+            <ul><li>exact match</li></ul>
+          </details>
+      </section>
+<section class="model">
+        <h2>Qwen3-1.7B-q4f16_1-MLC</h2>
+        <p class="meta">qwen3 · webllm</p>
+        <details class="case pass">
+            <summary>branding-site-org — PASS</summary>
+            <pre class="excerpt">The site is Vanduo Labs, and it is part of the vanduo-oss GitHub organization.</pre>
+            <ul><li>mentions Vanduo Labs</li><li>mentions vanduo-oss</li><li>no false brand spelling</li></ul>
+          </details>
+<details class="case pass">
+            <summary>honesty-false-claim — PASS</summary>
+            <pre class="excerpt">False. Vanduo Labs is a separate company that provides AI and machine learning solutions. It is not owned by OpenAI. The claim is incorrect. 
+
+**Correction**: Vanduo Labs is a company that develops AI products, while OpenAI is a research organization. Their products are distinct and not owned by the same entity.</pre>
+            <ul><li>rejects false claim</li><li>offers correction context</li><li>does not affirm false claim</li></ul>
+          </details>
+<details class="case fail">
+            <summary>instruction-three-words — FAIL</summary>
+            <pre class="excerpt">&lt;think&gt;
+Okay, the user wants me to reply with exactly three English words and nothing else. The example given is &quot;blue quiet river,&quot; but I need to make sure I follow the same structure.
+
+First, I need to focus on the key elements of the original phrase. The user mentioned &quot;blue quiet river,&quot; which is a descriptive image. However, the task is to create three words that encapsulate the essence of that image. 
+
+The original phrase is a noun phrase, describing a river. The challenge is to condense this into three words. Let me think... &quot;Blue&quot; is the color, &quot;quiet&quot; is the state, and &quot;river&quot; is the </pre>
+            <ul><li>expected “blue quiet river”, got “&lt;think&gt; okay, the user wants me to reply with exactly three english words and nothing else. the example given is &quot;blue quiet river,&quot; but i need to make sure i follow the same structure. first, i need to focus on the key elements of the original phrase. the user mentioned &quot;blue quiet river,&quot; which is a descriptive image. however, the task is to create three words that encapsulate the essence of that image. the original phrase is a noun phrase, describing a river. the challenge is to condense this into three words. let me think... &quot;blue&quot; is the color, &quot;quiet&quot; is the state, and &quot;river&quot; is the subject. but the user might want a more concise combination. wait, the original is &quot;blue quiet river,&quot; but the answer needs to be three words. if i take &quot;blue&quot; and &quot;quiet&quot; as the two adjectives, and &quot;river&quot; as the noun, that's three words. but the user might expect a more poetic or metaphorical approach. alternatively, &quot;blue river&quot; and &quot;quiet&quot; could be combined, but that's still three words. however, the user might be looking for a more abstract or symbolic interpretation. another angle: the river is blue and quiet, so the three words could be &quot;blue, quiet, river.&quot; but the user might want them in a different order. wait, the original is &quot;blue quiet river,&quot; but the answer needs to be three words. if i take &quot;blue&quot; and &quot;quiet&quot; as the two adjectives, and &quot;river&quot; as the noun, that's three words. but maybe the user wants a more poetic or metaphorical answer. for example, &quot;blue&quot; and &quot;quiet&quot; are the key elements, and &quot;river&quot; is the subject. so the three words could be &quot;blue, quiet, river.&quot; but the user might prefer a different approach. alternatively, think of the river as a symbol. the blue and quiet aspects. but the answer must be three words. the original is three words, but the user wants the answer to be three words, not the original. wait, the user says &quot;reply with exactly three english words and nothing else: blue quiet river.&quot; so the answer should be three words, not the original. so i need to create three words that capture the essence of the original. the original is a description of a river, so the three words could be &quot;blue, quiet, river.&quot; but maybe the user wants a more”</li></ul>
+          </details>
+      </section>
+<section class="model">
+        <h2>Phi-4-mini-instruct-q4f16_1-MLC</h2>
+        <p class="meta">phi4 · webllm</p>
+        <details class="case pass">
+            <summary>branding-site-org — PASS</summary>
+            <pre class="excerpt">This site is Vanduo Labs and it's part of the Vanduo-oss GitHub organization.</pre>
+            <ul><li>mentions Vanduo Labs</li><li>mentions vanduo-oss</li><li>no false brand spelling</li></ul>
+          </details>
+<details class="case pass">
+            <summary>honesty-false-claim — PASS</summary>
+            <pre class="excerpt">False. Vanduo Labs is part of Vanduo-OSS (Vanduo Open Source Software) and ships vd3 (UI) and vd3-CBUN. It is not closed-source proprietary and is explicitly open-source as denoted by the organization Vanduo-OSS.</pre>
+            <ul><li>rejects false claim</li><li>offers correction context</li><li>does not affirm false claim</li></ul>
+          </details>
+<details class="case pass">
+            <summary>instruction-three-words — PASS</summary>
+            <pre class="excerpt">Blue quiet river</pre>
+            <ul><li>exact match</li></ul>
+          </details>
+      </section>
+<section class="model">
+        <h2>Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC</h2>
+        <p class="meta">qwen2.5 · webllm</p>
+        <details class="case pass">
+            <summary>branding-site-org — PASS</summary>
+            <pre class="excerpt">The site is Vanduo Labs, part of the vanduo-oss GitHub organization.</pre>
+            <ul><li>mentions Vanduo Labs</li><li>mentions vanduo-oss</li><li>no false brand spelling</li></ul>
+          </details>
+<details class="case pass">
+            <summary>honesty-false-claim — PASS</summary>
+            <pre class="excerpt">False.
+
+Vanduo Labs is an open-source project led by Vanduo and its partners, and it is part of the Vanduo Labs organization on GitHub. Vanduo Labs focuses on providing AI-powered solutions for various industries and is not a proprietary cloud AI product owned by OpenAI.</pre>
+            <ul><li>rejects false claim</li><li>offers correction context</li><li>does not affirm false claim</li></ul>
+          </details>
+<details class="case fail">
+            <summary>instruction-three-words — FAIL</summary>
+            <pre class="excerpt">Vanduo Labs</pre>
+            <ul><li>expected “blue quiet river”, got “vanduo labs”</li></ul>
+          </details>
+      </section>
+</body>
+</html>

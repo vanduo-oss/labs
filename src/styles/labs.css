@@ -119,6 +119,27 @@ html {
       background: var(--color-primary-alpha-10);
     }
 
+    /* Align vd3 theme customizer trigger with Labs navbar action chrome. */
+    .vdl-theme-customizer {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .vdl-theme-customizer .vd-theme-customizer-trigger {
+      width: 40px;
+      height: 40px;
+      border-color: var(--border-color);
+      border-radius: var(--card-border-radius);
+      color: var(--text-secondary);
+      background: transparent;
+    }
+
+    .vdl-theme-customizer .vd-theme-customizer-trigger:hover {
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+      background: var(--color-primary-alpha-10);
+    }
+
     .vd-navbar-toggle {
       order: 99;
       flex-shrink: 0;
@@ -205,24 +226,22 @@ html {
       border-bottom-color: var(--color-primary);
     }
 
-    .hero .hero-wiki-cite {
-      display: inline;
-      margin-left: 0.2em;
-      white-space: nowrap;
-      opacity: 0.9;
+    .hero .hero-home-quote {
+      max-width: 36rem;
+      margin: 0.65rem auto 0;
+      padding: 0 1rem;
+      min-height: 1.6em;
+      transition: opacity 0.18s ease;
     }
 
-    .hero .hero-wiki-cite a {
-      color: var(--text-secondary);
-      text-decoration: underline;
-      text-decoration-color: rgba(var(--vd-color-primary-rgb), 0.35);
-      text-underline-offset: 0.18em;
-      font-weight: 400;
+    .hero .hero-home-quote-fading {
+      opacity: 0;
     }
 
-    .hero .hero-wiki-cite a:hover {
-      color: var(--color-primary);
-      text-decoration-color: var(--color-primary);
+    @media (prefers-reduced-motion: reduce) {
+      .hero .hero-home-quote {
+        transition: none;
+      }
     }
 
     .labs-main {
@@ -650,7 +669,8 @@ html {
 
     main[data-labs-route="home"] .labs-view:not(.labs-view-home),
     main[data-labs-route="about"] .labs-view:not(.labs-view-about),
-    main[data-labs-route="demos"] .labs-view:not(.labs-view-demos) {
+    main[data-labs-route="demos"] .labs-view:not(.labs-view-demos),
+    main[data-labs-route="tools"] .labs-view:not(.labs-view-tools) {
       display: none;
     }
 

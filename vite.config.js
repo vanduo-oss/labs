@@ -37,7 +37,11 @@ function localModelsPlugin() {
             res.end('Not found');
             return;
           }
+          const st = fs.statSync(filePath);
+          res.setHeader('Content-Length', String(st.size));
+          res.setHeader('Content-Type', 'application/octet-stream');
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          res.setHeader('Accept-Ranges', 'bytes');
           fs.createReadStream(filePath).pipe(res);
         } catch (err) {
           next(err);
@@ -55,6 +59,7 @@ export default defineConfig({
       targets: [
         { src: 'ai-chat.js', dest: '.' },
         { src: 'neptune-search.js', dest: '.' },
+        { src: 'model-eval.js', dest: '.' },
         { src: 'labs-md-to-html.js', dest: '.' },
         { src: 'guardrails', dest: '.' },
         { src: 'data', dest: '.' },
@@ -71,11 +76,16 @@ export default defineConfig({
         main: path.resolve(root, 'index.html'),
         'ai-chat-demo': path.resolve(root, 'demo/ai-chat-demo.html'),
         'neptune-demo': path.resolve(root, 'demo/neptune-demo.html'),
+        'model-eval-harness': path.resolve(root, 'demo/model-eval-harness.html'),
       },
     },
   },
   server: {
     port: 3000,
+    // Large local `.litertlm` downloads need more than the default keep-alive window.
+    headers: {
+      'Connection': 'keep-alive',
+    },
   },
   preview: {
     port: 3000,

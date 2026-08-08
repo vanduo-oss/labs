@@ -29,50 +29,113 @@ const CDN = {
   litert: 'https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm',
 };
 
-export const VDL_AI_CHAT_VERSION = '0.0.8';
+export const VDL_AI_CHAT_VERSION = '0.0.9';
 
 let _webllmModule = null;
 let _litertModule = null;
 
 export const MODEL_GROUPS = [
   { id: 'gemma4', label: 'Gemma 4' },
-  { id: 'optional', label: 'Optional' },
+  { id: 'qwen3', label: 'Qwen 3' },
+  { id: 'experimental', label: 'Experimental' },
+  { id: 'optional', label: 'Optional (WebLLM)' },
 ];
 
 /** ~GiB helper for model size metadata (weights on disk / download). */
 const GiB = 1024 ** 3;
 
+/**
+ * LiteRT support kinds (honest Labs labels — do not claim Google web support for non-official):
+ * - web-official: listed in LiteRT-LM JS docs
+ * - portable: community-verified general .litertlm in browser
+ * - spike: Labs experimental probe; may fail to load
+ */
 export const MODEL_OPTIONS = [
   {
     id: 'gemma-4-E2B-it-web',
     label: 'Gemma 4 E2B (~2.0GB) - Fast (Default)',
     tier: 'Fast',
     group: 'gemma4',
+    family: 'gemma4',
     backend: 'litert',
+    litertKind: 'web-official',
     requires: ['shader-f16'],
     approxBytes: 2.0 * GiB,
+    maxNumTokens: 8192,
     modelFile: 'gemma-4-E2B-it-web.litertlm',
     modelUrl:
       'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm',
   },
   {
     id: 'gemma-4-E4B-it-web',
-    label: 'Gemma 4 E4B (~2.0GB+) - Quality',
+    label: 'Gemma 4 E4B (~2.5GB) - Quality',
     tier: 'Quality',
     group: 'gemma4',
+    family: 'gemma4',
     backend: 'litert',
+    litertKind: 'web-official',
     requires: ['shader-f16'],
     experimental: true,
     approxBytes: 2.5 * GiB,
+    maxNumTokens: 8192,
     modelFile: 'gemma-4-E4B-it-web.litertlm',
     modelUrl:
       'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.litertlm',
   },
   {
+    // Spike: artifact downloads, but @litert-lm/core turns Blob/URL into a ReadableStream
+    // and PrefillDecode builds throw "Streaming … not supported yet" / JS Stream network error.
+    // Kept for Labs probing — not the Tiny recommendation.
+    id: 'qwen3-0.6B-litert',
+    label: 'Qwen3 0.6B LiteRT (~0.6GB) - Spike',
+    tier: 'Explorer',
+    group: 'experimental',
+    family: 'qwen3',
+    backend: 'litert',
+    litertKind: 'spike',
+    requires: [],
+    experimental: true,
+    approxBytes: 0.6 * GiB,
+    maxNumTokens: 4096,
+    disableThinking: true,
+    modelFile: 'Qwen3-0.6B.litertlm',
+    modelUrl:
+      'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B.litertlm',
+  },
+  {
+    id: 'ministral-3-3B-litert',
+    label: 'Ministral 3 3B LiteRT (~2.2GB) - Spike',
+    tier: 'Explorer',
+    group: 'experimental',
+    family: 'ministral',
+    backend: 'litert',
+    litertKind: 'spike',
+    requires: ['shader-f16'],
+    experimental: true,
+    approxBytes: 2.2 * GiB,
+    maxNumTokens: 4096,
+    modelFile: 'model.litertlm',
+    modelUrl:
+      'https://huggingface.co/litert-community/Ministral-3-3B-Reasoning-2512/resolve/main/model.litertlm',
+  },
+  {
+    id: 'Qwen3-0.6B-q4f16_1-MLC',
+    label: 'Qwen3 0.6B MLC (~0.5GB) - Tiny',
+    tier: 'Tiny',
+    group: 'qwen3',
+    family: 'qwen3',
+    backend: 'webllm',
+    requires: ['shader-f16'],
+    approxBytes: 0.5 * GiB,
+    disableThinking: true,
+    fallbackId: 'Qwen3-0.6B-q4f32_1-MLC',
+  },
+  {
     id: 'gemma-4-E2B-it-q4f16_1-MLC',
     label: 'Gemma 4 E2B MLC (~2.7GB) - Experimental',
     tier: 'Experimental',
-    group: 'gemma4',
+    group: 'experimental',
+    family: 'gemma4',
     backend: 'webllm',
     requires: ['shader-f16'],
     experimental: true,
@@ -92,7 +155,8 @@ export const MODEL_OPTIONS = [
     id: 'gemma-4-E4B-it-q4f16_1-MLC',
     label: 'Gemma 4 E4B MLC (~4.0GB) - Experimental',
     tier: 'Experimental',
-    group: 'gemma4',
+    group: 'experimental',
+    family: 'gemma4',
     backend: 'webllm',
     requires: ['shader-f16'],
     experimental: true,
@@ -106,40 +170,34 @@ export const MODEL_OPTIONS = [
       'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E4B-it-q4f16_1-MLC-webgpu.wasm',
   },
   {
-    id: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
-    label: 'SmolLM2 360M (~0.3GB) - Tiny',
-    tier: 'Tiny',
-    group: 'optional',
-    backend: 'webllm',
-    requires: ['shader-f16'],
-    approxBytes: 0.3 * GiB,
-    fallbackId: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
-  },
-  {
-    id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-    label: 'Qwen2.5 1.5B (~1.6GB) - Balanced',
+    id: 'Qwen3-1.7B-q4f16_1-MLC',
+    label: 'Qwen3 1.7B (~1.1GB) - Balanced',
     tier: 'Balanced',
     group: 'optional',
+    family: 'qwen3',
     backend: 'webllm',
-    requires: [],
-    approxBytes: 1.6 * GiB,
-    fallbackId: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
+    requires: ['shader-f16'],
+    approxBytes: 1.1 * GiB,
+    disableThinking: true,
+    fallbackId: 'Qwen3-1.7B-q4f32_1-MLC',
   },
   {
-    id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    label: 'Llama 3.2 3B (~2.3GB) - Alt Quality',
+    id: 'Phi-4-mini-instruct-q4f16_1-MLC',
+    label: 'Phi-4 mini (~2.5GB) - Alt Quality',
     tier: 'Alt Quality',
     group: 'optional',
+    family: 'phi4',
     backend: 'webllm',
-    requires: [],
-    approxBytes: 2.3 * GiB,
-    fallbackId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+    requires: ['shader-f16'],
+    approxBytes: 2.5 * GiB,
+    fallbackId: 'Phi-4-mini-instruct-q4f32_1-MLC',
   },
   {
     id: 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 Coder 1.5B (~1.6GB) - Coder',
     tier: 'Coder',
     group: 'optional',
+    family: 'qwen2.5',
     backend: 'webllm',
     requires: [],
     approxBytes: 1.6 * GiB,
@@ -148,7 +206,7 @@ export const MODEL_OPTIONS = [
 ];
 
 /** Suggested Tiny model when load-capacity heuristics say the device is weak. */
-export const TINY_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
+export const TINY_MODEL_ID = 'Qwen3-0.6B-q4f16_1-MLC';
 
 /**
  * Soft copy for the freeze window during WASM/WebGPU init (unavoidable in-browser).
@@ -214,8 +272,19 @@ const GEMMA4_GENERATION_CONFIG = {
 
 function generationConfigForModel(modelId) {
   const option = getModelOption(modelId);
-  if (option?.group === 'gemma4') return { ...GEMMA4_GENERATION_CONFIG };
-  return { ...DEFAULT_GENERATION_CONFIG };
+  const wantsGemmaBudget = option?.family === 'gemma4' || option?.group === 'gemma4';
+  const cfg = wantsGemmaBudget
+    ? { ...GEMMA4_GENERATION_CONFIG }
+    : { ...DEFAULT_GENERATION_CONFIG };
+  if (
+    option?.disableThinking
+    || option?.family === 'qwen3'
+    || option?.family === 'gemma4'
+    || option?.group === 'gemma4'
+  ) {
+    cfg.enable_thinking = false;
+  }
+  return cfg;
 }
 
 function modelBackend(modelId) {
@@ -228,7 +297,7 @@ function isLiteRTModel(modelId) {
 
 function isWebLLMGemmaMlC(modelId) {
   const option = getModelOption(modelId);
-  return option?.group === 'gemma4' && modelBackend(modelId) === 'webllm';
+  return option?.family === 'gemma4' && modelBackend(modelId) === 'webllm';
 }
 
 function extractLiteRTText(response) {
@@ -252,6 +321,8 @@ function sanitizeModelReply(text) {
   let out = String(text);
   // Drop full thought channels if the runtime leaked them into content.
   out = out.replace(/<\|channel>thought[\s\S]*?<channel\|>/gi, '');
+  out = out.replace(/<\|think\|>[\s\S]*?(?:<\|\/think\|>|$)/gi, '');
+  out = out.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
   out = out.replace(/<\|think\|>/g, '');
   out = out.replace(/<\/?turn\|>/g, '');
   out = out.replace(/<\|turn>(?:user|model|system)?/g, '');
@@ -423,6 +494,50 @@ async function openProgressModelStream(url, onProgress) {
       },
     }),
   );
+}
+
+/**
+ * Fetch model bytes into a Blob with download progress.
+ * Required for portable/spike `.litertlm` files — LiteRT rejects streamed
+ * kTfLitePrefillDecode models ("Streaming … is not supported yet").
+ * @param {string} url
+ * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ */
+async function openProgressModelBlob(url, onProgress) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch model (${res.status} ${res.statusText || ''}).`.trim());
+  }
+  const totalBytes = Number(res.headers.get('content-length')) || 0;
+  let received = 0;
+
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const blob = await res.blob();
+    onProgress?.({
+      loaded: 1,
+      received: blob.size,
+      totalBytes: totalBytes || blob.size,
+    });
+    return blob;
+  }
+
+  const reader = res.body.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    const loaded = totalBytes > 0 ? Math.min(1, received / totalBytes) : 0;
+    onProgress?.({ loaded, received, totalBytes });
+  }
+  const blob = new Blob(chunks, { type: 'application/octet-stream' });
+  onProgress?.({
+    loaded: 1,
+    received: blob.size,
+    totalBytes: totalBytes || blob.size,
+  });
+  return blob;
 }
 
 const localModelProbeCache = new Map();
@@ -776,16 +891,20 @@ export class AiChat {
     await yieldToMain();
 
     const modelUrl = await resolveLiteRTModelUrl(option);
+    const displayName = getModelDisplayName(this.modelId);
     this._emitProgress({
       stage: 'downloading',
-      message: 'Downloading / reading Gemma 4 (LiteRT)…',
+      message: `Downloading / reading ${displayName} (LiteRT)…`,
       text: modelUrl,
       loaded: 0,
     });
 
-    // Stream weights with progress (Engine accepts URL | ReadableStream | Blob).
-    // Progress updates only cover the fetch phase — WASM/WebGPU init still blocks afterward.
-    const modelSource = await openProgressModelStream(modelUrl, ({ loaded, received, totalBytes }) => {
+    // Engine accepts URL | ReadableStream | Blob.
+    // Official Gemma web builds accept streamed loads. Portable/spike PrefillDecode
+    // artifacts reject ReadableStream ("Streaming … not supported yet") — pass a URL
+    // (or Blob) so LiteRT performs a non-stream load.
+    const streamOk = option?.litertKind === 'web-official';
+    const onFetchProgress = ({ loaded, received, totalBytes }) => {
       const pct = totalBytes > 0
         ? `${Math.round(loaded * 100)}%`
         : `${(received / (1024 * 1024)).toFixed(1)} MB`;
@@ -797,7 +916,16 @@ export class AiChat {
         loaded: totalBytes > 0 ? loaded : Math.min(0.95, received / (2 * GiB)),
         message: 'Fetching model weights…',
       });
-    });
+    };
+    let modelSource;
+    if (streamOk) {
+      modelSource = await openProgressModelStream(modelUrl, onFetchProgress);
+    } else {
+      // Must be a fully buffered Blob — URL/ReadableStream both hit
+      // "Streaming kTfLitePrefillDecode models is not supported yet."
+      console.info(`[AiChat] Buffering portable LiteRT model as Blob: ${option.id}`);
+      modelSource = await openProgressModelBlob(modelUrl, onFetchProgress);
+    }
 
     this._emitProgress({
       stage: 'compiling',
@@ -809,7 +937,9 @@ export class AiChat {
 
     this.engine = await Engine.create({
       model: modelSource,
-      mainExecutorSettings: { maxNumTokens: 4096 },
+      mainExecutorSettings: {
+        maxNumTokens: option?.maxNumTokens || 4096,
+      },
     });
     await this._ensureLiteRTConversation(true);
   }
@@ -1026,6 +1156,15 @@ export class AiChat {
     this.messages = [];
     // LiteRT + WebLLM Gemma MLC: next generate() opens a fresh conversation / reloads.
     this._needsEngineReload = true;
+  }
+
+  /** Release WebGPU/WASM engine resources (eval harness / model switch). */
+  async dispose() {
+    await this._disposeEngine();
+    this._isLoaded = false;
+    this._isLoading = false;
+    this.messages = [];
+    this._needsEngineReload = false;
   }
 }
 
@@ -1280,7 +1419,7 @@ export class AiChatUI {
                   style="display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; border-radius: 999px; border: 1px solid var(--border-color, #d1d5db); color: var(--text-muted, #6b7280); font-size: 0.72rem; cursor: help;"
                 >?</span>
               </label>
-              <select id="vdl-ai-model-select" class="vd-select" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+              <select id="vdl-ai-model-select" class="vd-select" style="width: 100%; padding: 0.5rem; padding-right: calc(0.5rem + var(--vd-select-arrow-size, 16px) + 0.5rem); border-radius: var(--radius-sm); border: 1px solid var(--border-color); background-color: var(--bg-primary); color: var(--text-primary);">
               </select>
               <div class="vdl-ai-fallback-note vd-text-sm vd-text-muted" style="margin-top: 0.5rem; display: none;"></div>
               <div class="vdl-ai-cache-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem;"></div>
@@ -1759,6 +1898,9 @@ export class AiChatUI {
     const cached = this._isModelLikelyCached(modelId);
     const resolved = this._resolveModelForSystem(modelId);
     const flags = [];
+    if (option.litertKind === 'web-official') flags.push('LiteRT official web');
+    else if (option.litertKind === 'portable') flags.push('LiteRT portable');
+    else if (option.litertKind === 'spike') flags.push('LiteRT spike');
     if (option.experimental) flags.push('Experimental');
     if (cached) flags.push('Cached');
     if (resolved.unavailable) flags.push('Unavailable');

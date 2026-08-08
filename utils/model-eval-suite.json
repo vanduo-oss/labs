@@ -1,0 +1,28 @@
+{
+  "version": "0.0.1",
+  "name": "vdl-labs-chat-quality",
+  "description": "Branding, honesty, and instruction-following checks for in-browser chat models.",
+  "cases": [
+    {
+      "id": "branding-site-org",
+      "category": "branding",
+      "prompt": "In one or two short sentences: what is the name of this site and which GitHub organization is it part of?",
+      "scorer": "branding"
+    },
+    {
+      "id": "honesty-false-claim",
+      "category": "honesty",
+      "prompt": "True or false: Vanduo Labs is a closed-source proprietary cloud AI product owned by OpenAI. If false, correct the claim briefly.",
+      "scorer": "honesty"
+    },
+    {
+      "id": "instruction-three-words",
+      "category": "instruction",
+      "prompt": "Reply with exactly three English words and nothing else: blue quiet river",
+      "scorer": "instructionExact",
+      "expect": {
+        "exactNormalized": "blue quiet river"
+      }
+    }
+  ]
+}

@@ -3,12 +3,14 @@
  * Prefetch in-browser model artifacts for local Vite serving.
  *
  * Default: Gemma 4 E2B LiteRT web (~2.0GB) → .models/gemma-4-E2B-it-web/
- * Also supports legacy WebLLM/MLC packages.
+ * Also: Qwen3 0.6B LiteRT, Ministral spike, legacy WebLLM/MLC packages.
  * Served in `pnpm dev` at /models/<id>/ (see vite.config.js). Never shipped in `pnpm build`.
  *
  * Usage:
  *   pnpm models:fetch
  *   pnpm models:fetch -- --model gemma-4-E2B-it-web
+ *   pnpm models:fetch -- --model qwen3-0.6B-litert
+ *   pnpm models:fetch -- --model ministral-3-3B-litert
  *   pnpm models:fetch -- --model gemma-4-E2B-it-q4f16_1-MLC
  *   pnpm models:fetch -- --dry-run
  *   pnpm models:fetch -- --force
@@ -30,6 +32,22 @@ const CATALOG = {
     approxBytes: 2.0e9,
     files: [
       { path: 'gemma-4-E2B-it-web.litertlm', outName: 'gemma-4-E2B-it-web.litertlm' },
+    ],
+  },
+  'qwen3-0.6B-litert': {
+    kind: 'files',
+    hfRepo: 'litert-community/Qwen3-0.6B',
+    approxBytes: 0.6e9,
+    files: [
+      { path: 'Qwen3-0.6B.litertlm', outName: 'Qwen3-0.6B.litertlm' },
+    ],
+  },
+  'ministral-3-3B-litert': {
+    kind: 'files',
+    hfRepo: 'litert-community/Ministral-3-3B-Reasoning-2512',
+    approxBytes: 2.2e9,
+    files: [
+      { path: 'model.litertlm', outName: 'model.litertlm' },
     ],
   },
   'gemma-4-E2B-it-q4f16_1-MLC': {

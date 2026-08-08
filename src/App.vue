@@ -6,38 +6,106 @@ import {
   VdIcon,
   VdModal,
   VdNavbar,
+  VdThemeCustomizer,
   VdThemeSwitcher,
 } from '@vanduo-oss/vd3';
 import { DEFAULT_DOCS_BASE_URL, VDL_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
 import { VDL_AI_CHAT_VERSION } from '../ai-chat.js';
+import { VDL_MODEL_EVAL_VERSION } from '../model-eval.js';
 import { labsMarkdownToHtml } from '../labs-md-to-html.js';
 import VdlNeptuneSearchUI from './components/VdlNeptuneSearchUI.vue';
 import VdlAiChatUI from './components/VdlAiChatUI.vue';
+import VdlModelEvalUI from './components/VdlModelEvalUI.vue';
+import {
+  isGladosHomeQuote,
+  nextHomeQuoteIntervalMs,
+  pickNextHomeQuote,
+} from './vdl-home-quotes.js';
 
 const DEMO_SLUGS = new Set(['neptune', 'aichat']);
-const ROUTES = ['home', 'about', 'demos'];
+const TOOL_SLUGS = new Set(['model-eval']);
+const ROUTES = ['home', 'about', 'demos', 'tools'];
 const LABS_DEMOS_DISCLAIMER_KEY = 'vanduo-labs-demos-disclaimer-v1';
 const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
+const HOME_QUOTE_FADE_MS = 180;
 
 const COMPONENT_VERSION_MAP = {
   neptune: VDL_NEPTUNE_SEARCH_VERSION,
   aichat: VDL_AI_CHAT_VERSION,
+  'model-eval': VDL_MODEL_EVAL_VERSION,
 };
 
 const route = ref('home');
 const demoSlug = ref(null);
+const toolSlug = ref(null);
 const disclaimerOpen = ref(false);
 const docHtml = ref('');
 const docLoading = ref(false);
 const docError = ref('');
 const liveRegionText = ref('');
+/** @type {import('vue').Ref<{ id: string, text: string } | null>} */
+const homeQuoteEntry = ref(null);
+const homeQuoteVisible = ref(true);
+const homeQuoteIsGlados = computed(() => isGladosHomeQuote(homeQuoteEntry.value));
 
-const docHtmlCache = { neptune: null, aichat: null };
+const docHtmlCache = { neptune: null, aichat: null, 'model-eval': null };
 let docLoadSeq = 0;
-let lastTopLevelRoute = 'home';
+/** Empty until first hash sync so the initial `#home` visit advances the quote bag. */
+let lastTopLevelRoute = '';
+let homeQuoteTimer = null;
+let homeQuoteFadeTimer = null;
+
+function clearHomeQuoteTimers() {
+  if (homeQuoteTimer != null) {
+    clearTimeout(homeQuoteTimer);
+    homeQuoteTimer = null;
+  }
+  if (homeQuoteFadeTimer != null) {
+    clearTimeout(homeQuoteFadeTimer);
+    homeQuoteFadeTimer = null;
+  }
+}
+
+function applyHomeQuotePick(animate) {
+  if (homeQuoteFadeTimer != null) {
+    clearTimeout(homeQuoteFadeTimer);
+    homeQuoteFadeTimer = null;
+  }
+  const { entry } = pickNextHomeQuote();
+  if (!animate || !homeQuoteEntry.value) {
+    homeQuoteEntry.value = entry;
+    homeQuoteVisible.value = true;
+    return;
+  }
+  homeQuoteVisible.value = false;
+  homeQuoteFadeTimer = window.setTimeout(() => {
+    homeQuoteEntry.value = entry;
+    homeQuoteVisible.value = true;
+    homeQuoteFadeTimer = null;
+  }, HOME_QUOTE_FADE_MS);
+}
+
+function scheduleHomeQuoteTick() {
+  clearTimeout(homeQuoteTimer);
+  homeQuoteTimer = window.setTimeout(() => {
+    applyHomeQuotePick(true);
+    scheduleHomeQuoteTick();
+  }, nextHomeQuoteIntervalMs());
+}
+
+function startHomeQuoteRotation() {
+  clearHomeQuoteTimers();
+  applyHomeQuotePick(false);
+  scheduleHomeQuoteTick();
+}
+
+function stopHomeQuoteRotation() {
+  clearHomeQuoteTimers();
+}
 
 const neptuneVersion = computed(() => `v${COMPONENT_VERSION_MAP.neptune}`);
 const aichatVersion = computed(() => `v${COMPONENT_VERSION_MAP.aichat}`);
+const modelEvalVersion = computed(() => `v${COMPONENT_VERSION_MAP['model-eval']}`);
 
 function getComponentVersion(slug) {
   return COMPONENT_VERSION_MAP[slug] || '0.0.1';
@@ -54,10 +122,15 @@ function parseLabsHash() {
   if (nextRoute === 'demos') {
     let nextDemo = segments.length > 1 ? segments[1] : null;
     if (nextDemo && !DEMO_SLUGS.has(nextDemo)) nextDemo = null;
-    return { route: nextRoute, demoSlug: nextDemo };
+    return { route: nextRoute, demoSlug: nextDemo, toolSlug: null };
+  }
+  if (nextRoute === 'tools') {
+    let nextTool = segments.length > 1 ? segments[1] : 'model-eval';
+    if (!TOOL_SLUGS.has(nextTool)) nextTool = 'model-eval';
+    return { route: nextRoute, demoSlug: null, toolSlug: nextTool };
   }
   if (!ROUTES.includes(nextRoute)) nextRoute = 'home';
-  return { route: nextRoute, demoSlug: null };
+  return { route: nextRoute, demoSlug: null, toolSlug: null };
 }
 
 function closeDisclaimer() {
@@ -85,7 +158,11 @@ function acceptDisclaimer() {
 async function fetchDocumentationHtml(slug) {
   if (docHtmlCache[slug]) return docHtmlCache[slug];
   const path =
-    slug === 'neptune' ? '/doc/vdl-neptune-search.md' : '/doc/vdl-ai-chat.md';
+    slug === 'neptune'
+      ? '/doc/vdl-neptune-search.md'
+      : slug === 'model-eval'
+        ? '/doc/vdl-model-eval.md'
+        : '/doc/vdl-ai-chat.md';
   const res = await fetch(path, { credentials: 'same-origin' });
   if (!res.ok) throw new Error(`Could not load documentation (${res.status})`);
   const md = hydrateComponentVersionTokens(await res.text(), slug);
@@ -112,15 +189,22 @@ async function loadDocumentationForSlug(slug) {
   }
 }
 
-function applyLabsRoute(nextRoute, nextDemoSlug) {
+function applyLabsRoute(nextRoute, nextDemoSlug, nextToolSlug) {
   if (nextRoute !== 'demos') closeDisclaimer();
 
   const routeChanged = lastTopLevelRoute !== nextRoute;
   lastTopLevelRoute = nextRoute;
   route.value = nextRoute;
   demoSlug.value = nextRoute === 'demos' ? nextDemoSlug : null;
+  toolSlug.value = nextRoute === 'tools' ? nextToolSlug : null;
 
   if (routeChanged) window.scrollTo(0, 0);
+
+  if (nextRoute === 'home') {
+    if (routeChanged) startHomeQuoteRotation();
+  } else if (routeChanged) {
+    stopHomeQuoteRotation();
+  }
 
   if (nextRoute === 'demos') {
     maybeOpenDemosDisclaimer();
@@ -141,6 +225,9 @@ function applyLabsRoute(nextRoute, nextDemoSlug) {
       docError.value = '';
       docLoading.value = false;
     }
+  } else if (nextRoute === 'tools') {
+    liveRegionText.value = 'vdl-model-eval tool and documentation opened.';
+    loadDocumentationForSlug(nextToolSlug || 'model-eval');
   }
 }
 
@@ -148,9 +235,9 @@ function syncLabsRouteFromHash() {
   let parsed = parseLabsHash();
   if (!location.hash) {
     history.replaceState(null, '', '#home');
-    parsed = { route: 'home', demoSlug: null };
+    parsed = { route: 'home', demoSlug: null, toolSlug: null };
   }
-  applyLabsRoute(parsed.route, parsed.demoSlug);
+  applyLabsRoute(parsed.route, parsed.demoSlug, parsed.toolSlug);
 }
 
 function selectDemo(slug) {
@@ -169,10 +256,17 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('hashchange', syncLabsRouteFromHash);
+  stopHomeQuoteRotation();
 });
 
 watch(demoSlug, (slug) => {
   if (route.value === 'demos' && slug) {
+    loadDocumentationForSlug(slug);
+  }
+});
+
+watch(toolSlug, (slug) => {
+  if (route.value === 'tools' && slug) {
     loadDocumentationForSlug(slug);
   }
 });
@@ -234,6 +328,9 @@ watch(demoSlug, (slug) => {
       <li>
         <a href="#demos" class="vd-nav-link" :class="{ active: route === 'demos' }">Demos</a>
       </li>
+      <li>
+        <a href="#tools" class="vd-nav-link" :class="{ active: route === 'tools' }">Tools</a>
+      </li>
     </ul>
 
     <template #actions>
@@ -247,6 +344,7 @@ watch(demoSlug, (slug) => {
       >
         <VdIcon name="github-logo" />
       </a>
+      <VdThemeCustomizer class="vdl-theme-customizer" :show-palette="false" />
       <VdThemeSwitcher :menu="false" />
     </template>
   </VdNavbar>
@@ -287,18 +385,22 @@ watch(demoSlug, (slug) => {
           </svg>
           <span class="hero-title-brand">vanduo</span>&nbsp;<span class="vd-text-muted">labs</span>
         </h2>
-        <p class="vd-text-lg vd-text-muted">
-          We are not yet building
-          <a
-            href="https://en.wikipedia.org/wiki/GLaDOS"
-            class="hero-wiki-link"
-            rel="noopener noreferrer"
-            title="GLaDOS — Wikipedia (article)"
-            >GLaDOS</a
-          >, but we might soon…
-          <span class="vd-text-sm hero-wiki-cite">
-            (<a href="https://en.wikipedia.org/wiki/GLaDOS" rel="noopener noreferrer">Wikipedia</a>)
-          </span>
+        <p
+          class="vd-text-lg vd-text-muted hero-home-quote"
+          :class="{ 'hero-home-quote-fading': !homeQuoteVisible }"
+          aria-live="polite"
+        >
+          <template v-if="homeQuoteIsGlados">
+            We are not yet building
+            <a
+              href="https://en.wikipedia.org/wiki/GLaDOS"
+              class="hero-wiki-link"
+              rel="noopener noreferrer"
+              title="GLaDOS — Wikipedia (article)"
+              >GLaDOS</a
+            >, but we might soon…
+          </template>
+          <template v-else-if="homeQuoteEntry">{{ homeQuoteEntry.text }}</template>
         </p>
       </section>
     </div>
@@ -497,6 +599,62 @@ watch(demoSlug, (slug) => {
                   v-html="docError"
                 ></p>
                 <div v-else-if="docHtml" class="labs-md-prose" v-html="docHtml"></div>
+              </div>
+            </div>
+          </VdCard>
+        </section>
+      </div>
+    </div>
+
+    <div
+      class="labs-view labs-view-tools"
+      data-labs-panel="tools"
+      :aria-hidden="route === 'tools' ? 'false' : 'true'"
+      :inert="route !== 'tools'"
+    >
+      <div class="vd-container-responsive labs-main">
+        <section id="labs-tools" class="labs-section" aria-label="On-computer helper tools">
+          <p class="labs-tools-lede vd-text-muted">
+            On-computer helper for Labs development — not an Interactive Demo. Prefetch models locally,
+            run evals, publish reports.
+          </p>
+
+          <VdCard
+            id="labs-tools-detail"
+            class="labs-demos-detail vdl-card-glow vd-glass"
+            role="region"
+            aria-labelledby="labs-tools-detail-title"
+          >
+            <div class="labs-demos-detail-header">
+              <span class="labs-demo-card-icon" aria-hidden="true">
+                <i class="ph ph-chart-bar" style="font-size: 2.25rem"></i>
+              </span>
+              <h2 id="labs-tools-detail-title">vdl-model-eval</h2>
+              <span class="labs-demo-card-badge labs-demo-card-badge-version">{{
+                modelEvalVersion
+              }}</span>
+            </div>
+
+            <div class="labs-detail-stack-section">
+              <h3>Report</h3>
+              <VdlModelEvalUI />
+            </div>
+
+            <div class="labs-detail-stack-section" aria-labelledby="labs-tools-doc-heading">
+              <h3 id="labs-tools-doc-heading">Documentation</h3>
+              <div :class="{ 'labs-doc-loading': docLoading && route === 'tools' }">
+                <template v-if="docLoading && route === 'tools'">Loading documentation…</template>
+                <p
+                  v-else-if="docError && route === 'tools'"
+                  class="labs-doc-error"
+                  role="alert"
+                  v-html="docError"
+                ></p>
+                <div
+                  v-else-if="docHtml && route === 'tools'"
+                  class="labs-md-prose"
+                  v-html="docHtml"
+                ></div>
               </div>
             </div>
           </VdCard>
