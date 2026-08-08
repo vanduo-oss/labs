@@ -315,6 +315,55 @@ function extractLiteRTText(response) {
     .join('');
 }
 
+/**
+ * Consume LiteRT `sendMessageStreaming` output across browsers.
+ * Official API returns a `ReadableStream`. Chromium often supports
+ * `for await...of` on streams; Safari/WebKit frequently does not
+ * (`ReadableStream.prototype[Symbol.asyncIterator]` missing), which throws:
+ * `undefined is not a function (near '...s of a...')`.
+ * Prefer async iteration when present; otherwise use `getReader()`.
+ * @param {AsyncIterable|ReadableStream|Promise<AsyncIterable|ReadableStream>|null|undefined} streamLike
+ */
+export async function* iterateMessageStream(streamLike) {
+  let stream = streamLike;
+  if (stream != null && typeof stream.then === 'function') {
+    stream = await stream;
+  }
+  if (stream == null) return;
+
+  if (typeof stream[Symbol.asyncIterator] === 'function') {
+    yield* stream;
+    return;
+  }
+
+  if (typeof stream.getReader === 'function') {
+    const reader = stream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        yield value;
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        // ignore — lock may already be released after close/error
+      }
+    }
+    return;
+  }
+
+  if (typeof stream[Symbol.iterator] === 'function') {
+    yield* stream;
+    return;
+  }
+
+  throw new TypeError(
+    'LiteRT streaming response is not an async iterable or ReadableStream',
+  );
+}
+
 /** Strip accidental thinking / turn markers from streamed text (defense in depth). */
 export function sanitizeModelReply(text) {
   if (!text) return '';
@@ -1022,8 +1071,11 @@ export class AiChat {
     let reply = '';
 
     if (typeof conversation.sendMessageStreaming === 'function') {
-      const stream = conversation.sendMessageStreaming(userText);
-      for await (const chunk of stream) {
+      // Do not `for await` the raw return value — it is a ReadableStream, and
+      // Safari cannot async-iterate ReadableStream (see iterateMessageStream).
+      for await (const chunk of iterateMessageStream(
+        conversation.sendMessageStreaming(userText),
+      )) {
         const delta = extractLiteRTText(chunk);
         if (!delta) continue;
         // Streaming chunks may be cumulative or incremental — prefer append of delta text pieces.

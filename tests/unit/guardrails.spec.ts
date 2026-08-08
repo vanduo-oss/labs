@@ -252,6 +252,58 @@ test.describe('Guardrails Unit', () => {
     expect(result.createArgs.preface.messages[0].content).toContain('vd3-cbun');
   });
 
+  test('AiChat LiteRT generate works when stream is ReadableStream without asyncIterator (Safari)', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+
+      // Reader-only stream — no Symbol.asyncIterator (Safari/WebKit shape).
+      const readerOnlyStream = (chunks) => {
+        let i = 0;
+        return {
+          getReader() {
+            return {
+              async read() {
+                if (i >= chunks.length) return { done: true, value: undefined };
+                return { done: false, value: chunks[i++] };
+              },
+              releaseLock() {},
+            };
+          },
+        };
+      };
+
+      const collected = [];
+      for await (const chunk of mod.iterateMessageStream(
+        readerOnlyStream([
+          { content: [{ type: 'text', text: 'yo' }] },
+          { content: [{ type: 'text', text: ' man' }] },
+        ]),
+      )) {
+        collected.push(chunk);
+      }
+
+      const chat = new mod.AiChat({ modelId: 'gemma-4-E2B-it-web' });
+      chat._isLoaded = true;
+      chat.engine = {
+        createConversation: async () => ({
+          sendMessageStreaming: () => readerOnlyStream([
+            { content: [{ type: 'text', text: 'Hey' }] },
+            { content: [{ type: 'text', text: ' there' }] },
+          ]),
+          delete: async () => {},
+        }),
+      };
+      chat._conversation = await chat.engine.createConversation();
+      const updates = [];
+      const reply = await chat.generate('yo man', (t) => updates.push(t));
+      return { collectedLen: collected.length, reply, updates };
+    });
+
+    expect(result.collectedLen).toBe(2);
+    expect(result.reply).toBe('Hey there');
+    expect(result.updates.at(-1)).toBe('Hey there');
+  });
+
   test('AiChat Gemma 4 MLC payloads omit system role (WebLLM template limitation)', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
