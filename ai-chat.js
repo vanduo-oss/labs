@@ -128,6 +128,9 @@ function absoluteUrl(pathname) {
 /**
  * Prefer a local Vite mirror at `/models/<id>/` (from `pnpm models:fetch`) when present.
  * Falls back to the Hugging Face URLs on MODEL_OPTIONS.
+ *
+ * WebLLM treats model URLs like HF repos and requests `{model}/resolve/main/<file>`,
+ * so the local model URL includes that suffix and Vite strips it when serving.
  */
 async function resolveModelSource(option) {
   if (!option?.modelUrl || !option?.modelLibUrl) {
@@ -135,14 +138,13 @@ async function resolveModelSource(option) {
   }
 
   const localRoot = `/models/${option.id}`;
+  const localModelUrl = absoluteUrl(`${localRoot}/resolve/main/`);
+  const localLibUrl = absoluteUrl(`${localRoot}/libs/${option.id}-webgpu.wasm`);
+
   if (localModelProbeCache.has(option.id)) {
     const hit = localModelProbeCache.get(option.id);
     return hit
-      ? {
-          modelUrl: absoluteUrl(`${localRoot}/`),
-          modelLibUrl: absoluteUrl(`${localRoot}/libs/${option.id}-webgpu.wasm`),
-          local: true,
-        }
+      ? { modelUrl: localModelUrl, modelLibUrl: localLibUrl, local: true }
       : { modelUrl: option.modelUrl, modelLibUrl: option.modelLibUrl, local: false };
   }
 
@@ -151,11 +153,7 @@ async function resolveModelSource(option) {
     const ok = probe.ok;
     localModelProbeCache.set(option.id, ok);
     if (ok) {
-      return {
-        modelUrl: absoluteUrl(`${localRoot}/`),
-        modelLibUrl: absoluteUrl(`${localRoot}/libs/${option.id}-webgpu.wasm`),
-        local: true,
-      };
+      return { modelUrl: localModelUrl, modelLibUrl: localLibUrl, local: true };
     }
   } catch {
     localModelProbeCache.set(option.id, false);

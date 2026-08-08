@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const localModelsDir = path.join(root, '.models');
 
-/** Dev-only: serve `.models/<id>/…` at `/models/<id>/…` (never copied into `dist/`). */
+/** Dev-only: serve `.models/<id>/…` at `/models/<id>/…` (never copied into `dist/`).
+ *  Also accepts HuggingFace-style `/resolve/main/…` suffixes that WebLLM appends.
+ */
 function localModelsPlugin() {
   return {
     name: 'labs-local-models',
@@ -16,7 +18,9 @@ function localModelsPlugin() {
       server.middlewares.use('/models', (req, res, next) => {
         try {
           const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-          const rel = urlPath.replace(/^\/+/, '');
+          let rel = urlPath.replace(/^\/+/, '');
+          // WebLLM HF URL helper: {model}/resolve/main/<file>
+          rel = rel.replace(/\/resolve\/main(?=\/|$)/, '');
           if (!rel || rel.includes('..')) {
             res.statusCode = 400;
             res.end('Bad path');
