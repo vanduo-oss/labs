@@ -503,7 +503,7 @@ export function ensureHomeQuoteBag(options = {}) {
 
   let salt = safeGet(storage, keys.salt);
   if (!salt) {
-    salt = 'test-salt';
+    salt = randomSalt();
     safeSet(storage, keys.salt, salt);
   }
 

@@ -528,4 +528,29 @@ test.describe('Guardrails Unit', () => {
     expect(result.softSkipSelect).toBe(false);
     expect(result.softOkBody).toBe(true);
   });
+
+  test('sanitizeModelReply strips closed think blocks without wiping unclosed streaming suffixes', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const s = mod.sanitizeModelReply;
+      return {
+        closedHtml: s('<think>hidden</think>Visible answer'),
+        closedChannel: s('<|think|>hidden<|/think|>Visible answer'),
+        prefixUnclosedHtml: s('Visible then <think>still streaming answer'),
+        prefixUnclosedChannel: s('Prefix <|think|>partial stream continues'),
+        onlyUnclosedHtml: s('<think>partial'),
+        onlyUnclosedChannel: s('<|think|>partial'),
+        emptyFallback: s('<think>partial') || '<think>partial',
+      };
+    });
+
+    expect(result.closedHtml).toBe('Visible answer');
+    expect(result.closedChannel).toBe('Visible answer');
+    expect(result.prefixUnclosedHtml).toBe('Visible then still streaming answer');
+    expect(result.prefixUnclosedChannel).toBe('Prefix partial stream continues');
+    expect(result.onlyUnclosedHtml).toBe('partial');
+    expect(result.onlyUnclosedChannel).toBe('partial');
+    // Callers use `sanitize(...) || reply`; non-empty orphan strip means no raw-tag fallback.
+    expect(result.emptyFallback).toBe('partial');
+  });
 });

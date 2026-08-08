@@ -36,6 +36,10 @@ import {
 - **Concurrency planner** schedules waves from `approxBytes` + RAM heuristic (default 24GB × 45%).
 - **Harness** (`demo/model-eval-harness.html`) loads models via `AiChat` on WebGPU.
 
+## Chromium runner notes
+
+`pnpm model-eval` launches headed Chromium via `utils/model-eval-runner.mjs` with an isolated user profile under `.models/.model-eval-profile`. The runner passes `--disable-web-security` so local WebGPU/model asset fetches are not blocked by CORS — this is **eval tooling only**, not a production web setting. Do not reuse that flag for the Labs site itself.
+
 ## Suite
 
 See [`utils/model-eval-suite.json`](../utils/model-eval-suite.json). Cases include the known Tiny failure mode: inventing “Vandouno” fails branding.

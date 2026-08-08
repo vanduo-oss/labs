@@ -316,14 +316,18 @@ function extractLiteRTText(response) {
 }
 
 /** Strip accidental thinking / turn markers from streamed text (defense in depth). */
-function sanitizeModelReply(text) {
+export function sanitizeModelReply(text) {
   if (!text) return '';
   let out = String(text);
   // Drop full thought channels if the runtime leaked them into content.
+  // Only strip closed blocks — never `$`-to-EOF, or streaming suffixes after an
+  // unclosed open tag are wiped (callers use `sanitize(...) || reply` for empties).
   out = out.replace(/<\|channel>thought[\s\S]*?<channel\|>/gi, '');
-  out = out.replace(/<\|think\|>[\s\S]*?(?:<\|\/think\|>|$)/gi, '');
-  out = out.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
+  out = out.replace(/<\|think\|>[\s\S]*?<\|\/think\|>/gi, '');
+  out = out.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // Orphan open/close markers left mid-stream (no closed pair yet).
   out = out.replace(/<\|think\|>/g, '');
+  out = out.replace(/<\/?think>/gi, '');
   out = out.replace(/<\/?turn\|>/g, '');
   out = out.replace(/<\|turn>(?:user|model|system)?/g, '');
   return out.trim();

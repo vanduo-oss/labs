@@ -37,6 +37,8 @@ console.log('[model-eval] opening', url);
 const context = await chromium.launchPersistentContext(PROFILE, {
   headless: process.env.MODEL_EVAL_HEADLESS === '1',
   channel: process.env.MODEL_EVAL_CHANNEL || 'chrome',
+  // Local WebGPU/model eval only (isolated PROFILE). --disable-web-security
+  // relaxes CORS for cross-origin model asset fetches — not for production web.
   args: [
     '--enable-unsafe-webgpu',
     '--ignore-gpu-blocklist',
