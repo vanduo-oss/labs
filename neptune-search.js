@@ -403,8 +403,9 @@ export class NeptuneSearchUI {
     this.search = options.search;
     this.onResultClick = options.onResultClick ?? (() => {});
     this.placeholder = options.placeholder ?? 'Search docs…';
-    this.debounceMs = options.debounceMs ?? 150;
+    this.debounceMs = options.debounceMs ?? 350;
     this.showSemanticHint = options.showSemanticHint ?? true;
+    this.autofocus = options.autofocus ?? true;
     this.baseUrl = options.baseUrl ?? DEFAULT_DOCS_BASE_URL;
     this.emptyMessage = options.emptyMessage ?? 'No docs found. Try another query or pick a category filter.';
 
@@ -416,6 +417,10 @@ export class NeptuneSearchUI {
     this._keyboardHandler = null;
     this._clickOutsideHandler = null;
     this._unsubscribeSemantic = null;
+    /** Last accepted query string (for enrich-on-ready). */
+    this._lastQuery = '';
+    /** Ensures model-ready enrichment runs at most once per warm-up. */
+    this._didEnrichOnReady = false;
     /** Bumps when input/close/fuzzy runs so stale hybrid completions skip UI updates */
     this._semanticSeq = 0;
   }
@@ -427,19 +432,23 @@ export class NeptuneSearchUI {
     this._buildDOM();
     this._bindEvents();
     this._mounted = true;
-    // Warm Transformers.js + MiniLM in the background so Enter feels instant.
+    // Warm Transformers.js + MiniLM in the background so hybrid auto-search is ready sooner.
     // Fuzzy search remains available while this runs (non-blocking progress bar).
     this._preloadSemantic();
+    this._tryAutofocus();
   }
 
   destroy() {
     if (!this._mounted) return;
+    clearTimeout(this._debounceTimer);
     this._unbindEvents();
     this.container.innerHTML = '';
     this._mounted = false;
     this._elements = {};
     this._results = [];
     this._selectedIndex = -1;
+    this._lastQuery = '';
+    this._didEnrichOnReady = false;
   }
 
   /**
@@ -476,7 +485,7 @@ export class NeptuneSearchUI {
           aria-activedescendant=""
         />
         <span class="vdl-neptune-hint" aria-hidden="true">
-          ${this.showSemanticHint ? '<kbd>Enter</kbd> for AI search' : ''}
+          ${this.showSemanticHint ? 'AI · fuzzy' : ''}
         </span>
       </div>
       <div class="vdl-neptune-dropdown" id="vdl-neptune-results" role="listbox" hidden>
@@ -558,33 +567,36 @@ export class NeptuneSearchUI {
     }
   }
 
+  /**
+   * Focus search when safe: skip open modals and other text fields, but allow
+   * taking focus from buttons after mount.
+   */
+  _tryAutofocus() {
+    if (!this.autofocus || !this._elements.input) return;
+    const ae = document.activeElement;
+    if (ae?.closest?.('dialog, [role="dialog"], [aria-modal="true"]')) return;
+    if (ae && ae !== this._elements.input) {
+      const tag = ae.tagName;
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        ae.isContentEditable
+      ) {
+        return;
+      }
+    }
+    this._elements.input.focus({ preventScroll: true });
+  }
+
   // ── Event Handlers ───────────────────────────────────────────────────
 
   _onInput(e) {
-    const query = normalizeSearchQuery(e.target.value, {
-      maxLength: this.search?.queryMaxLength ?? 240,
-    });
-
-    clearTimeout(this._debounceTimer);
-    this._semanticSeq++;
-    this._elements.loader.hidden = true;
-
-    const queryCheck = validateSearchQuery(query, {
-      minLength: this.search?.queryMinLength ?? 2,
-      maxLength: this.search?.queryMaxLength ?? 240,
-    });
-    if (!queryCheck.allowed) {
-      this._clearResults();
-      return;
-    }
-
-    this._debounceTimer = setTimeout(async () => {
-      await this._runFuzzy(query);
-    }, this.debounceMs);
+    this._scheduleSearch(e.target.value);
   }
 
   _onKeyDown(e) {
-    const { dropdown, results, input } = this._elements;
+    const { dropdown, input } = this._elements;
 
     if (!dropdown.hidden && this._results.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -604,14 +616,13 @@ export class NeptuneSearchUI {
         if (this._selectedIndex >= 0) {
           this._selectResult(this._results[this._selectedIndex]);
         } else {
-          // Enter without selection → semantic search
-          this._runSemantic(input.value.trim());
+          this._scheduleSearch(input.value, { immediate: true });
         }
         return;
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      this._runSemantic(input.value.trim());
+      this._scheduleSearch(input.value, { immediate: true });
       return;
     }
   }
@@ -625,12 +636,20 @@ export class NeptuneSearchUI {
       if (data.progress?.loaded && data.progress?.total) {
         const pct = Math.round((data.progress.loaded / data.progress.total) * 100);
         progressBar.style.width = `${pct}%`;
-    } else {
+      } else {
         progressBar.style.width = '0%';
-    }
+      }
     } else if (data.stage === 'ready') {
       progress.hidden = true;
       progressBar.style.width = '0%';
+      // Enrich current query once when the model first becomes ready.
+      if (!this._didEnrichOnReady && this._lastQuery) {
+        this._didEnrichOnReady = true;
+        clearTimeout(this._debounceTimer);
+        this._debounceTimer = setTimeout(() => {
+          this._runSearch(this._lastQuery);
+        }, 0);
+      }
     } else if (data.stage === 'error') {
       progress.hidden = true;
       progressBar.style.width = '0%';
@@ -640,19 +659,37 @@ export class NeptuneSearchUI {
 
   // ── Search Execution ─────────────────────────────────────────────────
 
-  async _runFuzzy(query) {
+  _scheduleSearch(rawQuery, { immediate = false } = {}) {
     if (!this.search) return;
+    const query = normalizeSearchQuery(rawQuery, {
+      maxLength: this.search.queryMaxLength ?? 240,
+    });
+
+    clearTimeout(this._debounceTimer);
     this._semanticSeq++;
-    const seq = this._semanticSeq;
-    const result = await this.search.search(query, { mode: 'fuzzy' });
-    if (seq !== this._semanticSeq) return;
-    this._results = result.merged;
-    this._selectedIndex = -1;
     this._elements.loader.hidden = true;
-    this._renderResults();
+
+    const queryCheck = validateSearchQuery(query, {
+      minLength: this.search.queryMinLength ?? 2,
+      maxLength: this.search.queryMaxLength ?? 240,
+    });
+    if (!queryCheck.allowed) {
+      this._lastQuery = '';
+      this._clearResults();
+      return;
+    }
+
+    this._lastQuery = query;
+    if (immediate) {
+      this._runSearch(query, { forceHybrid: true });
+      return;
+    }
+    this._debounceTimer = setTimeout(() => {
+      this._runSearch(query);
+    }, this.debounceMs);
   }
 
-  async _runSemantic(query) {
+  async _runSearch(query, { forceHybrid = false } = {}) {
     if (!this.search) return;
     const normalizedQuery = normalizeSearchQuery(query, {
       maxLength: this.search.queryMaxLength ?? 240,
@@ -663,25 +700,32 @@ export class NeptuneSearchUI {
     });
     if (!queryCheck.allowed) return;
 
-    clearTimeout(this._debounceTimer);
-    const seq = this._semanticSeq;
+    const useHybrid = forceHybrid || this.search.isSemanticReady();
+    const seq = ++this._semanticSeq;
+    this._lastQuery = normalizedQuery;
     this._results = [];
     this._selectedIndex = -1;
     this._elements.empty.hidden = true;
     this._elements.results.innerHTML = '';
     this._elements.loader.hidden = false;
+    const loaderText = this._elements.loader.querySelector('.vdl-neptune-loader-text');
+    if (loaderText) {
+      loaderText.textContent = useHybrid ? 'Searching with AI…' : 'Searching…';
+    }
     this._elements.dropdown.hidden = false;
     this._elements.input.setAttribute('aria-expanded', 'true');
 
     try {
-      const result = await this.search.search(normalizedQuery, { mode: 'hybrid' });
+      const result = await this.search.search(normalizedQuery, {
+        mode: useHybrid ? 'hybrid' : 'fuzzy',
+      });
       if (seq !== this._semanticSeq) return;
       this._results = result.merged;
       this._selectedIndex = -1;
       this._elements.loader.hidden = true;
       this._renderResults();
     } catch (err) {
-      console.warn('[NeptuneUI] Semantic search error:', err);
+      console.warn('[NeptuneUI] Search error:', err);
       if (seq !== this._semanticSeq) return;
       this._elements.loader.hidden = true;
       const result = await this.search.search(normalizedQuery, { mode: 'fuzzy' });
@@ -689,7 +733,9 @@ export class NeptuneSearchUI {
       this._results = result.merged;
       this._renderResults();
     } finally {
-      this._elements.loader.hidden = true;
+      if (seq === this._semanticSeq) {
+        this._elements.loader.hidden = true;
+      }
     }
   }
 
@@ -795,6 +841,7 @@ export class NeptuneSearchUI {
 
   _clearResults() {
     this._semanticSeq++;
+    this._lastQuery = '';
     this._results = [];
     this._selectedIndex = -1;
     this._elements.results.innerHTML = '';

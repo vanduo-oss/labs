@@ -67,18 +67,49 @@ test.describe('NeptuneSearch E2E', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test('UI mounts and shows fuzzy results on input', async ({ page }) => {
+  test('UI autofocuses search input on mount', async ({ page }) => {
+    await page.evaluate(async () => {
+      await window.createUI();
+    });
+
+    await expect(page.locator('.vdl-neptune-input')).toBeFocused();
+  });
+
+  test('UI mounts and shows results on input without Enter', async ({ page }) => {
     await page.evaluate(async () => {
       await window.createUI();
     });
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
-    await page.waitForTimeout(200); // debounce
+    await page.waitForTimeout(450); // debounce (default 350ms)
 
     const results = page.locator('.vdl-neptune-result');
     await expect(results.first()).toBeVisible();
     await expect(results.first().locator('.vdl-neptune-result-title')).toContainText('Buttons');
+  });
+
+  test('UI Enter submits hybrid search immediately', async ({ page }) => {
+    const mode = await page.evaluate(async () => {
+      const search = await window.createSearch();
+      const modes = [];
+      const orig = search.search.bind(search);
+      search.search = async (q, opts) => {
+        modes.push(opts?.mode || 'hybrid');
+        return orig(q, opts);
+      };
+      const container = document.getElementById('mount');
+      container.innerHTML = '';
+      const ui = new window.NeptuneSearchUI({ container, search, debounceMs: 5000 });
+      ui.mount();
+      const input = container.querySelector('.vdl-neptune-input') as HTMLInputElement;
+      input.value = 'button';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((r) => setTimeout(r, 100));
+      return modes;
+    });
+
+    expect(mode).toContain('hybrid');
   });
 
   test('UI mount preloads semantic layer without blocking fuzzy', async ({ page }) => {
@@ -89,6 +120,7 @@ test.describe('NeptuneSearch E2E', () => {
       let initCalls = 0;
       const orig = search.initSemantic.bind(search);
       search.initSemantic = async () => {
+        if (search._semanticReady) return;
         initCalls += 1;
         await new Promise((r) => setTimeout(r, 80));
         search._semanticReady = true;
@@ -98,17 +130,17 @@ test.describe('NeptuneSearch E2E', () => {
 
       const container = document.getElementById('mount');
       container.innerHTML = '';
-      const ui = new window.NeptuneSearchUI({ container, search });
+      const ui = new window.NeptuneSearchUI({ container, search, debounceMs: 100 });
       ui.mount();
 
       // Fuzzy should work while preload is still in flight.
       const input = container.querySelector('.vdl-neptune-input');
       input.value = 'button';
       input.dispatchEvent(new Event('input'));
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 200));
       const fuzzyCount = container.querySelectorAll('.vdl-neptune-result').length;
 
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 150));
       return {
         initCalls,
         fuzzyCount,
@@ -160,13 +192,22 @@ test.describe('NeptuneSearch E2E', () => {
   });
 
   test('UI shows empty state for no results', async ({ page }) => {
+    // Force fuzzy-only: harness semantic mock matches all queries at ~1.0.
     await page.evaluate(async () => {
-      await window.createUI();
+      const search = await window.createSearch();
+      search._semanticReady = false;
+      search.initSemantic = async () => {
+        /* leave semantic unavailable so auto-search stays fuzzy */
+      };
+      const container = document.getElementById('mount');
+      container.innerHTML = '';
+      const ui = new window.NeptuneSearchUI({ container, search });
+      ui.mount();
     });
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('xyzabc');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
 
     await expect(page.locator('.vdl-neptune-empty')).toBeVisible();
   });
@@ -178,7 +219,7 @@ test.describe('NeptuneSearch E2E', () => {
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
 
     await input.press('ArrowDown');
     const first = page.locator('.vdl-neptune-result').first();
@@ -219,7 +260,7 @@ test.describe('NeptuneSearch E2E', () => {
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
 
     await page.locator('.vdl-neptune-result').first().click();
     await page.waitForTimeout(100);
@@ -239,7 +280,7 @@ test.describe('NeptuneSearch E2E', () => {
       const input1 = container.querySelector('.vdl-neptune-input') as HTMLInputElement;
       input1.value = 'button';
       input1.dispatchEvent(new Event('input'));
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 450));
 
       ui1.destroy();
 
@@ -250,7 +291,7 @@ test.describe('NeptuneSearch E2E', () => {
       const input2 = container.querySelector('.vdl-neptune-input') as HTMLInputElement;
       input2.value = 'glass';
       input2.dispatchEvent(new Event('input'));
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 450));
 
       const results2 = container.querySelectorAll('.vdl-neptune-result');
       return { count: results2.length };
@@ -266,7 +307,7 @@ test.describe('NeptuneSearch E2E', () => {
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
 
     const firstId = await page.locator('.vdl-neptune-result').first().getAttribute('id');
     expect(firstId).toBeTruthy();
@@ -280,7 +321,7 @@ test.describe('NeptuneSearch E2E', () => {
 
     const input = page.locator('.vdl-neptune-input');
     await input.fill('button');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450);
 
     await input.press('ArrowDown');
     const activeDescendant = await input.getAttribute('aria-activedescendant');
