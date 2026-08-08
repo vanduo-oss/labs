@@ -44,7 +44,12 @@ export const MODEL_OPTIONS = [
     tier: 'Fast',
     group: 'gemma4',
     requires: ['shader-f16'],
-    // Keep mlc-chat-config defaults (sliding_window_size: 512). Do not override to -1.
+    // WebLLM allows only one of context_window_size / sliding_window_size > 0.
+    // mlc-chat-config ships both (4096 + 512); prefer fixed context for this build.
+    overrides: {
+      context_window_size: 4096,
+      sliding_window_size: -1,
+    },
     modelUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC',
     modelLibUrl:
       'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E2B-it-q4f16_1-MLC-webgpu.wasm',
@@ -56,6 +61,10 @@ export const MODEL_OPTIONS = [
     group: 'gemma4',
     requires: ['shader-f16'],
     experimental: true,
+    overrides: {
+      context_window_size: 4096,
+      sliding_window_size: -1,
+    },
     modelUrl: 'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC',
     modelLibUrl:
       'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E4B-it-q4f16_1-MLC-webgpu.wasm',
