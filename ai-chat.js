@@ -7,7 +7,7 @@ import {
 import { toGuardrailError } from './guardrails/core.js';
 
 /**
- * vd-ai-chat — In-browser AI Chat for Vanduo Labs
+ * vdl-ai-chat — In-browser AI Chat for Vanduo Labs
  *
  * Provides a headless API (AiChat) and a UI component (AiChatUI)
  * for running Gemma models directly in the browser using WebGPU.
@@ -25,12 +25,14 @@ import { toGuardrailError } from './guardrails/core.js';
 // ═══════════════════════════════════════════════════════════════════════
 
 const CDN = {
-  webllm: 'https://esm.run/@mlc-ai/web-llm'
+  webllm: 'https://esm.run/@mlc-ai/web-llm',
+  litert: 'https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm',
 };
 
-export const VD_AI_CHAT_VERSION = '0.0.6';
+export const VDL_AI_CHAT_VERSION = '0.0.8';
 
 let _webllmModule = null;
+let _litertModule = null;
 
 export const MODEL_GROUPS = [
   { id: 'gemma4', label: 'Gemma 4' },
@@ -39,13 +41,39 @@ export const MODEL_GROUPS = [
 
 export const MODEL_OPTIONS = [
   {
-    id: 'gemma-4-E2B-it-q4f16_1-MLC',
-    label: 'Gemma 4 E2B (~2.7GB) - Fast (Default)',
+    id: 'gemma-4-E2B-it-web',
+    label: 'Gemma 4 E2B (~2.0GB) - Fast (Default)',
     tier: 'Fast',
     group: 'gemma4',
+    backend: 'litert',
     requires: ['shader-f16'],
+    modelFile: 'gemma-4-E2B-it-web.litertlm',
+    modelUrl:
+      'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm',
+  },
+  {
+    id: 'gemma-4-E4B-it-web',
+    label: 'Gemma 4 E4B (~2.0GB+) - Quality',
+    tier: 'Quality',
+    group: 'gemma4',
+    backend: 'litert',
+    requires: ['shader-f16'],
+    experimental: true,
+    modelFile: 'gemma-4-E4B-it-web.litertlm',
+    modelUrl:
+      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.litertlm',
+  },
+  {
+    id: 'gemma-4-E2B-it-q4f16_1-MLC',
+    label: 'Gemma 4 E2B MLC (~2.7GB) - Experimental',
+    tier: 'Experimental',
+    group: 'gemma4',
+    backend: 'webllm',
+    requires: ['shader-f16'],
+    experimental: true,
     // WebLLM allows only one of context_window_size / sliding_window_size > 0.
     // mlc-chat-config ships both (4096 + 512); prefer fixed context for this build.
+    // Native multi-turn context is unreliable on this community MLC package.
     overrides: {
       context_window_size: 4096,
       sliding_window_size: -1,
@@ -56,9 +84,10 @@ export const MODEL_OPTIONS = [
   },
   {
     id: 'gemma-4-E4B-it-q4f16_1-MLC',
-    label: 'Gemma 4 E4B (~4.0GB) - Quality',
-    tier: 'Quality',
+    label: 'Gemma 4 E4B MLC (~4.0GB) - Experimental',
+    tier: 'Experimental',
     group: 'gemma4',
+    backend: 'webllm',
     requires: ['shader-f16'],
     experimental: true,
     overrides: {
@@ -74,6 +103,7 @@ export const MODEL_OPTIONS = [
     label: 'SmolLM2 360M (~0.3GB) - Tiny',
     tier: 'Tiny',
     group: 'optional',
+    backend: 'webllm',
     requires: ['shader-f16'],
     fallbackId: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
   },
@@ -82,6 +112,7 @@ export const MODEL_OPTIONS = [
     label: 'Qwen2.5 1.5B (~1.6GB) - Balanced',
     tier: 'Balanced',
     group: 'optional',
+    backend: 'webllm',
     requires: [],
     fallbackId: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
   },
@@ -90,6 +121,7 @@ export const MODEL_OPTIONS = [
     label: 'Llama 3.2 3B (~2.3GB) - Alt Quality',
     tier: 'Alt Quality',
     group: 'optional',
+    backend: 'webllm',
     requires: [],
     fallbackId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
   },
@@ -98,17 +130,71 @@ export const MODEL_OPTIONS = [
     label: 'Qwen2.5 Coder 1.5B (~1.6GB) - Coder',
     tier: 'Coder',
     group: 'optional',
+    backend: 'webllm',
     requires: [],
     fallbackId: 'Qwen2.5-Coder-1.5B-Instruct-q4f32_1-MLC',
   },
 ];
 
-const MODEL_CACHE_FLAG_PREFIX = 'vd-ai-chat-model-cached:';
+const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
 const DEFAULT_GENERATION_CONFIG = {
   max_tokens: 512,
   temperature: 0.7,
   top_p: 0.9,
 };
+
+/** Gemma 4 may emit `<|channel>thought…<channel|>` when thinking is on; that burns tokens and yields tiny visible replies. */
+const GEMMA4_GENERATION_CONFIG = {
+  ...DEFAULT_GENERATION_CONFIG,
+  max_tokens: 768,
+  enable_thinking: false,
+};
+
+function generationConfigForModel(modelId) {
+  const option = getModelOption(modelId);
+  if (option?.group === 'gemma4') return { ...GEMMA4_GENERATION_CONFIG };
+  return { ...DEFAULT_GENERATION_CONFIG };
+}
+
+function modelBackend(modelId) {
+  return getModelOption(modelId)?.backend || 'webllm';
+}
+
+function isLiteRTModel(modelId) {
+  return modelBackend(modelId) === 'litert';
+}
+
+function isWebLLMGemmaMlC(modelId) {
+  const option = getModelOption(modelId);
+  return option?.group === 'gemma4' && modelBackend(modelId) === 'webllm';
+}
+
+function extractLiteRTText(response) {
+  const parts = response?.content;
+  if (typeof response === 'string') return response;
+  if (!Array.isArray(parts)) {
+    return normalizeCompletionText(response?.text ?? response?.message?.content ?? '');
+  }
+  return parts
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (part?.type === 'text' || typeof part?.text === 'string') return part.text || '';
+      return normalizeCompletionText(part);
+    })
+    .join('');
+}
+
+/** Strip accidental thinking / turn markers from streamed text (defense in depth). */
+function sanitizeModelReply(text) {
+  if (!text) return '';
+  let out = String(text);
+  // Drop full thought channels if the runtime leaked them into content.
+  out = out.replace(/<\|channel>thought[\s\S]*?<channel\|>/gi, '');
+  out = out.replace(/<\|think\|>/g, '');
+  out = out.replace(/<\/?turn\|>/g, '');
+  out = out.replace(/<\|turn>(?:user|model|system)?/g, '');
+  return out.trim();
+}
 
 export function getModelOption(modelId) {
   return MODEL_OPTIONS.find((m) => m.id === modelId) || null;
@@ -164,26 +250,58 @@ async function resolveModelSource(option) {
   return { modelUrl: option.modelUrl, modelLibUrl: option.modelLibUrl, local: false };
 }
 
+async function resolveLiteRTModelUrl(option) {
+  if (!option?.modelUrl) return option?.modelUrl;
+  const fileName = option.modelFile || pathBasename(option.modelUrl);
+  const localPath = `/models/${option.id}/${fileName}`;
+
+  if (localModelProbeCache.has(option.id)) {
+    return localModelProbeCache.get(option.id)
+      ? absoluteUrl(localPath)
+      : option.modelUrl;
+  }
+
+  try {
+    const probe = await fetch(localPath, { method: 'HEAD', cache: 'no-store' });
+    const ok = probe.ok;
+    localModelProbeCache.set(option.id, ok);
+    if (ok) {
+      console.info(`[AiChat] Using local LiteRT model for ${option.id}: ${localPath}`);
+      return absoluteUrl(localPath);
+    }
+  } catch {
+    localModelProbeCache.set(option.id, false);
+  }
+
+  return option.modelUrl;
+}
+
+function pathBasename(urlOrPath) {
+  const cleaned = String(urlOrPath || '').split('?')[0];
+  const parts = cleaned.split('/').filter(Boolean);
+  return parts[parts.length - 1] || cleaned;
+}
+
 function modelSupportsSystemRole(modelId) {
-  const option = getModelOption(modelId);
-  // Gemma 4 instruction template only defines user/model roles (no system).
-  return option?.group !== 'gemma4';
+  // LiteRT conversations accept a system preface (full Vanduo Labs / FOSS prompt).
+  // Community Gemma 4 MLC (`gemma_instruction`) only defines user/model roles —
+  // injecting system (or folding it into the user turn) truncates / breaks replies.
+  // For those models we omit system and rely on deterministic LLM guardrails only.
+  if (isLiteRTModel(modelId)) return true;
+  if (isWebLLMGemmaMlC(modelId)) return false;
+  return true;
 }
 
 function buildChatPayload(modelId, historyMessages) {
-  const system = buildChatSystemPrompt();
-  if (modelSupportsSystemRole(modelId)) {
-    return [{ role: 'system', content: system }, ...historyMessages];
+  // Always copy — WebLLM/request holders must not share our mutable history array.
+  const history = historyMessages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
+  if (!modelSupportsSystemRole(modelId)) {
+    return history;
   }
-  return historyMessages.map((message, index) => {
-    if (index === 0 && message.role === 'user') {
-      return {
-        role: 'user',
-        content: `${system}\n\n${message.content}`,
-      };
-    }
-    return message;
-  });
+  return [{ role: 'system', content: buildChatSystemPrompt() }, ...history];
 }
 
 async function buildModelAppConfig(modelId) {
@@ -248,23 +366,41 @@ function formatBytes(bytes) {
 
 async function loadWebLLM() {
   if (_webllmModule) return _webllmModule;
-  if (typeof window !== 'undefined' && window.__vdWebLLMModule) {
-    _webllmModule = window.__vdWebLLMModule;
+  if (typeof window !== 'undefined' && window.__vdlWebLLMModule) {
+    _webllmModule = window.__vdlWebLLMModule;
     return _webllmModule;
   }
   try {
     _webllmModule = await import(/* @vite-ignore */ CDN.webllm);
     if (typeof window !== 'undefined') {
-      if (window.__vdWebLLMModule && window.__vdWebLLMModule !== _webllmModule) {
+      if (window.__vdlWebLLMModule && window.__vdlWebLLMModule !== _webllmModule) {
         console.warn(
           '[AiChat] Multiple WebLLM module instances detected; Tokenizer bindings may fail. Hard-refresh the tab.',
         );
       }
-      window.__vdWebLLMModule = _webllmModule;
+      window.__vdlWebLLMModule = _webllmModule;
     }
     return _webllmModule;
   } catch (err) {
     console.error('[AiChat] Failed to load WebLLM from CDN:', err);
+    throw err;
+  }
+}
+
+async function loadLiteRT() {
+  if (_litertModule) return _litertModule;
+  if (typeof window !== 'undefined' && window.__vdlLiteRTModule) {
+    _litertModule = window.__vdlLiteRTModule;
+    return _litertModule;
+  }
+  try {
+    _litertModule = await import(/* @vite-ignore */ CDN.litert);
+    if (typeof window !== 'undefined') {
+      window.__vdlLiteRTModule = _litertModule;
+    }
+    return _litertModule;
+  } catch (err) {
+    console.error('[AiChat] Failed to load LiteRT-LM from CDN:', err);
     throw err;
   }
 }
@@ -293,36 +429,35 @@ export const InputGuardrail = {
 // ═══════════════════════════════════════════════════════════════════════
 
 export class AiChat {
-  static VERSION = VD_AI_CHAT_VERSION;
+  static VERSION = VDL_AI_CHAT_VERSION;
 
   constructor(options = {}) {
-    // Default to the smaller Gemma 2B model for speed.
     this.modelId = options.modelId || MODEL_OPTIONS[0].id;
     this.engine = null;
+    this._conversation = null;
     this.messages = [];
     this._progressSubscribers = [];
     this._isLoaded = false;
     this._isLoading = false;
+    // WebLLM Gemma MLC: resetChat() does not reliably clear KV — next cold turn must reload.
+    this._needsEngineReload = false;
   }
 
-  setModelId(modelId, options = {}) {
+  async setModelId(modelId, options = {}) {
     const { resetMessages = false } = options;
     if (this._isLoading) {
       throw new Error('Cannot change model ID while loading.');
     }
 
-    if (this._isLoaded && this.modelId !== modelId) {
-      // Best-effort dispose. Some engines expose unload(), others do not.
-      try {
-        const maybePromise = this.engine?.unload?.();
-        if (maybePromise && typeof maybePromise.catch === 'function') {
-          maybePromise.catch(() => {});
-        }
-      } catch {
-        // Ignore teardown errors and continue with fresh load.
-      }
+    const modelChanged = this.modelId !== modelId;
+    // Always await teardown before pointing at a new backend — LiteRT/WebLLM
+    // share the WebGPU adapter and racing dispose breaks subsequent loads.
+    if (modelChanged && (this._isLoaded || this.engine || this._conversation)) {
+      await this._disposeEngine();
       this.engine = null;
+      this._conversation = null;
       this._isLoaded = false;
+      this._needsEngineReload = false;
     }
 
     this.modelId = modelId;
@@ -342,40 +477,115 @@ export class AiChat {
     for (const cb of this._progressSubscribers) cb(data);
   }
 
+  async _disposeEngine() {
+    try {
+      if (this._conversation && typeof this._conversation.delete === 'function') {
+        await this._conversation.delete();
+      }
+    } catch {
+      // ignore conversation teardown
+    }
+    this._conversation = null;
+    try {
+      if (this.engine && typeof this.engine.delete === 'function') {
+        await this.engine.delete();
+        return;
+      }
+      const maybePromise = this.engine?.unload?.();
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        await maybePromise.catch(() => {});
+      }
+    } catch {
+      // Ignore teardown errors.
+    }
+  }
+
+  async _ensureLiteRTConversation(forceNew = false) {
+    if (!forceNew && this._conversation) return this._conversation;
+    if (this._conversation && typeof this._conversation.delete === 'function') {
+      try { await this._conversation.delete(); } catch { /* ignore */ }
+    }
+    const preface = modelSupportsSystemRole(this.modelId)
+      ? { messages: [{ role: 'system', content: buildChatSystemPrompt() }] }
+      : undefined;
+    this._conversation = await this.engine.createConversation(
+      preface ? { preface } : undefined,
+    );
+    return this._conversation;
+  }
+
   async load() {
     if (this._isLoaded) return;
     if (this._isLoading) throw new Error('Model is already loading.');
 
     this._isLoading = true;
     try {
-      const { CreateMLCEngine } = await loadWebLLM();
-      
-      this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
-
-      const appConfig = await buildModelAppConfig(this.modelId);
-      const engineConfig = {
-        initProgressCallback: (progress) => {
-          this._emitProgress({
-            stage: 'downloading',
-            text: progress.text,
-            loaded: progress.progress,
-          });
-        }
-      };
-      if (appConfig) {
-        engineConfig.appConfig = appConfig;
+      // Clear any partial engine left by a previous failed load attempt.
+      if (this.engine || this._conversation) {
+        await this._disposeEngine();
+        this.engine = null;
+        this._conversation = null;
       }
-
-      this.engine = await CreateMLCEngine(this.modelId, engineConfig);
-      
+      if (isLiteRTModel(this.modelId)) {
+        await this._loadLiteRT();
+      } else {
+        await this._loadWebLLM();
+      }
       this._isLoaded = true;
+      this._needsEngineReload = false;
       this._emitProgress({ stage: 'ready', message: 'Model loaded and ready!' });
     } catch (err) {
+      try {
+        await this._disposeEngine();
+      } catch {
+        // ignore teardown after failed load
+      }
+      this.engine = null;
+      this._conversation = null;
+      this._isLoaded = false;
       this._emitProgress({ stage: 'error', message: err.message || 'Failed to load model.' });
       throw err;
     } finally {
       this._isLoading = false;
     }
+  }
+
+  async _loadLiteRT() {
+    const option = getModelOption(this.modelId);
+    const { Engine } = await loadLiteRT();
+    this._emitProgress({ stage: 'init', message: 'Initializing LiteRT WebGPU engine…' });
+    const modelUrl = await resolveLiteRTModelUrl(option);
+    this._emitProgress({
+      stage: 'downloading',
+      message: 'Loading Gemma 4 (LiteRT)…',
+      text: modelUrl,
+    });
+    this.engine = await Engine.create({
+      model: modelUrl,
+      mainExecutorSettings: { maxNumTokens: 4096 },
+    });
+    await this._ensureLiteRTConversation(true);
+  }
+
+  async _loadWebLLM() {
+    const { CreateMLCEngine } = await loadWebLLM();
+    this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
+
+    const appConfig = await buildModelAppConfig(this.modelId);
+    const engineConfig = {
+      initProgressCallback: (progress) => {
+        this._emitProgress({
+          stage: 'downloading',
+          text: progress.text,
+          loaded: progress.progress,
+        });
+      }
+    };
+    if (appConfig) {
+      engineConfig.appConfig = appConfig;
+    }
+
+    this.engine = await CreateMLCEngine(this.modelId, engineConfig);
   }
 
   isLoaded() {
@@ -384,6 +594,107 @@ export class AiChat {
 
   isLoading() {
     return this._isLoading;
+  }
+
+  _chatOptionsForReload() {
+    const option = getModelOption(this.modelId);
+    return option?.overrides ? { ...option.overrides } : undefined;
+  }
+
+  async _reloadEngine(reason = 'reset') {
+    if (isLiteRTModel(this.modelId)) {
+      await this._ensureLiteRTConversation(true);
+      this._needsEngineReload = false;
+      return;
+    }
+    if (!this.engine || typeof this.engine.reload !== 'function') {
+      if (typeof this.engine?.resetChat === 'function') {
+        await this.engine.resetChat();
+      }
+      this._needsEngineReload = false;
+      return;
+    }
+    this._emitProgress({
+      stage: 'init',
+      message: reason === 'reset'
+        ? 'Resetting model state…'
+        : 'Refreshing model state…',
+    });
+    const chatOpts = this._chatOptionsForReload();
+    if (chatOpts) {
+      await this.engine.reload(this.modelId, chatOpts);
+    } else {
+      await this.engine.reload(this.modelId);
+    }
+    this._needsEngineReload = false;
+    this._emitProgress({ stage: 'ready', message: 'Model ready.' });
+  }
+
+  async _completeOnceLiteRT(userText, onUpdate) {
+    const conversation = await this._ensureLiteRTConversation(false);
+    let reply = '';
+
+    if (typeof conversation.sendMessageStreaming === 'function') {
+      const stream = conversation.sendMessageStreaming(userText);
+      for await (const chunk of stream) {
+        const delta = extractLiteRTText(chunk);
+        if (!delta) continue;
+        // Streaming chunks may be cumulative or incremental — prefer append of delta text pieces.
+        if (Array.isArray(chunk?.content)) {
+          reply += delta;
+        } else if (delta.startsWith(reply)) {
+          reply = delta;
+        } else {
+          reply += delta;
+        }
+        const cleanedPartial = sanitizeModelReply(reply) || reply;
+        if (onUpdate) onUpdate(cleanedPartial);
+      }
+    } else {
+      const response = await conversation.sendMessage(userText);
+      reply = extractLiteRTText(response);
+      if (reply && onUpdate) onUpdate(sanitizeModelReply(reply) || reply);
+    }
+
+    reply = sanitizeModelReply(reply) || reply.trim();
+    return { reply, usage: null };
+  }
+
+  async _completeOnce(payload, genConfig, onUpdate) {
+    const chunks = await this.engine.chat.completions.create({
+      messages: payload,
+      ...genConfig,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    let reply = '';
+    let usage = null;
+
+    for await (const chunk of chunks) {
+      if (chunk.usage) usage = chunk.usage;
+      const delta = extractCompletionResponseText(chunk);
+      if (!delta) continue;
+      reply += delta;
+      const cleanedPartial = sanitizeModelReply(reply) || reply;
+      if (onUpdate) onUpdate(cleanedPartial);
+    }
+
+    reply = sanitizeModelReply(reply) || reply.trim();
+
+    if (!reply.trim()) {
+      await this._reloadEngine('empty');
+      const completion = await this.engine.chat.completions.create({
+        messages: payload,
+        ...genConfig,
+        stream: false,
+      });
+      reply = sanitizeModelReply(extractCompletionResponseText(completion));
+      usage = completion?.usage || usage;
+      if (reply && onUpdate) onUpdate(reply);
+    }
+
+    return { reply, usage };
   }
 
   async generate(userText, onUpdate, onFinish) {
@@ -396,58 +707,56 @@ export class AiChat {
       throw new Error('Model not loaded. Call load() first.');
     }
 
+    const startingFreshConversation = this.messages.length === 0;
     this.messages.push({ role: 'user', content: userText });
-    const payload = buildChatPayload(this.modelId, this.messages);
+    const useLiteRT = isLiteRTModel(this.modelId);
+    const useBrokenMlCWorkaround = isWebLLMGemmaMlC(this.modelId);
+    const genConfig = generationConfigForModel(this.modelId);
 
     try {
-      // Explicit message list is authoritative; clear any residual engine chat state.
-      if (typeof this.engine.resetChat === 'function') {
-        await this.engine.resetChat();
-      }
-
-      const chunks = await this.engine.chat.completions.create({
-        messages: payload,
-        ...DEFAULT_GENERATION_CONFIG,
-        stream: true,
-        stream_options: { include_usage: true }
-      });
-
-      let reply = "";
-      let usage = null;
-      
-      for await (const chunk of chunks) {
-        if (chunk.usage) usage = chunk.usage;
-        const delta = extractCompletionResponseText(chunk);
-        if (!delta) continue;
-        reply += delta;
-        if (onUpdate) onUpdate(reply);
-      }
-
-      if (!reply.trim()) {
-        if (typeof this.engine.resetChat === 'function') {
-          await this.engine.resetChat();
+      if (useLiteRT) {
+        if (startingFreshConversation && this._needsEngineReload) {
+          await this._reloadEngine('reset');
         }
-        const completion = await this.engine.chat.completions.create({
-          messages: payload,
-          ...DEFAULT_GENERATION_CONFIG,
-          stream: false
-        });
-        reply = extractCompletionResponseText(completion);
-        usage = completion?.usage || usage;
-        if (reply && onUpdate) onUpdate(reply);
+        const { reply, usage } = await this._completeOnceLiteRT(userText, onUpdate);
+        if (!reply.trim()) {
+          this.messages.pop();
+          throw new Error(
+            `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model.`,
+          );
+        }
+        this.messages.push({ role: 'assistant', content: reply });
+        if (onFinish && usage) onFinish(usage);
+        return reply;
       }
+
+      // Community Gemma 4 MLC: native multi-turn history is unreliable — latest turn only.
+      const payload = useBrokenMlCWorkaround
+        ? buildChatPayload(this.modelId, [{ role: 'user', content: userText }])
+        : buildChatPayload(this.modelId, this.messages);
+
+      if (useBrokenMlCWorkaround) {
+        if (startingFreshConversation) {
+          if (this._needsEngineReload) await this._reloadEngine('reset');
+        } else {
+          await this._reloadEngine('gemma-turn');
+        }
+      } else if (startingFreshConversation && this._needsEngineReload) {
+        await this._reloadEngine('reset');
+      }
+
+      const { reply, usage } = await this._completeOnce(payload, genConfig, onUpdate);
 
       if (!reply.trim()) {
         this.messages.pop();
         throw new Error(
-          `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model (Gemma 4 builds are experimental).`,
+          `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model (Gemma 4 MLC builds are experimental).`,
         );
       }
       this.messages.push({ role: 'assistant', content: reply });
       if (onFinish && usage) onFinish(usage);
       return reply;
     } catch (err) {
-      // Drop the optimistic user turn if generation failed before an assistant reply.
       if (
         this.messages.length &&
         this.messages[this.messages.length - 1]?.role === 'user' &&
@@ -462,16 +771,18 @@ export class AiChat {
 
   reset() {
     this.messages = [];
+    // LiteRT + WebLLM Gemma MLC: next generate() opens a fresh conversation / reloads.
+    this._needsEngineReload = true;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // AiChatUI — legacy imperative DOM component (compat / tests)
-// Labs site uses Vue `VdAiChatUI` instead.
+// Labs site uses Vue `VdlAiChatUI` instead.
 // ═══════════════════════════════════════════════════════════════════════
 
 export class AiChatUI {
-  static VERSION = VD_AI_CHAT_VERSION;
+  static VERSION = VDL_AI_CHAT_VERSION;
 
   constructor(options = {}) {
     this.container = options.container;
@@ -509,15 +820,15 @@ export class AiChatUI {
 
   _buildDOM() {
     const wrapper = document.createElement('div');
-    wrapper.className = 'vd-ai-chat-wrap vd-card vd-card-glow vd-glass';
+    wrapper.className = 'vdl-ai-chat-wrap vd-card vdl-card-glow vd-glass';
     
     wrapper.innerHTML = `
       <style>
-        @keyframes vd-ai-load-source-pulse {
+        @keyframes vdl-ai-load-source-pulse {
           0%, 100% { opacity: 0.35; }
           50% { opacity: 1; }
         }
-        .vd-ai-load-source-badge {
+        .vdl-ai-load-source-badge {
           display: none;
           align-items: center;
           font-size: 0.65rem;
@@ -530,18 +841,18 @@ export class AiChatUI {
           line-height: 1.2;
           white-space: nowrap;
         }
-        .vd-ai-load-source-badge.vd-ai-load-source-badge--on {
+        .vdl-ai-load-source-badge.vdl-ai-load-source-badge--on {
           display: inline-flex;
-          animation: vd-ai-load-source-pulse 2.4s ease-in-out infinite;
+          animation: vdl-ai-load-source-pulse 2.4s ease-in-out infinite;
         }
-        .vd-ai-header-status {
+        .vdl-ai-header-status {
           display: flex;
           align-items: center;
           gap: 0.5rem;
           flex-wrap: wrap;
           justify-content: flex-end;
         }
-        .vd-ai-chat-wrap .vd-ai-setup-actions {
+        .vdl-ai-chat-wrap .vdl-ai-setup-actions {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
@@ -551,7 +862,7 @@ export class AiChatUI {
           max-width: 40rem;
           margin: 0 0 0.5rem;
         }
-        .vd-ai-chat-wrap .vd-ai-chat-composer {
+        .vdl-ai-chat-wrap .vdl-ai-chat-composer {
           display: flex;
           flex-direction: column;
           gap: 0.55rem;
@@ -559,12 +870,12 @@ export class AiChatUI {
           border-top: 1px solid var(--border-color, #e0e0e0);
           background: var(--bg-primary, #fff);
         }
-        .vd-ai-chat-wrap .vd-ai-form {
+        .vdl-ai-chat-wrap .vdl-ai-form {
           display: flex;
           align-items: stretch;
           gap: 0.65rem;
         }
-        .vd-ai-chat-wrap .vd-ai-chat-subbar {
+        .vdl-ai-chat-wrap .vdl-ai-chat-subbar {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
@@ -573,7 +884,7 @@ export class AiChatUI {
           padding: 0.2rem 0 0.45rem;
           font-size: 0.75rem;
         }
-        .vd-ai-chat-wrap .vd-ai-clear-storage-btn {
+        .vdl-ai-chat-wrap .vdl-ai-clear-storage-btn {
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -589,11 +900,11 @@ export class AiChatUI {
           font-weight: 600;
           line-height: 1.2;
         }
-        .vd-ai-chat-wrap .vd-ai-clear-storage-btn:disabled {
+        .vdl-ai-chat-wrap .vdl-ai-clear-storage-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
-        .vd-ai-chat-wrap .vd-ai-switch-btn {
+        .vdl-ai-chat-wrap .vdl-ai-switch-btn {
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -610,10 +921,10 @@ export class AiChatUI {
           font-weight: 700;
           line-height: 1.2;
         }
-        .vd-ai-chat-wrap .vd-ai-chat-model-select {
+        .vdl-ai-chat-wrap .vdl-ai-chat-model-select {
           min-height: 2.1rem;
         }
-        .vd-ai-chat-wrap .vd-ai-setup-grid {
+        .vdl-ai-chat-wrap .vdl-ai-setup-grid {
           width: 100%;
           max-width: 56rem;
           margin: 0 auto 1.25rem;
@@ -623,13 +934,13 @@ export class AiChatUI {
           align-items: flex-start;
           text-align: left;
         }
-        .vd-ai-chat-wrap .vd-ai-storage-panel {
+        .vdl-ai-chat-wrap .vdl-ai-storage-panel {
           background: var(--bg-secondary, #f8fafc);
           border: 1px solid var(--border-color, #e2e8f0);
           border-radius: var(--radius-sm, 0.5rem);
           padding: 0.8rem 0.9rem;
         }
-        .vd-ai-chat-wrap .vd-ai-storage-meter-track {
+        .vdl-ai-chat-wrap .vdl-ai-storage-meter-track {
           height: 5px;
           background: var(--bg-primary, #fff);
           border-radius: 3px;
@@ -637,13 +948,13 @@ export class AiChatUI {
           margin-top: 0.45rem;
           border: 1px solid var(--border-color, #e2e8f0);
         }
-        .vd-ai-chat-wrap .vd-ai-storage-meter-fill {
+        .vdl-ai-chat-wrap .vdl-ai-storage-meter-fill {
           height: 100%;
           width: 0%;
           background: var(--color-primary, #3b82f6);
           transition: width 0.35s ease;
         }
-        .vd-ai-chat-wrap .vd-ai-modal-overlay {
+        .vdl-ai-chat-wrap .vdl-ai-modal-overlay {
           display: none;
           position: fixed;
           inset: 0;
@@ -653,10 +964,10 @@ export class AiChatUI {
           justify-content: center;
           padding: 1.25rem;
         }
-        .vd-ai-chat-wrap .vd-ai-modal-overlay.vd-ai-modal-on {
+        .vdl-ai-chat-wrap .vdl-ai-modal-overlay.vdl-ai-modal-on {
           display: flex;
         }
-        .vd-ai-chat-wrap .vd-ai-modal {
+        .vdl-ai-chat-wrap .vdl-ai-modal {
           max-width: 28rem;
           width: 100%;
           max-height: min(90vh, 32rem);
@@ -668,14 +979,14 @@ export class AiChatUI {
           padding: 1.2rem 1.35rem;
           box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
         }
-        .vd-ai-chat-wrap .vd-ai-modal .vd-ai-modal-list {
+        .vdl-ai-chat-wrap .vdl-ai-modal .vdl-ai-modal-list {
           margin: 0.4rem 0 0.25rem 1.1rem;
           padding: 0;
           line-height: 1.5;
           font-size: 0.88rem;
           color: var(--text-muted, #6b7280);
         }
-        .vd-ai-chat-wrap .vd-ai-modal .vd-ai-modal-actions {
+        .vdl-ai-chat-wrap .vdl-ai-modal .vdl-ai-modal-actions {
           display: flex;
           flex-wrap: wrap;
           gap: 0.5rem 0.65rem;
@@ -683,65 +994,65 @@ export class AiChatUI {
           margin-top: 1.2rem;
         }
       </style>
-      <div class="vd-card-body vd-ai-card-body" style="display: flex; flex-direction: column; min-height: 0; padding: 0; flex: 1 1 auto;">
+      <div class="vd-card-body vdl-ai-card-body" style="display: flex; flex-direction: column; min-height: 0; padding: 0; flex: 1 1 auto;">
         <!-- Header -->
         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color, #e0e0e0); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <i class="ph ph-robot" style="font-size: 1.5rem; color: var(--color-primary, #3b82f6);"></i>
-            <h3 class="vd-ai-title" style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">AI Chat</h3>
+            <h3 class="vdl-ai-title" style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">AI Chat</h3>
           </div>
-          <div class="vd-ai-header-status vd-text-sm vd-text-muted">
-            <span class="vd-ai-load-source-badge" data-vd-badge-zone="header" aria-live="polite"></span>
+          <div class="vdl-ai-header-status vd-text-sm vd-text-muted">
+            <span class="vdl-ai-load-source-badge" data-vd-badge-zone="header" aria-live="polite"></span>
             <span>
-              <span class="vd-ai-status-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); margin-right: 4px;"></span>
-              <span class="vd-ai-status-text">Offline</span>
+              <span class="vdl-ai-status-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); margin-right: 4px;"></span>
+              <span class="vdl-ai-status-text">Offline</span>
             </span>
           </div>
         </div>
 
         <!-- Setup block (stays visible; chat appears below) -->
-        <div class="vd-ai-setup" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 1.5rem 1.5rem; text-align: center; flex: 0 0 auto; width: 100%;">
+        <div class="vdl-ai-setup" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 1.5rem 1.5rem; text-align: center; flex: 0 0 auto; width: 100%;">
           <i class="ph ph-download-simple" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem;"></i>
           <h4 style="margin: 0 0 0.9rem; color: var(--text-primary);">Download Model</h4>
           
-          <div class="vd-ai-setup-grid">
-            <div class="vd-ai-setup-col-model" style="flex: 1 1 17rem; min-width: 0; max-width: 100%;">
-              <label for="vd-ai-model-select" class="vd-form-label vd-text-sm vd-text-muted" style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.25rem;">
+          <div class="vdl-ai-setup-grid">
+            <div class="vdl-ai-setup-col-model" style="flex: 1 1 17rem; min-width: 0; max-width: 100%;">
+              <label for="vdl-ai-model-select" class="vdl-form-label vd-text-sm vd-text-muted" style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.25rem;">
                 <span>Select Model Size:</span>
                 <span
-                  class="vd-ai-fallback-help"
+                  class="vdl-ai-fallback-help"
                   role="img"
                   aria-label="Why fallback"
-                  title="Why fallback? Some models require GPU features (like shader-f16). If your device lacks a required feature, vd-ai-chat automatically loads a compatible fallback model."
+                  title="Why fallback? Some models require GPU features (like shader-f16). If your device lacks a required feature, vdl-ai-chat automatically loads a compatible fallback model."
                   style="display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; border-radius: 999px; border: 1px solid var(--border-color, #d1d5db); color: var(--text-muted, #6b7280); font-size: 0.72rem; cursor: help;"
                 >?</span>
               </label>
-              <select id="vd-ai-model-select" class="vd-select" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+              <select id="vdl-ai-model-select" class="vd-select" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
               </select>
-              <div class="vd-ai-fallback-note vd-text-sm vd-text-muted" style="margin-top: 0.5rem; display: none;"></div>
-              <div class="vd-ai-cache-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem;"></div>
+              <div class="vdl-ai-fallback-note vd-text-sm vd-text-muted" style="margin-top: 0.5rem; display: none;"></div>
+              <div class="vdl-ai-cache-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem;"></div>
             </div>
-            <aside class="vd-ai-storage-panel" style="flex: 1 1 14rem; min-width: 0; max-width: 100%;" aria-label="Local storage for this site">
+            <aside class="vdl-ai-storage-panel" style="flex: 1 1 14rem; min-width: 0; max-width: 100%;" aria-label="Local storage for this site">
               <div class="vd-text-sm" style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.55rem;">Storage &amp; memory</div>
-              <div class="vd-text-sm vd-text-muted" style="line-height: 1.5;">This origin: <strong class="vd-ai-storage-usage" style="color: var(--text-primary); font-weight: 600;">—</strong></div>
-              <div class="vd-text-sm vd-text-muted" style="line-height: 1.5; margin-top: 0.2rem">Quota: <span class="vd-ai-storage-quota">—</span></div>
-              <div class="vd-ai-storage-meter-track" aria-hidden="true"><div class="vd-ai-storage-meter-fill"></div></div>
-              <div class="vd-text-sm vd-text-muted vd-ai-js-heap-row" style="margin-top: 0.5rem; line-height: 1.45; display: none;">
-                JS heap (approx.): <span class="vd-ai-js-heap">—</span>
+              <div class="vd-text-sm vd-text-muted" style="line-height: 1.5;">This origin: <strong class="vdl-ai-storage-usage" style="color: var(--text-primary); font-weight: 600;">—</strong></div>
+              <div class="vd-text-sm vd-text-muted" style="line-height: 1.5; margin-top: 0.2rem">Quota: <span class="vdl-ai-storage-quota">—</span></div>
+              <div class="vdl-ai-storage-meter-track" aria-hidden="true"><div class="vdl-ai-storage-meter-fill"></div></div>
+              <div class="vd-text-sm vd-text-muted vdl-ai-js-heap-row" style="margin-top: 0.5rem; line-height: 1.45; display: none;">
+                JS heap (approx.): <span class="vdl-ai-js-heap">—</span>
               </div>
               <p class="vd-text-sm vd-text-muted" style="margin: 0.5rem 0 0; font-size: 0.72rem; line-height: 1.4;">
-                <span class="vd-ai-storage-fineprint">“This origin” includes Cache Storage and IndexedDB for this page. It is an estimate of total usage, not only the model. GPU / WebGPU memory is not available to the page.</span>
+                <span class="vdl-ai-storage-fineprint">“This origin” includes Cache Storage and IndexedDB for this page. It is an estimate of total usage, not only the model. GPU / WebGPU memory is not available to the page.</span>
               </p>
             </aside>
           </div>
 
-          <div class="vd-ai-system-info" style="margin: 0 0 1.25rem; width: 100%; max-width: 56rem; text-align: left; background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: var(--radius-sm, 0.5rem); padding: 0.75rem;">
+          <div class="vdl-ai-system-info" style="margin: 0 0 1.25rem; width: 100%; max-width: 56rem; text-align: left; background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: var(--radius-sm, 0.5rem); padding: 0.75rem;">
             <div class="vd-text-sm" style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">System Info</div>
-            <div class="vd-text-sm vd-text-muted">WebGPU: <span class="vd-ai-sys-webgpu">Checking...</span></div>
-            <div class="vd-text-sm vd-text-muted">GPU: <span class="vd-ai-sys-gpu">Detecting...</span></div>
-            <div class="vd-text-sm vd-text-muted">shader-f16: <span class="vd-ai-sys-f16">Checking...</span></div>
+            <div class="vd-text-sm vd-text-muted">WebGPU: <span class="vdl-ai-sys-webgpu">Checking...</span></div>
+            <div class="vd-text-sm vd-text-muted">GPU: <span class="vdl-ai-sys-gpu">Detecting...</span></div>
+            <div class="vd-text-sm vd-text-muted">shader-f16: <span class="vdl-ai-sys-f16">Checking...</span></div>
             <div class="vd-text-sm vd-text-muted" style="margin-top: 0.5rem;">Compatible tiers:</div>
-            <div class="vd-ai-compatible-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem;"></div>
+            <div class="vdl-ai-compatible-badges" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem;"></div>
           </div>
 
           <p class="vd-text-muted vd-text-sm" style="max-width: 40rem; margin: 0 0 0.5rem; width: 100%;">
@@ -750,53 +1061,53 @@ export class AiChatUI {
           <p class="vd-text-muted" style="font-size: 0.75rem; max-width: 40rem; margin: 0 0 1.5rem; width: 100%;">
             <em>FOSS guardrails are active. Injection patterns courtesy of LlmGuard, ai-guardian, and llm-prompt-guard.</em>
           </p>
-          <p class="vd-ai-cache-hint vd-text-muted vd-text-sm" style="max-width: 40rem; margin: 0 0 0.75rem; width: 100%;"></p>
-          <div class="vd-ai-setup-actions">
-            <button type="button" class="vd-btn vd-btn-primary vd-ai-load-btn">
+          <p class="vdl-ai-cache-hint vd-text-muted vd-text-sm" style="max-width: 40rem; margin: 0 0 0.75rem; width: 100%;"></p>
+          <div class="vdl-ai-setup-actions">
+            <button type="button" class="vd-btn vd-btn-primary vdl-ai-load-btn">
               Load AI Model
             </button>
-            <button type="button" class="vd-btn vd-ai-switch-btn">
+            <button type="button" class="vd-btn vdl-ai-switch-btn">
               <i class="ph ph-arrows-clockwise" style="font-size: 0.95rem;"></i>
               <span>Switch Model</span>
             </button>
-            <button type="button" class="vd-btn vd-ai-clear-storage-btn" title="No model cache recorded for this site yet" aria-label="Clear downloaded model storage from this browser">
+            <button type="button" class="vd-btn vdl-ai-clear-storage-btn" title="No model cache recorded for this site yet" aria-label="Clear downloaded model storage from this browser">
               <i class="ph ph-trash" style="font-size: 0.95rem;" aria-hidden="true"></i>
               <span>Clear Storage</span>
             </button>
           </div>
-          <div class="vd-ai-progress-wrap" style="width: 100%; max-width: 28rem; margin-top: 0.75rem; display: none;">
-            <div class="vd-ai-progress-badge-row" style="margin: 0; display: none; align-items: center; justify-content: center;">
-              <span class="vd-ai-load-source-badge" data-vd-badge-zone="progress" aria-hidden="true"></span>
+          <div class="vdl-ai-progress-wrap" style="width: 100%; max-width: 28rem; margin-top: 0.75rem; display: none;">
+            <div class="vdl-ai-progress-badge-row" style="margin: 0; display: none; align-items: center; justify-content: center;">
+              <span class="vdl-ai-load-source-badge" data-vd-badge-zone="progress" aria-hidden="true"></span>
             </div>
-            <div class="vd-text-sm vd-text-muted vd-ai-progress-text" style="margin-bottom: 0.5rem;">Initializing...</div>
+            <div class="vd-text-sm vd-text-muted vdl-ai-progress-text" style="margin-bottom: 0.5rem;">Initializing...</div>
             <div style="height: 6px; background: var(--bg-secondary, #f5f5f5); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color, #e0e0e0);">
-              <div class="vd-ai-progress-bar" style="height: 100%; width: 0%; background: var(--color-primary, #3b82f6); transition: width 0.1s ease;"></div>
+              <div class="vdl-ai-progress-bar" style="height: 100%; width: 0%; background: var(--color-primary, #3b82f6); transition: width 0.1s ease;"></div>
             </div>
           </div>
         </div>
 
         <!-- Chat (below setup; shown after first successful load) -->
-        <div class="vd-ai-chat-interface" style="flex: 0 0 auto; display: none; flex-direction: column; min-height: 50vh; height: min(62vh, 44rem); max-height: 70vh; min-width: 0; border-top: 1px solid var(--border-color, #e0e0e0);">
-          <div class="vd-ai-messages" style="flex: 1; overflow-y: auto; min-height: 0; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;">
-            <div class="vd-ai-message vd-ai-assistant">
-              <div class="vd-ai-bubble" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: var(--radius-md); border-top-left-radius: 0; display: inline-block; max-width: 85%; font-size: 0.95rem; line-height: 1.5; color: var(--text-primary);">
+        <div class="vdl-ai-chat-interface" style="flex: 0 0 auto; display: none; flex-direction: column; min-height: 50vh; height: min(62vh, 44rem); max-height: 70vh; min-width: 0; border-top: 1px solid var(--border-color, #e0e0e0);">
+          <div class="vdl-ai-messages" style="flex: 1; overflow-y: auto; min-height: 0; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div class="vdl-ai-message vdl-ai-assistant">
+              <div class="vdl-ai-bubble" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: var(--radius-md); border-top-left-radius: 0; display: inline-block; max-width: 85%; font-size: 0.95rem; line-height: 1.5; color: var(--text-primary);">
                 Hello! I am a local AI running in your browser. How can I help you today?
               </div>
             </div>
           </div>
           
-          <div class="vd-ai-chat-composer">
-            <form class="vd-ai-form">
-              <input type="text" class="vd-input vd-ai-input" placeholder="Type a message..." style="flex: 1; min-width: 0; min-height: 2.5rem; padding: 0.5rem 0.75rem;" disabled maxlength="2000">
-              <button type="submit" class="vd-btn vd-btn-primary vd-ai-send-btn" style="min-width: 2.7rem; min-height: 2.5rem; padding: 0 0.7rem; display: inline-flex; align-items: center; justify-content: center;" disabled>
+          <div class="vdl-ai-chat-composer">
+            <form class="vdl-ai-form">
+              <input type="text" class="vd-input vdl-ai-input" placeholder="Type a message..." style="flex: 1; min-width: 0; min-height: 2.5rem; padding: 0.5rem 0.75rem;" disabled maxlength="2000">
+              <button type="submit" class="vd-btn vd-btn-primary vdl-ai-send-btn" style="min-width: 2.7rem; min-height: 2.5rem; padding: 0 0.7rem; display: inline-flex; align-items: center; justify-content: center;" disabled>
                 <i class="ph ph-paper-plane-right" style="font-size: 1.1rem;"></i>
               </button>
             </form>
-            <div class="vd-ai-chat-subbar" style="color: var(--text-muted, #6b7280); width: 100%;">
-              <div class="vd-ai-chat-counters" style="display: inline-flex; align-items: center; gap: 0.75rem; font-size: 0.82rem; margin-left: auto;">
-                <span class="vd-ai-char-counter">0 / 2000</span>
-                <span class="vd-ai-token-wrap" style="display: none;" title="Context tokens used">
-                  <i class="ph ph-cpu" style="vertical-align: middle;"></i> <span class="vd-ai-token-counter">0</span> / ~8K
+            <div class="vdl-ai-chat-subbar" style="color: var(--text-muted, #6b7280); width: 100%;">
+              <div class="vdl-ai-chat-counters" style="display: inline-flex; align-items: center; gap: 0.75rem; font-size: 0.82rem; margin-left: auto;">
+                <span class="vdl-ai-char-counter">0 / 2000</span>
+                <span class="vdl-ai-token-wrap" style="display: none;" title="Context tokens used">
+                  <i class="ph ph-cpu" style="vertical-align: middle;"></i> <span class="vdl-ai-token-counter">0</span> / ~8K
                 </span>
               </div>
             </div>
@@ -804,19 +1115,19 @@ export class AiChatUI {
         </div>
       </div>
 
-      <div class="vd-ai-modal-overlay vd-ai-clear-modal-overlay" aria-hidden="true">
+      <div class="vdl-ai-modal-overlay vdl-ai-clear-modal-overlay" aria-hidden="true">
         <div
-          class="vd-ai-modal"
+          class="vdl-ai-modal"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="vd-ai-clear-modal-title"
-          aria-describedby="vd-ai-clear-modal-desc"
+          aria-labelledby="vdl-ai-clear-modal-title"
+          aria-describedby="vdl-ai-clear-modal-desc"
         >
-          <h4 id="vd-ai-clear-modal-title" style="margin: 0 0 0.65rem; color: var(--text-primary, inherit); font-size: 1.05rem;">Clear model storage?</h4>
-          <p id="vd-ai-clear-modal-desc" style="margin: 0 0 0.65rem; font-size: 0.9rem; line-height: 1.5; color: var(--text-primary, #374151);">
+          <h4 id="vdl-ai-clear-modal-title" style="margin: 0 0 0.65rem; color: var(--text-primary, inherit); font-size: 1.05rem;">Clear model storage?</h4>
+          <p id="vdl-ai-clear-modal-desc" style="margin: 0 0 0.65rem; font-size: 0.9rem; line-height: 1.5; color: var(--text-primary, #374151);">
             This will remove data this chat stored in your browser for <strong>this site only</strong>. The next time you load a model, files may download from the network again.
           </p>
-          <ul class="vd-ai-modal-list">
+          <ul class="vdl-ai-modal-list">
             <li>Cache Storage entries that look like MLC / WebLLM model files</li>
             <li>Matching IndexedDB databases (model / wasm related)</li>
             <li>Local “model cached” markers used by this UI</li>
@@ -824,9 +1135,9 @@ export class AiChatUI {
           <p style="margin: 0.75rem 0 0; font-size: 0.82rem; line-height: 1.45; color: var(--text-muted, #6b7280);">
             It does <strong>not</strong> delete your chat history in this session. Your loaded model will stop working until you download again.
           </p>
-          <div class="vd-ai-modal-actions">
-            <button type="button" class="vd-btn vd-btn-secondary vd-ai-modal-cancel" style="min-height: 2.25rem;">Cancel</button>
-            <button type="button" class="vd-btn vd-ai-modal-confirm" style="min-height: 2.25rem; border: 1px solid var(--vd-color-danger, #ef4444); background: rgba(239, 68, 68, 0.14); color: var(--vd-color-danger, #ef4444); font-weight: 600;">
+          <div class="vdl-ai-modal-actions">
+            <button type="button" class="vd-btn vd-btn-secondary vdl-ai-modal-cancel" style="min-height: 2.25rem;">Cancel</button>
+            <button type="button" class="vd-btn vdl-ai-modal-confirm" style="min-height: 2.25rem; border: 1px solid var(--vd-color-danger, #ef4444); background: rgba(239, 68, 68, 0.14); color: var(--vd-color-danger, #ef4444); font-weight: 600;">
               Clear storage
             </button>
           </div>
@@ -838,43 +1149,43 @@ export class AiChatUI {
 
     this._elements = {
       wrapper,
-      cardBody: wrapper.querySelector('.vd-ai-card-body'),
-      title: wrapper.querySelector('.vd-ai-title'),
-      setupScreen: wrapper.querySelector('.vd-ai-setup'),
-      loadBtn: wrapper.querySelector('.vd-ai-load-btn'),
-      modelSelect: wrapper.querySelector('#vd-ai-model-select'),
-      cacheBadges: wrapper.querySelector('.vd-ai-cache-badges'),
-      fallbackNote: wrapper.querySelector('.vd-ai-fallback-note'),
-      sysWebGpu: wrapper.querySelector('.vd-ai-sys-webgpu'),
-      sysGpu: wrapper.querySelector('.vd-ai-sys-gpu'),
-      sysF16: wrapper.querySelector('.vd-ai-sys-f16'),
-      compatibleBadges: wrapper.querySelector('.vd-ai-compatible-badges'),
-      cacheHint: wrapper.querySelector('.vd-ai-cache-hint'),
-      progressWrap: wrapper.querySelector('.vd-ai-progress-wrap'),
-      progressBar: wrapper.querySelector('.vd-ai-progress-bar'),
-      progressText: wrapper.querySelector('.vd-ai-progress-text'),
-      loadSourceBadges: wrapper.querySelectorAll('.vd-ai-load-source-badge'),
-      progressBadgeRow: wrapper.querySelector('.vd-ai-progress-badge-row'),
-      chatInterface: wrapper.querySelector('.vd-ai-chat-interface'),
-      messagesContainer: wrapper.querySelector('.vd-ai-messages'),
-      chatForm: wrapper.querySelector('.vd-ai-form'),
-      chatInput: wrapper.querySelector('.vd-ai-input'),
-      sendBtn: wrapper.querySelector('.vd-ai-send-btn'),
-      switchModelBtn: wrapper.querySelector('.vd-ai-switch-btn'),
-      clearStorageBtn: wrapper.querySelector('.vd-ai-clear-storage-btn'),
-      charCounter: wrapper.querySelector('.vd-ai-char-counter'),
-      tokenWrap: wrapper.querySelector('.vd-ai-token-wrap'),
-      tokenCounter: wrapper.querySelector('.vd-ai-token-counter'),
-      statusIndicator: wrapper.querySelector('.vd-ai-status-indicator'),
-      statusText: wrapper.querySelector('.vd-ai-status-text'),
-      clearModalOverlay: wrapper.querySelector('.vd-ai-clear-modal-overlay'),
-      clearModalCancel: wrapper.querySelector('.vd-ai-modal-cancel'),
-      clearModalConfirm: wrapper.querySelector('.vd-ai-modal-confirm'),
-      storageUsage: wrapper.querySelector('.vd-ai-storage-usage'),
-      storageQuota: wrapper.querySelector('.vd-ai-storage-quota'),
-      storageMeterFill: wrapper.querySelector('.vd-ai-storage-meter-fill'),
-      jsHeapRow: wrapper.querySelector('.vd-ai-js-heap-row'),
-      jsHeap: wrapper.querySelector('.vd-ai-js-heap')
+      cardBody: wrapper.querySelector('.vdl-ai-card-body'),
+      title: wrapper.querySelector('.vdl-ai-title'),
+      setupScreen: wrapper.querySelector('.vdl-ai-setup'),
+      loadBtn: wrapper.querySelector('.vdl-ai-load-btn'),
+      modelSelect: wrapper.querySelector('#vdl-ai-model-select'),
+      cacheBadges: wrapper.querySelector('.vdl-ai-cache-badges'),
+      fallbackNote: wrapper.querySelector('.vdl-ai-fallback-note'),
+      sysWebGpu: wrapper.querySelector('.vdl-ai-sys-webgpu'),
+      sysGpu: wrapper.querySelector('.vdl-ai-sys-gpu'),
+      sysF16: wrapper.querySelector('.vdl-ai-sys-f16'),
+      compatibleBadges: wrapper.querySelector('.vdl-ai-compatible-badges'),
+      cacheHint: wrapper.querySelector('.vdl-ai-cache-hint'),
+      progressWrap: wrapper.querySelector('.vdl-ai-progress-wrap'),
+      progressBar: wrapper.querySelector('.vdl-ai-progress-bar'),
+      progressText: wrapper.querySelector('.vdl-ai-progress-text'),
+      loadSourceBadges: wrapper.querySelectorAll('.vdl-ai-load-source-badge'),
+      progressBadgeRow: wrapper.querySelector('.vdl-ai-progress-badge-row'),
+      chatInterface: wrapper.querySelector('.vdl-ai-chat-interface'),
+      messagesContainer: wrapper.querySelector('.vdl-ai-messages'),
+      chatForm: wrapper.querySelector('.vdl-ai-form'),
+      chatInput: wrapper.querySelector('.vdl-ai-input'),
+      sendBtn: wrapper.querySelector('.vdl-ai-send-btn'),
+      switchModelBtn: wrapper.querySelector('.vdl-ai-switch-btn'),
+      clearStorageBtn: wrapper.querySelector('.vdl-ai-clear-storage-btn'),
+      charCounter: wrapper.querySelector('.vdl-ai-char-counter'),
+      tokenWrap: wrapper.querySelector('.vdl-ai-token-wrap'),
+      tokenCounter: wrapper.querySelector('.vdl-ai-token-counter'),
+      statusIndicator: wrapper.querySelector('.vdl-ai-status-indicator'),
+      statusText: wrapper.querySelector('.vdl-ai-status-text'),
+      clearModalOverlay: wrapper.querySelector('.vdl-ai-clear-modal-overlay'),
+      clearModalCancel: wrapper.querySelector('.vdl-ai-modal-cancel'),
+      clearModalConfirm: wrapper.querySelector('.vdl-ai-modal-confirm'),
+      storageUsage: wrapper.querySelector('.vdl-ai-storage-usage'),
+      storageQuota: wrapper.querySelector('.vdl-ai-storage-quota'),
+      storageMeterFill: wrapper.querySelector('.vdl-ai-storage-meter-fill'),
+      jsHeapRow: wrapper.querySelector('.vdl-ai-js-heap-row'),
+      jsHeap: wrapper.querySelector('.vdl-ai-js-heap')
     };
 
     this._renderModelOptions();
@@ -927,6 +1238,14 @@ export class AiChatUI {
       chatInput.addEventListener('input', (e) => {
         charCounter.textContent = `${e.target.value.length} / 2000`;
       });
+    }
+
+    const { messagesContainer } = this._elements;
+    if (messagesContainer) {
+      this._stickToBottom = true;
+      messagesContainer.addEventListener('scroll', () => {
+        this._stickToBottom = this._isNearBottom(messagesContainer);
+      }, { passive: true });
     }
 
     loadBtn.addEventListener('click', () => this._handleLoadModel());
@@ -1004,7 +1323,7 @@ export class AiChatUI {
     const resolved = this._resolveModelForSystem(requested);
     this._renderModelOptions();
     if (!resolved.unavailable) {
-      this.chat.setModelId(resolved.modelId);
+      await this.chat.setModelId(resolved.modelId);
     }
     this._renderFallbackNote(resolved);
     this._renderCacheHint(resolved.modelId);
@@ -1074,7 +1393,7 @@ export class AiChatUI {
       return;
     }
     this._clearModalOpen = true;
-    ov.classList.add('vd-ai-modal-on');
+    ov.classList.add('vdl-ai-modal-on');
     ov.setAttribute('aria-hidden', 'false');
     this._clearModalKeyHandler = (e) => {
       if (e.key === 'Escape') {
@@ -1090,7 +1409,7 @@ export class AiChatUI {
     const { restoreFocus = true } = options;
     const ov = this._elements.clearModalOverlay;
     if (ov) {
-      ov.classList.remove('vd-ai-modal-on');
+      ov.classList.remove('vdl-ai-modal-on');
       ov.setAttribute('aria-hidden', 'true');
     }
     if (this._clearModalKeyHandler) {
@@ -1274,7 +1593,7 @@ export class AiChatUI {
     }
   }
 
-  _handleModelSelectionChange(requestedModelId) {
+  async _handleModelSelectionChange(requestedModelId) {
     this._selectedModelId = requestedModelId;
     const resolved = this._resolveModelForSystem(requestedModelId);
     this._renderFallbackNote(resolved);
@@ -1282,8 +1601,12 @@ export class AiChatUI {
     this._syncModelSelectors();
 
     if (!resolved.unavailable && !this.chat.isLoaded() && !this.chat.isLoading()) {
-      this.chat.setModelId(resolved.modelId);
-      this._updateModelTitle(resolved.modelId);
+      try {
+        await this.chat.setModelId(resolved.modelId);
+        this._updateModelTitle(requestedModelId);
+      } catch {
+        // Ignore while a concurrent load is starting.
+      }
     } else if (resolved.unavailable) {
       this._updateModelTitle(requestedModelId);
     }
@@ -1398,7 +1721,7 @@ export class AiChatUI {
       el.title = title;
       el.style.borderColor = color;
       el.style.color = color;
-      el.classList.add('vd-ai-load-source-badge--on');
+      el.classList.add('vdl-ai-load-source-badge--on');
     }
     const row = this._elements.progressBadgeRow;
     if (row) {
@@ -1411,7 +1734,7 @@ export class AiChatUI {
     const badges = this._elements.loadSourceBadges;
     if (!badges || !badges.length) return;
     for (const el of badges) {
-      el.classList.remove('vd-ai-load-source-badge--on');
+      el.classList.remove('vdl-ai-load-source-badge--on');
       el.textContent = '';
       el.removeAttribute('title');
       el.style.borderColor = '';
@@ -1491,9 +1814,9 @@ export class AiChatUI {
       this._updateSwitchButtonState();
       return;
     }
-    this.chat.setModelId(resolved.modelId);
+    await this.chat.setModelId(resolved.modelId);
     this._renderFallbackNote(resolved);
-    this._updateModelTitle(resolved.modelId);
+    this._updateModelTitle(selectedModel);
     this._updateSwitchButtonState();
 
     progressWrap.style.display = 'block';
@@ -1520,13 +1843,14 @@ export class AiChatUI {
       return;
     }
 
-    this.chat.setModelId(resolved.modelId);
+    await this.chat.setModelId(resolved.modelId, { resetMessages: true });
+    this._resetMessagesUi();
     this._renderFallbackNote(resolved);
     this._renderCacheHint(resolved.modelId);
-    this._updateModelTitle(resolved.modelId);
+    this._updateModelTitle(this._selectedModelId);
 
     this._elements.statusIndicator.style.background = 'var(--vd-color-warning, #f59e0b)';
-    this._elements.statusText.textContent = `Switching to ${getModelDisplayName(resolved.modelId)}...`;
+    this._elements.statusText.textContent = `Switching to ${getModelDisplayName(this._selectedModelId)}...`;
     this._elements.chatInput.disabled = true;
     this._elements.sendBtn.disabled = true;
 
@@ -1570,6 +1894,33 @@ export class AiChatUI {
     sendBtn.disabled = false;
     this._updateSwitchButtonState();
     chatInput.focus();
+  }
+
+  _resetMessagesUi() {
+    const { messagesContainer, tokenWrap, tokenCounter } = this._elements;
+    if (!messagesContainer) return;
+    messagesContainer.innerHTML = '';
+    this._appendMessage(
+      'assistant',
+      this._esc('Hello! I am a local AI running in your browser. How can I help you today?'),
+    );
+    if (tokenWrap) tokenWrap.style.display = 'none';
+    if (tokenCounter) tokenCounter.textContent = '0';
+    this._stickToBottom = true;
+  }
+
+  _isNearBottom(container, threshold = 80) {
+    if (!container) return true;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  }
+
+  _scrollMessagesToLatest(force = false) {
+    const { messagesContainer } = this._elements;
+    if (!messagesContainer) return;
+    if (force || this._stickToBottom !== false) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      this._stickToBottom = true;
+    }
   }
 
   _isLikelyModelStorageName(name) {
@@ -1696,7 +2047,7 @@ export class AiChatUI {
     }
 
     // Add empty assistant bubble
-    const assistantBubble = this._appendMessage('assistant', '<span class="vd-ai-typing">...</span>');
+    const assistantBubble = this._appendMessage('assistant', '<span class="vdl-ai-typing">...</span>');
 
     try {
       const finalReply = await this.chat.generate(
@@ -1704,7 +2055,7 @@ export class AiChatUI {
         (reply) => {
           if (!reply) return;
           assistantBubble.innerHTML = labsMarkdownToHtml(reply.replace(/\\n/g, '\n'));
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          this._scrollMessagesToLatest();
         },
         (usage) => {
           if (usage && tokenWrap && tokenCounter) {
@@ -1728,7 +2079,7 @@ export class AiChatUI {
       chatInput.disabled = false;
       sendBtn.disabled = false;
       chatInput.focus();
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      this._scrollMessagesToLatest(true);
     }
   }
 
@@ -1737,13 +2088,13 @@ export class AiChatUI {
     const isUser = role === 'user';
     
     const wrapper = document.createElement('div');
-    wrapper.className = `vd-ai-message vd-ai-${role}`;
+    wrapper.className = `vdl-ai-message vdl-ai-${role}`;
     wrapper.style.display = 'flex';
     wrapper.style.flexDirection = 'column';
     wrapper.style.alignItems = isUser ? 'flex-end' : 'flex-start';
 
     const bubble = document.createElement('div');
-    bubble.className = 'vd-ai-bubble';
+    bubble.className = 'vdl-ai-bubble';
     bubble.style.padding = '0.75rem 1rem';
     bubble.style.borderRadius = 'var(--radius-md, 0.5rem)';
     bubble.style.maxWidth = '85%';
@@ -1764,7 +2115,7 @@ export class AiChatUI {
 
     wrapper.appendChild(bubble);
     messagesContainer.appendChild(wrapper);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    this._scrollMessagesToLatest(role === 'user');
 
     return bubble;
   }
@@ -1783,19 +2134,19 @@ export class AiChatUI {
 // Inject keyframe animation for typing indicator
 const typingStyle = document.createElement('style');
 typingStyle.textContent = `
-  @keyframes vd-ai-blink {
+  @keyframes vdl-ai-blink {
     0% { opacity: .2; }
     20% { opacity: 1; }
     100% { opacity: .2; }
   }
-  .vd-ai-typing span {
-    animation-name: vd-ai-blink;
+  .vdl-ai-typing span {
+    animation-name: vdl-ai-blink;
     animation-duration: 1.4s;
     animation-iteration-count: infinite;
     animation-fill-mode: both;
   }
-  .vd-ai-typing span:nth-child(2) { animation-delay: .2s; }
-  .vd-ai-typing span:nth-child(3) { animation-delay: .4s; }
+  .vdl-ai-typing span:nth-child(2) { animation-delay: .2s; }
+  .vdl-ai-typing span:nth-child(3) { animation-delay: .4s; }
 `;
 if (typeof document !== 'undefined') {
   document.head.appendChild(typingStyle);

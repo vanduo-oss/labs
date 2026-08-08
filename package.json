@@ -1,7 +1,7 @@
 {
-  "name": "@vanduo-oss/labs-vd-neptune-search",
+  "name": "@vanduo-oss/labs-vdl-neptune-search",
   "version": "0.0.2",
-  "description": "vd-neptune-search — in-browser hybrid fuzzy + semantic search for Vanduo Docs (ES modules)",
+  "description": "vdl-neptune-search — in-browser hybrid fuzzy + semantic search for Vanduo Docs (ES modules)",
   "type": "module",
   "license": "MIT",
   "repository": {

@@ -17,15 +17,16 @@ import {
 } from '../../ai-chat.js';
 import { labsMarkdownToHtml } from '../../labs-md-to-html.js';
 
-const MODEL_CACHE_FLAG_PREFIX = 'vd-ai-chat-model-cached:';
+const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
 
 const props = defineProps({
   chat: { type: Object, default: null },
 });
 
 /**
- * WebLLM WASM cannot live inside Vue reactivity (Proxy breaks Tokenizer bindings)
- * and only one runtime may exist per tab. Keep AiChat as a plain module singleton.
+ * Inference engines (LiteRT / WebLLM WASM) must not live inside Vue reactivity
+ * (Proxy breaks bindings) and only one runtime should exist per tab.
+ * Keep AiChat as a plain module singleton.
  * @type {AiChat | null}
  */
 let chat = null;
@@ -49,6 +50,8 @@ const storageUsage = ref('—');
 const storageQuota = ref('—');
 const storagePct = ref(0);
 const errorBanner = ref('');
+const messagesEl = ref(null);
+const stickToBottom = ref(true);
 
 let unsubProgress = null;
 
@@ -151,15 +154,32 @@ function applySelection(modelId) {
   selectedModelId.value = modelId;
   const resolved = resolveModelForSystem(modelId);
   fallbackNote.value = resolved.changed || resolved.unavailable ? resolved.reason : '';
-  cacheHint.value = isModelLikelyCached(resolved.modelId)
+  cacheHint.value = isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
     ? 'This model looks cached in your browser — reload should skip a full download.'
     : 'First load downloads model weights into browser cache.';
   if (!loaded.value && chat) {
-    try {
-      chat.setModelId(resolved.modelId);
-    } catch {
+    void chat.setModelId(resolved.modelId).catch(() => {
       /* ignore while loading */
-    }
+    });
+  }
+}
+
+function isNearBottom(el, threshold = 80) {
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+function onMessagesScroll() {
+  stickToBottom.value = isNearBottom(messagesEl.value);
+}
+
+async function scrollToLatest(force = false) {
+  await nextTick();
+  const el = messagesEl.value;
+  if (!el) return;
+  if (force || stickToBottom.value) {
+    el.scrollTop = el.scrollHeight;
+    stickToBottom.value = true;
   }
 }
 
@@ -194,27 +214,33 @@ function formatBytes(n) {
 
 async function loadModel() {
   if (!chat || loading.value) return;
-  const resolved = resolveModelForSystem(selectedModelId.value);
+  const catalogId = selectedModelId.value;
+  const resolved = resolveModelForSystem(catalogId);
   if (resolved.unavailable) {
     errorBanner.value = resolved.reason;
     return;
   }
   errorBanner.value = '';
-  applySelection(selectedModelId.value);
-  chat.setModelId(resolved.modelId, { resetMessages: true });
-  selectedModelId.value = resolved.modelId;
+  applySelection(catalogId);
+  await chat.setModelId(resolved.modelId, { resetMessages: true });
+  // Keep the catalog option selected (fallback IDs are not in the <select>).
+  selectedModelId.value = catalogId;
   loading.value = true;
   progressPct.value = 0;
-  progressText.value = 'Initializing WebGPU engine…';
+  progressText.value = getModelOption(catalogId)?.backend === 'litert'
+    ? 'Initializing LiteRT WebGPU engine…'
+    : 'Initializing WebGPU engine…';
   statusTone.value = 'warn';
   statusText.value = 'Loading…';
   try {
     await chat.load();
+    markModelCached(catalogId);
     markModelCached(resolved.modelId);
     loaded.value = true;
     statusTone.value = 'ok';
-    statusText.value = `Online (${getModelDisplayName(resolved.modelId)})`;
+    statusText.value = `Online (${getModelDisplayName(catalogId)})`;
     progressText.value = '';
+    stickToBottom.value = true;
     await refreshStoragePanel();
   } catch (err) {
     statusTone.value = 'danger';
@@ -237,6 +263,7 @@ async function switchModel() {
   loaded.value = false;
   messages.value = [];
   tokenCount.value = null;
+  stickToBottom.value = true;
   chat.reset();
   await loadModel();
 }
@@ -251,11 +278,14 @@ async function sendMessage() {
   messages.value.push({ role: 'assistant', content: '' });
   const assistantIdx = messages.value.length - 1;
   streaming.value = true;
+  stickToBottom.value = true;
+  await scrollToLatest(true);
   try {
     await chat.generate(
       text,
       (partial) => {
         messages.value[assistantIdx] = { role: 'assistant', content: partial };
+        void scrollToLatest();
       },
       (usage) => {
         tokenCount.value = usage?.total_tokens ?? null;
@@ -270,15 +300,15 @@ async function sendMessage() {
     };
   } finally {
     streaming.value = false;
-    await nextTick();
+    await scrollToLatest(true);
   }
 }
 
 function onComposerKeydown(event) {
-  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-    event.preventDefault();
-    sendMessage();
-  }
+  if (event.key !== 'Enter') return;
+  if (event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  sendMessage();
 }
 
 function isLikelyModelStorageName(name) {
@@ -331,6 +361,8 @@ async function clearModelStorage() {
   clearModalOpen.value = false;
   loaded.value = false;
   messages.value = [];
+  tokenCount.value = null;
+  if (chat) chat.reset();
   statusTone.value = 'muted';
   statusText.value = 'Offline';
   errorBanner.value = `Cleared ${deletedFlags} markers, ${deletedCacheStores} caches, ${deletedDatabases} databases.`;
@@ -398,26 +430,26 @@ watch(
 </script>
 
 <template>
-  <VdCard class="vd-ai-chat-wrap vd-card-glow vd-glass">
-    <div class="vd-ai-header">
-      <div class="vd-ai-header-left">
+  <VdCard class="vdl-ai-chat-wrap vdl-card-glow vd-glass">
+    <div class="vdl-ai-header">
+      <div class="vdl-ai-header-left">
         <VdIcon name="robot" />
-        <h3 class="vd-ai-title">{{ displayTitle }}</h3>
+        <h3 class="vdl-ai-title">{{ displayTitle }}</h3>
       </div>
-      <div class="vd-ai-header-status">
-        <span class="vd-ai-status-dot" :data-tone="statusTone"></span>
+      <div class="vdl-ai-header-status">
+        <span class="vdl-ai-status-dot" :data-tone="statusTone"></span>
         <span>{{ statusText }}</span>
       </div>
     </div>
 
-    <div v-if="!loaded" class="vd-ai-setup">
-      <VdIcon name="download-simple" class="vd-ai-setup-icon" />
-      <div class="vd-ai-setup-grid">
-        <div class="vd-ai-setup-col">
-          <label class="vd-form-label" for="vd-ai-model-select">Model</label>
+    <div v-if="!loaded" class="vdl-ai-setup">
+      <VdIcon name="download-simple" class="vdl-ai-setup-icon" />
+      <div class="vdl-ai-setup-grid">
+        <div class="vdl-ai-setup-col">
+          <label class="vdl-form-label" for="vdl-ai-model-select">Model</label>
           <select
-            id="vd-ai-model-select"
-            class="vd-select vd-ai-model-select"
+            id="vdl-ai-model-select"
+            class="vd-select vdl-ai-model-select"
             :value="selectedModelId"
             :disabled="loading"
             @change="applySelection($event.target.value)"
@@ -433,13 +465,13 @@ watch(
               </option>
             </optgroup>
           </select>
-          <p v-if="fallbackNote" class="vd-ai-note">{{ fallbackNote }}</p>
-          <p v-if="cacheHint" class="vd-ai-note">{{ cacheHint }}</p>
-          <div class="vd-ai-cache-badges">
+          <p v-if="fallbackNote" class="vdl-ai-note">{{ fallbackNote }}</p>
+          <p v-if="cacheHint" class="vdl-ai-note">{{ cacheHint }}</p>
+          <div class="vdl-ai-cache-badges">
             <span
               v-for="model in MODEL_OPTIONS"
               :key="model.id"
-              class="vd-ai-mini-badge"
+              class="vdl-ai-mini-badge"
               :data-cached="isModelLikelyCached(model.id) ? '1' : '0'"
             >
               {{ model.tier }}
@@ -448,23 +480,23 @@ watch(
           </div>
         </div>
 
-        <aside class="vd-ai-storage-panel" aria-label="Local storage for this site">
-          <div class="vd-ai-storage-title">Storage &amp; memory</div>
+        <aside class="vdl-ai-storage-panel" aria-label="Local storage for this site">
+          <div class="vdl-ai-storage-title">Storage &amp; memory</div>
           <div class="vd-text-sm vd-text-muted">
             This origin: <strong>{{ storageUsage }}</strong>
           </div>
           <div class="vd-text-sm vd-text-muted">Quota: {{ storageQuota }}</div>
-          <div class="vd-ai-storage-meter" aria-hidden="true">
-            <div class="vd-ai-storage-meter-fill" :style="{ width: storagePct + '%' }"></div>
+          <div class="vdl-ai-storage-meter" aria-hidden="true">
+            <div class="vdl-ai-storage-meter-fill" :style="{ width: storagePct + '%' }"></div>
           </div>
-          <p class="vd-ai-fineprint">
+          <p class="vdl-ai-fineprint">
             Includes Cache Storage / IndexedDB for this page. GPU memory is not available to the page.
           </p>
         </aside>
       </div>
 
-      <div class="vd-ai-system-info">
-        <div class="vd-ai-storage-title">System Info</div>
+      <div class="vdl-ai-system-info">
+        <div class="vdl-ai-storage-title">System Info</div>
         <div class="vd-text-sm vd-text-muted">
           WebGPU:
           {{
@@ -488,11 +520,11 @@ watch(
               : 'Checking…'
           }}
         </div>
-        <div class="vd-ai-compat-row">
+        <div class="vdl-ai-compat-row">
           <span
             v-for="model in MODEL_OPTIONS"
             :key="'compat-' + model.id"
-            class="vd-ai-mini-badge"
+            class="vdl-ai-mini-badge"
             :data-state="
               resolveModelForSystem(model.id).unavailable
                 ? 'unavailable'
@@ -522,14 +554,14 @@ watch(
         lighter download. Inference stays in your browser.
       </p>
 
-      <div v-if="loading || progressText" class="vd-ai-progress">
+      <div v-if="loading || progressText" class="vdl-ai-progress">
         <VdProgress :value="progressPct" />
         <div class="vd-text-sm vd-text-muted">{{ progressText }}</div>
       </div>
 
-      <p v-if="errorBanner" class="vd-ai-error" role="alert">{{ errorBanner }}</p>
+      <p v-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
 
-      <div class="vd-ai-setup-actions">
+      <div class="vdl-ai-setup-actions">
         <VdButton variant="primary" :loading="loading" :disabled="loading" @click="loadModel">
           <VdIcon name="download-simple" />
           Load AI Model
@@ -541,10 +573,10 @@ watch(
       </div>
     </div>
 
-    <div v-else class="vd-ai-chat-interface">
-      <div class="vd-ai-toolbar">
+    <div v-else class="vdl-ai-chat-interface">
+      <div class="vdl-ai-toolbar">
         <select
-          class="vd-select vd-ai-model-select"
+          class="vd-select vdl-ai-model-select"
           :value="selectedModelId"
           :disabled="loading || streaming"
           @change="applySelection($event.target.value)"
@@ -568,30 +600,35 @@ watch(
         </VdButton>
       </div>
 
-      <div class="vd-ai-messages" aria-live="polite">
+      <div
+        ref="messagesEl"
+        class="vdl-ai-messages"
+        aria-live="polite"
+        @scroll.passive="onMessagesScroll"
+      >
         <div
           v-for="(msg, idx) in messages"
           :key="idx"
-          class="vd-ai-message"
+          class="vdl-ai-message"
           :data-role="msg.role"
         >
-          <div class="vd-ai-message-role">{{ msg.role === 'user' ? 'You' : 'Assistant' }}</div>
-          <div class="vd-ai-message-body" v-html="renderMarkdown(msg.content)"></div>
+          <div class="vdl-ai-message-role">{{ msg.role === 'user' ? 'You' : 'Assistant' }}</div>
+          <div class="vdl-ai-message-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
-        <div v-if="!messages.length" class="vd-ai-empty">Ask anything. Answers stay on this device.</div>
+        <div v-if="!messages.length" class="vdl-ai-empty">Ask anything. Answers stay on this device.</div>
       </div>
 
-      <form class="vd-ai-form" @submit.prevent="sendMessage">
+      <form class="vdl-ai-form" @submit.prevent="sendMessage">
         <textarea
           v-model="inputText"
-          class="vd-ai-input"
+          class="vdl-ai-input"
           rows="3"
           maxlength="2000"
-          placeholder="Message the local model… (⌘/Ctrl+Enter to send)"
+          placeholder="Message the local model… (Enter to send, Shift+Enter for newline)"
           :disabled="streaming"
           @keydown="onComposerKeydown"
         ></textarea>
-        <div class="vd-ai-form-meta">
+        <div class="vdl-ai-form-meta">
           <span class="vd-text-sm vd-text-muted">{{ inputText.length }} / 2000</span>
           <span v-if="tokenCount != null" class="vd-text-sm vd-text-muted">Tokens: {{ tokenCount }}</span>
           <VdButton type="submit" variant="primary" :loading="streaming" :disabled="streaming || !inputText.trim()">
@@ -601,7 +638,7 @@ watch(
           </VdButton>
         </div>
       </form>
-      <p v-if="errorBanner" class="vd-ai-error" role="alert">{{ errorBanner }}</p>
+      <p v-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
     </div>
   </VdCard>
 
@@ -623,11 +660,11 @@ watch(
 </template>
 
 <style scoped>
-.vd-ai-chat-wrap {
+.vdl-ai-chat-wrap {
   width: 100%;
 }
 
-.vd-ai-header {
+.vdl-ai-header {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -636,20 +673,20 @@ watch(
   border-bottom: 1px solid var(--border-color);
 }
 
-.vd-ai-header-left {
+.vdl-ai-header-left {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
   color: var(--color-primary);
 }
 
-.vd-ai-title {
+.vdl-ai-title {
   margin: 0;
   font-size: 1.1rem;
   color: var(--text-primary);
 }
 
-.vd-ai-header-status {
+.vdl-ai-header-status {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -657,24 +694,24 @@ watch(
   font-size: 0.85rem;
 }
 
-.vd-ai-status-dot {
+.vdl-ai-status-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
   background: var(--text-muted);
 }
 
-.vd-ai-status-dot[data-tone='ok'] {
+.vdl-ai-status-dot[data-tone='ok'] {
   background: var(--vd-color-success, #22c55e);
 }
-.vd-ai-status-dot[data-tone='warn'] {
+.vdl-ai-status-dot[data-tone='warn'] {
   background: var(--vd-color-warning, #f59e0b);
 }
-.vd-ai-status-dot[data-tone='danger'] {
+.vdl-ai-status-dot[data-tone='danger'] {
   background: var(--vd-color-danger, #ef4444);
 }
 
-.vd-ai-setup {
+.vdl-ai-setup {
   padding: 1.25rem 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
@@ -682,47 +719,47 @@ watch(
   align-items: stretch;
 }
 
-.vd-ai-setup-icon {
+.vdl-ai-setup-icon {
   font-size: 2.5rem;
   color: var(--color-primary);
   align-self: center;
 }
 
-.vd-ai-setup-grid {
+.vdl-ai-setup-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
 }
 
-.vd-ai-setup-col,
-.vd-ai-storage-panel,
-.vd-ai-system-info {
+.vdl-ai-setup-col,
+.vdl-ai-storage-panel,
+.vdl-ai-system-info {
   flex: 1 1 16rem;
   min-width: 0;
 }
 
-.vd-ai-storage-panel,
-.vd-ai-system-info {
+.vdl-ai-storage-panel,
+.vdl-ai-system-info {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   padding: 0.85rem;
 }
 
-.vd-ai-storage-title {
+.vdl-ai-storage-title {
   font-weight: 650;
   margin-bottom: 0.45rem;
   color: var(--text-primary);
 }
 
-.vd-form-label {
+.vdl-form-label {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.vd-ai-model-select {
+.vdl-ai-model-select {
   width: 100%;
   padding: 0.55rem 0.65rem;
   border-radius: var(--radius-sm);
@@ -731,23 +768,23 @@ watch(
   color: var(--text-primary);
 }
 
-.vd-ai-note,
-.vd-ai-fineprint {
+.vdl-ai-note,
+.vdl-ai-fineprint {
   margin: 0.45rem 0 0;
   color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.45;
 }
 
-.vd-ai-cache-badges,
-.vd-ai-compat-row {
+.vdl-ai-cache-badges,
+.vdl-ai-compat-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.55rem;
 }
 
-.vd-ai-mini-badge {
+.vdl-ai-mini-badge {
   font-size: 0.7rem;
   border-radius: 999px;
   padding: 0.15rem 0.5rem;
@@ -755,28 +792,28 @@ watch(
   color: var(--text-muted);
 }
 
-.vd-ai-mini-badge[data-cached='1'],
-.vd-ai-mini-badge[data-state='native'] {
+.vdl-ai-mini-badge[data-cached='1'],
+.vdl-ai-mini-badge[data-state='native'] {
   border-color: rgba(var(--vd-color-success-rgb, 34, 197, 94), 0.45);
   color: var(--vd-color-success, #22c55e);
 }
 
-.vd-ai-mini-badge[data-state='fallback'] {
+.vdl-ai-mini-badge[data-state='fallback'] {
   border-color: rgba(var(--vd-color-warning-rgb, 245, 158, 11), 0.45);
   color: var(--vd-color-warning, #f59e0b);
 }
 
-.vd-ai-mini-badge[data-state='unavailable'] {
+.vdl-ai-mini-badge[data-state='unavailable'] {
   border-color: rgba(var(--vd-color-danger-rgb, 239, 68, 68), 0.45);
   color: var(--vd-color-danger, #ef4444);
 }
 
-.vd-ai-mini-badge[data-state='experimental'] {
+.vdl-ai-mini-badge[data-state='experimental'] {
   border-color: rgba(var(--vd-color-info-rgb, 59, 130, 246), 0.45);
   color: var(--vd-color-info, #3b82f6);
 }
 
-.vd-ai-storage-meter {
+.vdl-ai-storage-meter {
   margin-top: 0.45rem;
   height: 0.4rem;
   border-radius: 999px;
@@ -784,36 +821,36 @@ watch(
   overflow: hidden;
 }
 
-.vd-ai-storage-meter-fill {
+.vdl-ai-storage-meter-fill {
   height: 100%;
   background: var(--color-primary);
 }
 
-.vd-ai-setup-actions {
+.vdl-ai-setup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.65rem;
 }
 
-.vd-ai-progress {
+.vdl-ai-progress {
   display: grid;
   gap: 0.4rem;
 }
 
-.vd-ai-error {
+.vdl-ai-error {
   margin: 0;
   color: var(--vd-color-danger, #ef4444);
   font-size: 0.88rem;
 }
 
-.vd-ai-chat-interface {
+.vdl-ai-chat-interface {
   display: flex;
   flex-direction: column;
   min-height: min(62vh, 44rem);
   max-height: 70vh;
 }
 
-.vd-ai-toolbar {
+.vdl-ai-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -821,11 +858,11 @@ watch(
   border-bottom: 1px solid var(--border-color);
 }
 
-.vd-ai-toolbar .vd-ai-model-select {
+.vdl-ai-toolbar .vdl-ai-model-select {
   flex: 1 1 14rem;
 }
 
-.vd-ai-messages {
+.vdl-ai-messages {
   flex: 1 1 auto;
   overflow: auto;
   padding: 1rem;
@@ -834,18 +871,18 @@ watch(
   gap: 0.85rem;
 }
 
-.vd-ai-message {
+.vdl-ai-message {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   padding: 0.75rem 0.9rem;
 }
 
-.vd-ai-message[data-role='user'] {
+.vdl-ai-message[data-role='user'] {
   background: rgba(var(--vd-color-primary-rgb), 0.08);
 }
 
-.vd-ai-message-role {
+.vdl-ai-message-role {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -853,26 +890,26 @@ watch(
   margin-bottom: 0.35rem;
 }
 
-.vd-ai-message-body {
+.vdl-ai-message-body {
   color: var(--text-primary);
   line-height: 1.55;
   font-size: 0.95rem;
 }
 
-.vd-ai-empty {
+.vdl-ai-empty {
   color: var(--text-muted);
   text-align: center;
   margin: auto;
 }
 
-.vd-ai-form {
+.vdl-ai-form {
   border-top: 1px solid var(--border-color);
   padding: 0.85rem 1rem 1rem;
   display: grid;
   gap: 0.55rem;
 }
 
-.vd-ai-input {
+.vdl-ai-input {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
@@ -885,7 +922,7 @@ watch(
   font: inherit;
 }
 
-.vd-ai-form-meta {
+.vdl-ai-form-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

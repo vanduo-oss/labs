@@ -8,11 +8,11 @@ import {
   VdNavbar,
   VdThemeSwitcher,
 } from '@vanduo-oss/vd3';
-import { DEFAULT_DOCS_BASE_URL, VD_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
-import { VD_AI_CHAT_VERSION } from '../ai-chat.js';
+import { DEFAULT_DOCS_BASE_URL, VDL_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
+import { VDL_AI_CHAT_VERSION } from '../ai-chat.js';
 import { labsMarkdownToHtml } from '../labs-md-to-html.js';
-import VdNeptuneSearchUI from './components/VdNeptuneSearchUI.vue';
-import VdAiChatUI from './components/VdAiChatUI.vue';
+import VdlNeptuneSearchUI from './components/VdlNeptuneSearchUI.vue';
+import VdlAiChatUI from './components/VdlAiChatUI.vue';
 
 const DEMO_SLUGS = new Set(['neptune', 'aichat']);
 const ROUTES = ['home', 'about', 'demos'];
@@ -20,8 +20,8 @@ const LABS_DEMOS_DISCLAIMER_KEY = 'vanduo-labs-demos-disclaimer-v1';
 const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
 
 const COMPONENT_VERSION_MAP = {
-  neptune: VD_NEPTUNE_SEARCH_VERSION,
-  aichat: VD_AI_CHAT_VERSION,
+  neptune: VDL_NEPTUNE_SEARCH_VERSION,
+  aichat: VDL_AI_CHAT_VERSION,
 };
 
 const route = ref('home');
@@ -85,7 +85,7 @@ function acceptDisclaimer() {
 async function fetchDocumentationHtml(slug) {
   if (docHtmlCache[slug]) return docHtmlCache[slug];
   const path =
-    slug === 'neptune' ? '/doc/vd-neptune-search.md' : '/doc/vd-ai-chat.md';
+    slug === 'neptune' ? '/doc/vdl-neptune-search.md' : '/doc/vdl-ai-chat.md';
   const res = await fetch(path, { credentials: 'same-origin' });
   if (!res.ok) throw new Error(`Could not load documentation (${res.status})`);
   const md = hydrateComponentVersionTokens(await res.text(), slug);
@@ -105,7 +105,7 @@ async function loadDocumentationForSlug(slug) {
   } catch (err) {
     if (seq !== docLoadSeq) return;
     docError.value =
-      'Documentation could not be loaded. Check that <code>doc/vd-neptune-search.md</code> and <code>doc/vd-ai-chat.md</code> are present, serve this folder over HTTP (not file://), then refresh.';
+      'Documentation could not be loaded. Check that <code>doc/vdl-neptune-search.md</code> and <code>doc/vdl-ai-chat.md</code> are present, serve this folder over HTTP (not file://), then refresh.';
     console.warn('[labs]', err);
   } finally {
     if (seq === docLoadSeq) docLoading.value = false;
@@ -126,7 +126,7 @@ function applyLabsRoute(nextRoute, nextDemoSlug) {
     maybeOpenDemosDisclaimer();
     if (nextDemoSlug) {
       liveRegionText.value =
-        (nextDemoSlug === 'neptune' ? 'vd-neptune-search' : 'vd-ai-chat') +
+        (nextDemoSlug === 'neptune' ? 'vdl-neptune-search' : 'vdl-ai-chat') +
         ' demo and documentation opened.';
       loadDocumentationForSlug(nextDemoSlug);
       nextTick(() => {
@@ -311,7 +311,7 @@ watch(demoSlug, (slug) => {
     >
       <div class="vd-container-responsive labs-main">
         <section id="labs-about" class="labs-section">
-          <VdCard class="vd-card-glow vd-glass labs-about-card">
+          <VdCard class="vdl-card-glow vd-glass labs-about-card">
             <p class="labs-about-pill">
               <VdIcon name="flask" aria-hidden="true" /> Experimental by design
             </p>
@@ -320,7 +320,7 @@ watch(demoSlug, (slug) => {
               Vanduo Labs is where we ship ideas before they are polished—interactive demos, odd
               widgets, and half-serious prototypes that might graduate into the framework, or might
               just make us smile. Most demos are not guaranteed stable; that is the point. Some
-              components, like <code>vd-neptune-search</code>, are experimental prototypes that may
+              components, like <code>vdl-neptune-search</code>, are experimental prototypes that may
               graduate into the framework.
             </p>
             <div class="labs-about-grid">
@@ -379,7 +379,7 @@ watch(demoSlug, (slug) => {
               <span class="labs-demo-card-icon" aria-hidden="true">
                 <i class="ph ph-magnifying-glass" style="font-size: 3rem"></i>
               </span>
-              <span class="labs-demo-card-title">vd-neptune-search</span>
+              <span class="labs-demo-card-title">vdl-neptune-search</span>
               <span class="labs-demo-card-desc" id="labs-card-neptune-desc"
                 >In-browser hybrid fuzzy + semantic search over vd3 docs—no server required</span
               >
@@ -406,7 +406,7 @@ watch(demoSlug, (slug) => {
               <span class="labs-demo-card-icon" aria-hidden="true">
                 <i class="ph ph-robot" style="font-size: 3rem"></i>
               </span>
-              <span class="labs-demo-card-title">vd-ai-chat</span>
+              <span class="labs-demo-card-title">vdl-ai-chat</span>
               <span class="labs-demo-card-desc" id="labs-card-aichat-desc"
                 >In-browser AI chat with Gemma 4 and FOSS guardrails—no server required</span
               >
@@ -430,7 +430,7 @@ watch(demoSlug, (slug) => {
 
           <VdCard
             id="labs-demos-detail"
-            class="labs-demos-detail vd-card-glow vd-glass"
+            class="labs-demos-detail vdl-card-glow vd-glass"
             role="region"
             aria-labelledby="labs-demos-detail-title"
             :hidden="!demoSlug"
@@ -451,9 +451,9 @@ watch(demoSlug, (slug) => {
               <h2 id="labs-demos-detail-title">
                 {{
                   demoSlug === 'neptune'
-                    ? 'vd-neptune-search'
+                    ? 'vdl-neptune-search'
                     : demoSlug === 'aichat'
-                      ? 'vd-ai-chat'
+                      ? 'vdl-ai-chat'
                       : 'Component'
                 }}
               </h2>
@@ -467,7 +467,7 @@ watch(demoSlug, (slug) => {
                   id="labs-demo-neptune"
                   :hidden="demoSlug !== 'neptune'"
                 >
-                  <VdNeptuneSearchUI
+                  <VdlNeptuneSearchUI
                     v-if="demoSlug === 'neptune'"
                     :base-url="DOCS_BASE_URL"
                     placeholder="Search vd3 docs…"
@@ -478,7 +478,7 @@ watch(demoSlug, (slug) => {
                   id="labs-demo-aichat"
                   :hidden="demoSlug !== 'aichat'"
                 >
-                  <VdAiChatUI v-if="demoSlug === 'aichat'" />
+                  <VdlAiChatUI v-if="demoSlug === 'aichat'" />
                 </div>
               </div>
             </div>

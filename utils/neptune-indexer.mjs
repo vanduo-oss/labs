@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Neptune Indexer — Build script for vd-neptune-search
+ * Neptune Indexer — Build script for vdl-neptune-search
  *
  * Catalogues pages from vd3-docs `src/nav.ts`, crawls prerendered HTML from
  * https://vanduo-oss.github.io/vd3-docs/, builds a Fuse.js corpus, and

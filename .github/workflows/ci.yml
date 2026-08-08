@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright unit + e2e
+        run: pnpm test
+        env:
+          CI: true
+
+      - name: Build site
+        run: pnpm build
+
+      - name: Assert tests and smoke demos are not in dist
+        run: |
+          if [ -d dist/tests ]; then
+            echo "dist/tests must not be published" >&2
+            exit 1
+          fi
+          if ls dist/demo/gemma-* >/dev/null 2>&1; then
+            echo "dist must not include gemma smoke demos" >&2
+            exit 1
+          fi
+          test -f dist/CNAME
+          grep -qx 'labs.vanduo.dev' dist/CNAME

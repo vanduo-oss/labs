@@ -176,7 +176,7 @@ test.describe('NeptuneSearch Unit', () => {
         source: 'fuzzy',
       }];
       ui._renderResults();
-      return document.querySelector('.vd-neptune-result-link')?.getAttribute('href');
+      return document.querySelector('.vdl-neptune-result-link')?.getAttribute('href');
     });
 
     expect(href).toBe('#');

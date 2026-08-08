@@ -10,8 +10,8 @@ Current component versions:
 
 | Component | Version | Module |
 |------|------|------|
-| `vd-neptune-search` | `0.0.3` | [`neptune-search.js`](./neptune-search.js) |
-| `vd-ai-chat` | `0.0.5` | [`ai-chat.js`](./ai-chat.js) |
+| `vdl-neptune-search` | `0.0.3` | [`neptune-search.js`](./neptune-search.js) |
+| `vdl-ai-chat` | `0.0.5` | [`ai-chat.js`](./ai-chat.js) |
 
 ### Shared Guardrails Modules
 
@@ -19,11 +19,11 @@ Current component versions:
 
 - Shared service version: `0.0.1` (exported as `VD_GUARDRAILS_VERSION`)
 
-- `./guardrails/llm.js`: LLM-facing input validation + system-prompt composition for `vd-ai-chat`.
-- `./guardrails/search.js`: deterministic query/index/vector and render-path hardening for `vd-neptune-search`.
+- `./guardrails/llm.js`: LLM-facing input validation + system-prompt composition for `vdl-ai-chat`.
+- `./guardrails/search.js`: deterministic query/index/vector and render-path hardening for `vdl-neptune-search`.
 - `./guardrails/core.js`: shared result/error helpers used by both policy families.
 
-See canonical documentation: [doc/vd-guardrails.md](./doc/vd-guardrails.md)
+See canonical documentation: [doc/vdl-guardrails.md](./doc/vdl-guardrails.md)
 
 ```javascript
 import { validateLlmInput, buildChatSystemPrompt } from './guardrails/llm.js';
@@ -57,13 +57,13 @@ import { VdHexGrid } from '@vanduo-oss/hex-grid';
 
 ---
 
-## vd-neptune-search (Neptune Hybrid Search)
+## vdl-neptune-search (Neptune Hybrid Search)
 
 In-browser **hybrid search** over **[vd3 docs](https://vanduo-oss.github.io/vd3-docs/)** — instant fuzzy search via Fuse.js + semantic vector search via Transformers.js. Zero external LLM API calls.
 
-Labs UI: Vue + vd3 component `VdNeptuneSearchUI` (headless `NeptuneSearch` remains a vanilla ES module).
+Labs UI: Vue + vd3 component `VdlNeptuneSearchUI` (headless `NeptuneSearch` remains a vanilla ES module).
 
-See full documentation: [doc/vd-neptune-search.md](./doc/vd-neptune-search.md)
+See full documentation: [doc/vdl-neptune-search.md](./doc/vdl-neptune-search.md)
 
 ### Search Quality (Tuned)
 
@@ -121,11 +121,11 @@ pnpm preview
 
 ---
 
-## vd-ai-chat (AiChat)
+## vdl-ai-chat (AiChat)
 
 In-browser **AI chat** component with local WebGPU inference and deterministic guardrails.
 
-See full documentation: [doc/vd-ai-chat.md](./doc/vd-ai-chat.md)
+See full documentation: [doc/vdl-ai-chat.md](./doc/vdl-ai-chat.md)
 
 ### Quick Start
 
@@ -137,7 +137,7 @@ await chat.load();
 await chat.generate('Hello');
 ```
 
-Labs UI: Vue + vd3 component `VdAiChatUI` (headless `AiChat` remains a vanilla ES module).
+Labs UI: Vue + vd3 component `VdlAiChatUI` (headless `AiChat` remains a vanilla ES module).
 
 Optional local Gemma E2B mirror for faster `pnpm dev` loads (gitignored, not shipped in `dist/`):
 
@@ -161,7 +161,7 @@ pnpm dev
 Labs modules are synced from their canonical source locations:
 
 ```bash
-# vd-neptune-search: module + generated corpus (regenerate with pnpm index when docs change)
+# vdl-neptune-search: module + generated corpus (regenerate with pnpm index when docs change)
 cp docs/js/neptune-search.js labs/neptune-search.js
 cp docs/js/data/search-index.json labs/data/search-index.json
 cp docs/js/data/vectors.json labs/data/vectors.json
@@ -173,6 +173,12 @@ cp docs/js/data/vectors.json labs/data/vectors.json
 - Verify demo page badges and docs reflect current versions.
 - Run test suite (`pnpm test`) and smoke-check `https://labs.vanduo.dev`.
 - Ensure package export/file lists stay synchronized before publishing.
+
+## Support / Contributing
+
+This repository is maintained by vanduo-oss; external contributions are not accepted at this time.
+
+Security reports: see [SECURITY.md](./SECURITY.md).
 
 ## License
 

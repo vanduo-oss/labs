@@ -1,0 +1,47 @@
+schema: spec-driven
+
+context: |
+  Project: vanduo labs (@vanduo-oss/labs) — experimental Vue demos + headless ESM modules.
+
+  Naming (labs-owned):
+  - Prefix labs UI/components/CSS/product ids with `vdl` / `Vdl` / `vdl-`
+    (e.g. VdlAiChatUI, VdlNeptuneSearchUI, .vdl-ai-*, .vdl-neptune-*, vdl-ai-chat).
+  - Do NOT rename `@vanduo-oss/vd3` or its design-system API (`VdButton`, `VdCard`,
+    `VdModal`, `--vd-*` tokens, `.vd-btn` / `.vd-glass` / etc.). Those stay `vd` / `Vd`.
+  - Do NOT rewrite vd3-docs corpus content in `data/search-index.json` / fixtures.
+
+  Architecture:
+  - Headless ESM: `neptune-search.js` (hybrid fuzzy+semantic search), `ai-chat.js` (in-browser chat).
+  - Labs Vue shell: Vite + Vue 3 + `@vanduo-oss/vd3` (`src/App.vue`, `src/components/Vdl*.vue`).
+  - Shared policy: `guardrails/{core,llm,search}.js` — docs in `doc/vdl-guardrails.md`.
+  - Default AI path: LiteRT Gemma (WebLLM fallback). Local model mirrors under `.models/`
+    (dev-served at `/models/…` via vite; never ship into dist). Fetch with `pnpm models:fetch`.
+  - Neptune corpus: regenerate with `pnpm index` (`utils/neptune-indexer.mjs`) from vd3-docs.
+
+  Key paths:
+  - Modules: `neptune-search.js`, `ai-chat.js`, `guardrails/`
+  - UI: `src/components/VdlAiChatUI.vue`, `src/components/VdlNeptuneSearchUI.vue`
+  - Docs: `doc/vdl-neptune-search.md`, `doc/vdl-ai-chat.md`, `doc/vdl-guardrails.md`, `README.md`
+  - Tests: `tests/unit/*.spec.ts`, `tests/e2e/vdl-neptune-search.spec.ts` (Playwright)
+  - Demos: `demo/*`, `src/demos/*`
+
+  Testing: `pnpm test` (Playwright). Prefer focused unit specs when changing guardrails/modules.
+
+rules:
+  proposal:
+    - Call out whether the change touches labs `vdl` surface vs `@vanduo-oss/vd3` APIs
+    - Prefer small deltas; do not boil the ocean with brownfield backfill
+  specs:
+    - Use Given/When/Then scenarios for observable behavior
+    - Keep `vd3` / design-system references explicit when relevant
+  tasks:
+    - Include a verification step (`pnpm test` or a focused Playwright/unit file)
+
+operations:
+  apply:
+    guidance:
+      - Prefer focused unit tests before full Playwright when possible
+      - Do not commit unless the user asks
+  archive:
+    guidance:
+      - Keep the completion summary concise

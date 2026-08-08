@@ -3,7 +3,7 @@ import { VanduoVue, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
 import { DEFAULT_DOCS_BASE_URL } from '../../neptune-search.js';
-import VdNeptuneSearchUI from '../components/VdNeptuneSearchUI.vue';
+import VdlNeptuneSearchUI from '../components/VdlNeptuneSearchUI.vue';
 
 const lastDebug = ref('Type a query and press Enter to see raw results…');
 
@@ -47,7 +47,7 @@ const DemoApp = {
           h(VdThemeSwitcher, { menu: false }),
         ]),
         h('div', { class: 'demo-search-wrap' }, [
-          h(VdNeptuneSearchUI, {
+          h(VdlNeptuneSearchUI, {
             baseUrl: DEFAULT_DOCS_BASE_URL,
             placeholder: 'Search vd3 docs…',
             onResultClick,

@@ -28,6 +28,14 @@ const props = defineProps({
 
 const emit = defineEmits(['result-click']);
 
+/**
+ * Reuse one NeptuneSearch per index/vectors URL across HMR / v-if remounts
+ * so semantic preload is not restarted from scratch on every remount.
+ * @type {import('../../neptune-search.js').NeptuneSearch | null}
+ */
+let sharedEngine = null;
+let sharedEngineKey = '';
+
 const rootEl = ref(null);
 const inputEl = ref(null);
 const query = ref('');
@@ -37,10 +45,14 @@ const dropdownOpen = ref(false);
 const loading = ref(false);
 const loadingMessage = ref('');
 const statusMessage = ref('');
+/** Subtle, non-blocking model download status (separate from search loading). */
+const modelLoading = ref(false);
+const modelProgressMessage = ref('');
+const modelProgressPct = ref(0);
 const activeCategory = ref('all');
 const categories = ref([]);
 const shortQueryHint = ref(false);
-const listboxId = `vd-neptune-results-${Math.random().toString(36).slice(2, 9)}`;
+const listboxId = `vdl-neptune-results-${Math.random().toString(36).slice(2, 9)}`;
 
 let engine = null;
 let ownsEngine = false;
@@ -80,10 +92,17 @@ async function ensureEngine() {
     engine = props.search;
     ownsEngine = false;
   } else {
-    engine = new NeptuneSearch({
-      indexUrl: props.indexUrl,
-      vectorsUrl: props.vectorsUrl,
-    });
+    const key = `${props.indexUrl}\0${props.vectorsUrl}`;
+    if (sharedEngine && sharedEngineKey === key) {
+      engine = sharedEngine;
+    } else {
+      engine = new NeptuneSearch({
+        indexUrl: props.indexUrl,
+        vectorsUrl: props.vectorsUrl,
+      });
+      sharedEngine = engine;
+      sharedEngineKey = key;
+    }
     ownsEngine = true;
   }
   await engine.initFuzzy();
@@ -97,6 +116,19 @@ async function ensureEngine() {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
   return engine;
+}
+
+/** Background warm of Transformers.js + MiniLM; does not block typing/fuzzy. */
+function preloadSemantic(eng) {
+  if (!eng || eng.isSemanticReady?.()) {
+    modelLoading.value = false;
+    modelProgressMessage.value = '';
+    modelProgressPct.value = 0;
+    return;
+  }
+  eng.initSemantic().catch((err) => {
+    console.warn('[VdlNeptuneSearchUI] Semantic preload failed:', err?.message || err);
+  });
 }
 
 function openDropdown() {
@@ -176,7 +208,7 @@ async function runHybrid(rawQuery) {
     results.value = result.merged;
     if (!results.value.length) statusMessage.value = props.emptyMessage;
   } catch (err) {
-    console.warn('[VdNeptuneSearchUI] hybrid search failed', err);
+    console.warn('[VdlNeptuneSearchUI] hybrid search failed', err);
     if (seq !== semanticSeq) return;
     const fallback = await eng.search(normalized, { mode: 'fuzzy' });
     if (seq !== semanticSeq) return;
@@ -264,17 +296,25 @@ function setCategory(name) {
 }
 
 onMounted(async () => {
-  await ensureEngine();
-  unsubscribeSemantic = engine.onSemanticProgress((data) => {
+  const eng = await ensureEngine();
+  unsubscribeSemantic = eng.onSemanticProgress((data) => {
+    // Keep model progress out of the results dropdown so typing/fuzzy stay free.
     if (data.stage === 'loading-model' || data.stage === 'downloading') {
-      loading.value = true;
-      loadingMessage.value = data.message || 'Loading search model…';
-      openDropdown();
+      modelLoading.value = true;
+      modelProgressMessage.value = data.message || 'Loading search model…';
+      if (data.progress?.loaded && data.progress?.total) {
+        modelProgressPct.value = Math.round((data.progress.loaded / data.progress.total) * 100);
+      } else if (data.stage === 'loading-model') {
+        modelProgressPct.value = 0;
+      }
     } else if (data.stage === 'ready' || data.stage === 'error') {
-      if (!results.value.length) loading.value = false;
-      if (data.stage === 'ready') loadingMessage.value = '';
+      modelLoading.value = false;
+      modelProgressMessage.value = '';
+      modelProgressPct.value = 0;
     }
   });
+
+  preloadSemantic(eng);
 
   keyboardHandler = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -300,7 +340,11 @@ onBeforeUnmount(() => {
   clearTimeout(debounceTimer);
   if (keyboardHandler) document.removeEventListener('keydown', keyboardHandler);
   if (clickOutsideHandler) document.removeEventListener('click', clickOutsideHandler);
-  if (unsubscribeSemantic) unsubscribeSemantic();
+  if (unsubscribeSemantic) {
+    unsubscribeSemantic();
+    unsubscribeSemantic = null;
+  }
+  // Keep sharedEngine alive for HMR / v-if remount; only drop the local ref.
   engine = null;
 });
 
@@ -319,11 +363,11 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl" class="vd-neptune-search">
-    <div v-if="categories.length" class="vd-neptune-filters" role="list" aria-label="Filter by category">
+  <div ref="rootEl" class="vdl-neptune-search">
+    <div v-if="categories.length" class="vdl-neptune-filters" role="list" aria-label="Filter by category">
       <button
         type="button"
-        class="vd-neptune-filter-chip"
+        class="vdl-neptune-filter-chip"
         :class="{ 'is-active': activeCategory === 'all' }"
         role="listitem"
         @click="setCategory('all')"
@@ -334,23 +378,23 @@ defineExpose({
         v-for="cat in categories"
         :key="cat.name"
         type="button"
-        class="vd-neptune-filter-chip"
+        class="vdl-neptune-filter-chip"
         :class="{ 'is-active': activeCategory === cat.name }"
         role="listitem"
         @click="setCategory(cat.name)"
       >
         {{ cat.name }}
-        <span class="vd-neptune-filter-count">{{ cat.count }}</span>
+        <span class="vdl-neptune-filter-count">{{ cat.count }}</span>
       </button>
     </div>
 
-    <div class="vd-neptune-input-wrap">
-      <VdIcon name="magnifying-glass" class="vd-neptune-input-icon" aria-hidden="true" />
+    <div class="vdl-neptune-input-wrap">
+      <VdIcon name="magnifying-glass" class="vdl-neptune-input-icon" aria-hidden="true" />
       <input
         ref="inputEl"
         v-model="query"
         type="search"
-        class="vd-neptune-input"
+        class="vdl-neptune-input"
         :placeholder="placeholder"
         autocomplete="off"
         autocapitalize="off"
@@ -367,25 +411,25 @@ defineExpose({
         @keydown="onKeyDown"
         @focus="openDropdown"
       />
-      <span v-if="showSemanticHint" class="vd-neptune-hint" aria-hidden="true">
+      <span v-if="showSemanticHint" class="vdl-neptune-hint" aria-hidden="true">
         <kbd>Enter</kbd> AI
       </span>
     </div>
 
     <div
       :id="listboxId"
-      class="vd-neptune-dropdown"
+      class="vdl-neptune-dropdown"
       role="listbox"
       :hidden="!dropdownOpen"
     >
-      <div v-if="loading" class="vd-neptune-loader" role="status">
+      <div v-if="loading" class="vdl-neptune-loader" role="status">
         <VdSpinner size="sm" />
         <span>{{ loadingMessage || 'Searching…' }}</span>
       </div>
 
       <p
         v-else-if="shortQueryHint || statusMessage"
-        class="vd-neptune-empty"
+        class="vdl-neptune-empty"
         role="status"
       >
         {{ statusMessage || emptyMessage }}
@@ -395,7 +439,7 @@ defineExpose({
         v-for="(result, index) in filteredResults"
         :id="`${listboxId}-opt-${index}`"
         :key="result.doc.id"
-        class="vd-neptune-result"
+        class="vdl-neptune-result"
         :class="{ 'is-selected': index === selectedIndex }"
         role="option"
         :aria-selected="index === selectedIndex ? 'true' : 'false'"
@@ -403,39 +447,39 @@ defineExpose({
         @click="selectResult(result)"
         @mouseenter="selectedIndex = index"
       >
-        <div class="vd-neptune-result-header">
-          <span class="vd-neptune-result-icon">
+        <div class="vdl-neptune-result-header">
+          <span class="vdl-neptune-result-icon">
             <VdIcon :name="iconName(result.doc)" />
           </span>
-          <span class="vd-neptune-result-title">{{ result.doc.title }}</span>
-          <span class="vd-neptune-result-trail">
-            <span class="vd-neptune-result-category">{{ result.doc.category }}</span>
+          <span class="vdl-neptune-result-title">{{ result.doc.title }}</span>
+          <span class="vdl-neptune-result-trail">
+            <span class="vdl-neptune-result-category">{{ result.doc.category }}</span>
             <span
-              class="vd-neptune-badge"
+              class="vdl-neptune-badge"
               :class="
                 result.source === 'semantic'
-                  ? 'vd-neptune-badge-semantic'
-                  : 'vd-neptune-badge-fuzzy'
+                  ? 'vdl-neptune-badge-semantic'
+                  : 'vdl-neptune-badge-fuzzy'
               "
             >
               {{ result.source === 'semantic' ? 'AI' : 'Fuzzy' }}
             </span>
           </span>
         </div>
-        <div v-if="snippetFor(result.doc)" class="vd-neptune-result-body">
+        <div v-if="snippetFor(result.doc)" class="vdl-neptune-result-body">
           {{ snippetFor(result.doc) }}
         </div>
-        <div class="vd-neptune-result-footer">
-          <div class="vd-neptune-result-keywords">
+        <div class="vdl-neptune-result-footer">
+          <div class="vdl-neptune-result-keywords">
             <span
               v-for="kw in (result.doc.keywords || []).slice(0, 3)"
               :key="kw"
-              class="vd-neptune-keyword"
+              class="vdl-neptune-keyword"
               >{{ kw }}</span
             >
           </div>
           <a
-            class="vd-neptune-result-link"
+            class="vdl-neptune-result-link"
             :href="hrefFor(result.doc)"
             target="_blank"
             rel="noopener noreferrer"
@@ -445,23 +489,36 @@ defineExpose({
         </div>
       </div>
     </div>
+
+    <div
+      v-if="modelLoading"
+      class="vdl-neptune-progress"
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        class="vdl-neptune-progress-bar"
+        :style="{ width: `${modelProgressPct}%` }"
+      />
+      <span class="vdl-neptune-progress-text">{{ modelProgressMessage }}</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.vd-neptune-search {
+.vdl-neptune-search {
   position: relative;
   width: 100%;
 }
 
-.vd-neptune-filters {
+.vdl-neptune-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-bottom: 0.85rem;
 }
 
-.vd-neptune-filter-chip {
+.vdl-neptune-filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -475,31 +532,31 @@ defineExpose({
   cursor: pointer;
 }
 
-.vd-neptune-filter-chip.is-active {
+.vdl-neptune-filter-chip.is-active {
   border-color: var(--color-primary);
   color: var(--color-primary);
   background: var(--color-primary-alpha-10, rgba(var(--vd-color-primary-rgb), 0.12));
 }
 
-.vd-neptune-filter-count {
+.vdl-neptune-filter-count {
   opacity: 0.7;
   font-size: 0.72rem;
 }
 
-.vd-neptune-input-wrap {
+.vdl-neptune-input-wrap {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.vd-neptune-input-icon {
+.vdl-neptune-input-icon {
   position: absolute;
   left: 0.85rem;
   color: var(--text-muted);
   pointer-events: none;
 }
 
-.vd-neptune-input {
+.vdl-neptune-input {
   width: 100%;
   box-sizing: border-box;
   padding: 0.85rem 4.5rem 0.85rem 2.6rem;
@@ -511,12 +568,12 @@ defineExpose({
   font-size: 1rem;
 }
 
-.vd-neptune-input:focus {
+.vdl-neptune-input:focus {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
-.vd-neptune-hint {
+.vdl-neptune-hint {
   position: absolute;
   right: 0.75rem;
   color: var(--text-muted);
@@ -524,7 +581,7 @@ defineExpose({
   white-space: nowrap;
 }
 
-.vd-neptune-hint kbd {
+.vdl-neptune-hint kbd {
   font: inherit;
   border: 1px solid var(--border-color);
   border-radius: 0.3rem;
@@ -532,7 +589,7 @@ defineExpose({
   margin-right: 0.2rem;
 }
 
-.vd-neptune-dropdown {
+.vdl-neptune-dropdown {
   margin-top: 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -542,12 +599,12 @@ defineExpose({
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
-.vd-neptune-dropdown[hidden] {
+.vdl-neptune-dropdown[hidden] {
   display: none !important;
 }
 
-.vd-neptune-loader,
-.vd-neptune-empty {
+.vdl-neptune-loader,
+.vdl-neptune-empty {
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -556,53 +613,53 @@ defineExpose({
   font-size: 0.9rem;
 }
 
-.vd-neptune-result {
+.vdl-neptune-result {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
 }
 
-.vd-neptune-result:last-child {
+.vdl-neptune-result:last-child {
   border-bottom: 0;
 }
 
-.vd-neptune-result.is-selected,
-.vd-neptune-result:hover {
+.vdl-neptune-result.is-selected,
+.vdl-neptune-result:hover {
   background: var(--bg-secondary);
 }
 
-.vd-neptune-result-header {
+.vdl-neptune-result-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.vd-neptune-result-icon {
+.vdl-neptune-result-icon {
   color: var(--color-primary);
   display: inline-flex;
 }
 
-.vd-neptune-result-title {
+.vdl-neptune-result-title {
   font-weight: 650;
   color: var(--text-primary);
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.vd-neptune-result-trail {
+.vdl-neptune-result-trail {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   margin-left: auto;
 }
 
-.vd-neptune-result-category {
+.vdl-neptune-result-category {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
 
-.vd-neptune-badge {
+.vdl-neptune-badge {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -611,24 +668,24 @@ defineExpose({
   padding: 0.15rem 0.45rem;
 }
 
-.vd-neptune-badge-fuzzy {
+.vdl-neptune-badge-fuzzy {
   background: rgba(var(--vd-color-info-rgb), 0.18);
   color: var(--vd-color-info);
 }
 
-.vd-neptune-badge-semantic {
+.vdl-neptune-badge-semantic {
   background: rgba(var(--vd-color-primary-rgb), 0.18);
   color: var(--color-primary);
 }
 
-.vd-neptune-result-body {
+.vdl-neptune-result-body {
   margin-top: 0.4rem;
   color: var(--text-secondary);
   font-size: 0.88rem;
   line-height: 1.45;
 }
 
-.vd-neptune-result-footer {
+.vdl-neptune-result-footer {
   margin-top: 0.55rem;
   display: flex;
   flex-wrap: wrap;
@@ -637,13 +694,13 @@ defineExpose({
   justify-content: space-between;
 }
 
-.vd-neptune-result-keywords {
+.vdl-neptune-result-keywords {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.vd-neptune-keyword {
+.vdl-neptune-keyword {
   font-size: 0.72rem;
   color: var(--text-muted);
   border: 1px solid var(--border-color);
@@ -651,23 +708,46 @@ defineExpose({
   padding: 0.1rem 0.45rem;
 }
 
-.vd-neptune-result-link {
+.vdl-neptune-result-link {
   color: var(--color-primary);
   font-size: 0.8rem;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.vd-neptune-result-link:hover {
+.vdl-neptune-result-link:hover {
   text-decoration: underline;
 }
 
+.vdl-neptune-progress {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.vdl-neptune-progress-bar {
+  height: 4px;
+  background: var(--color-primary);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.vdl-neptune-progress-text {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 @media (max-width: 600px) {
-  .vd-neptune-input {
+  .vdl-neptune-input {
     padding-right: 3.5rem;
   }
 
-  .vd-neptune-hint {
+  .vdl-neptune-hint {
     font-size: 0.65rem;
   }
 }

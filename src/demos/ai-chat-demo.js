@@ -2,7 +2,7 @@ import { createApp, h } from 'vue';
 import { VanduoVue, VdCard, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
-import VdAiChatUI from '../components/VdAiChatUI.vue';
+import VdlAiChatUI from '../components/VdlAiChatUI.vue';
 
 const DemoApp = {
   name: 'AiChatDemo',
@@ -14,17 +14,17 @@ const DemoApp = {
           h(
             'p',
             [
-              'In-browser inference using WebLLM with Gemma 4 first, plus optional small/fast models.',
+              'In-browser inference using LiteRT-LM for Gemma 4 (true multi-turn), plus optional WebLLM models.',
               h('br'),
               'Fully private, FOSS guardrails enforced. No server required.',
             ],
           ),
           h(VdThemeSwitcher, { menu: false }),
         ]),
-        h('div', { class: 'demo-chat-wrap' }, [h(VdAiChatUI)]),
+        h('div', { class: 'demo-chat-wrap' }, [h(VdlAiChatUI)]),
         h(
           VdCard,
-          { class: 'demo-info-section vd-card-glow vd-glass' },
+          { class: 'demo-info-section vdl-card-glow vd-glass' },
           {
             default: () => [
               h('h3', 'How it Works'),
@@ -37,12 +37,7 @@ const DemoApp = {
               h('ul', [
                 h('li', [
                   h('strong', 'The Download is Cached: '),
-                  h(
-                    'a',
-                    { href: 'https://webllm.mlc.ai/', target: '_blank', rel: 'noopener noreferrer' },
-                    'WebLLM',
-                  ),
-                  " automatically utilizes the browser's native Cache API. After the initial model download, weights are stored securely on your hard drive.",
+                  'After the initial model download, weights are stored securely on your hard drive (LiteRT/OPFS or browser Cache API depending on backend).',
                 ]),
                 h('li', [
                   h('strong', 'VRAM Initialization: '),
@@ -61,6 +56,20 @@ const DemoApp = {
                     h(
                       'a',
                       {
+                        href: 'https://developers.google.com/edge/litert-lm/js',
+                        target: '_blank',
+                        rel: 'noopener noreferrer',
+                      },
+                      'LiteRT-LM (@litert-lm/core)',
+                    ),
+                  ]),
+                  ': Default Gemma 4 backend — Google AI Edge WebGPU runtime with native multi-turn conversations.',
+                ]),
+                h('li', [
+                  h('strong', [
+                    h(
+                      'a',
+                      {
                         href: 'https://webllm.mlc.ai/',
                         target: '_blank',
                         rel: 'noopener noreferrer',
@@ -68,7 +77,7 @@ const DemoApp = {
                       'WebLLM (@mlc-ai/web-llm)',
                     ),
                   ]),
-                  ': The core inference engine bringing LLM chat to browsers using WebGPU acceleration and WebAssembly.',
+                  ': Optional smaller instruct models (and experimental Gemma MLC packages).',
                 ]),
                 h('li', [
                   h('strong', [
@@ -82,7 +91,7 @@ const DemoApp = {
                       'Gemma 4',
                     ),
                   ]),
-                  ': Primary local models (E2B / E4B) via community MLC/WebLLM packages.',
+                  ': Primary local models (E2B / E4B) via official LiteRT-LM web packages.',
                 ]),
               ]),
               h('h5', 'UI & Design'),

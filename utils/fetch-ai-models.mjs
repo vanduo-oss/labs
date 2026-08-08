@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * Prefetch WebLLM/MLC model artifacts for local Vite serving.
+ * Prefetch in-browser model artifacts for local Vite serving.
  *
- * Default: Gemma 4 E2B (~2.7GB) → .models/gemma-4-E2B-it-q4f16_1-MLC/
+ * Default: Gemma 4 E2B LiteRT web (~2.0GB) → .models/gemma-4-E2B-it-web/
+ * Also supports legacy WebLLM/MLC packages.
  * Served in `pnpm dev` at /models/<id>/ (see vite.config.js). Never shipped in `pnpm build`.
  *
  * Usage:
  *   pnpm models:fetch
+ *   pnpm models:fetch -- --model gemma-4-E2B-it-web
  *   pnpm models:fetch -- --model gemma-4-E2B-it-q4f16_1-MLC
  *   pnpm models:fetch -- --dry-run
  *   pnpm models:fetch -- --force
@@ -22,7 +24,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MODELS_DIR = path.join(ROOT, '.models');
 
 const CATALOG = {
+  'gemma-4-E2B-it-web': {
+    kind: 'files',
+    hfRepo: 'litert-community/gemma-4-E2B-it-litert-lm',
+    approxBytes: 2.0e9,
+    files: [
+      { path: 'gemma-4-E2B-it-web.litertlm', outName: 'gemma-4-E2B-it-web.litertlm' },
+    ],
+  },
   'gemma-4-E2B-it-q4f16_1-MLC': {
+    kind: 'tree',
     hfRepo: 'welcoma/gemma-4-E2B-it-q4f16_1-MLC',
     approxBytes: 2.7e9,
     skipNames: new Set(['.gitattributes', 'README.md']),
@@ -34,7 +45,7 @@ const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
 const modelFlagIdx = args.indexOf('--model');
 const modelId =
-  modelFlagIdx >= 0 ? args[modelFlagIdx + 1] : 'gemma-4-E2B-it-q4f16_1-MLC';
+  modelFlagIdx >= 0 ? args[modelFlagIdx + 1] : 'gemma-4-E2B-it-web';
 
 if (!CATALOG[modelId]) {
   console.error(`Unknown model "${modelId}". Known: ${Object.keys(CATALOG).join(', ')}`);
@@ -58,7 +69,7 @@ function formatBytes(n) {
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-async function listAllFiles(apiUrl, prefix = '') {
+async function listAllFiles(apiUrl) {
   const res = await fetch(apiUrl);
   if (!res.ok) throw new Error(`HF tree failed (${res.status}): ${apiUrl}`);
   const items = await res.json();
@@ -67,12 +78,11 @@ async function listAllFiles(apiUrl, prefix = '') {
     if (item.type === 'directory') {
       const nested = await listAllFiles(
         `https://huggingface.co/api/models/${entry.hfRepo}/tree/main/${item.path}`,
-        item.path,
       );
       files.push(...nested);
     } else if (item.type === 'file') {
       const base = path.posix.basename(item.path);
-      if (entry.skipNames.has(base)) continue;
+      if (entry.skipNames?.has(base)) continue;
       files.push({
         path: item.path,
         size: item.lfs?.size || item.size || 0,
@@ -82,8 +92,8 @@ async function listAllFiles(apiUrl, prefix = '') {
   return files;
 }
 
-async function downloadFile(relPath, expectedSize) {
-  const dest = path.join(outDir, relPath);
+async function downloadFile(relPath, destRel, expectedSize) {
+  const dest = path.join(outDir, destRel);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
 
   if (!force && fs.existsSync(dest)) {
@@ -122,7 +132,23 @@ async function main() {
   console.log(`[models:fetch] out=${path.relative(ROOT, outDir)} (~${formatBytes(entry.approxBytes)})`);
   if (dryRun) console.log('[models:fetch] dry-run — no files written');
 
-  const files = await listAllFiles(HF_API);
+  let files;
+  if (entry.kind === 'files') {
+    // Resolve sizes from HF tree for the listed files.
+    const tree = await listAllFiles(HF_API);
+    const byPath = new Map(tree.map((f) => [f.path, f]));
+    files = entry.files.map((f) => {
+      const meta = byPath.get(f.path);
+      return {
+        path: f.path,
+        outName: f.outName || f.path,
+        size: meta?.size || 0,
+      };
+    });
+  } else {
+    files = (await listAllFiles(HF_API)).map((f) => ({ ...f, outName: f.path }));
+  }
+
   files.sort((a, b) => a.path.localeCompare(b.path));
   const total = files.reduce((sum, f) => sum + (f.size || 0), 0);
   console.log(`[models:fetch] ${files.length} files, ${formatBytes(total)}`);
@@ -136,7 +162,7 @@ async function main() {
   for (const file of files) {
     process.stdout.write(`  ${file.path} (${formatBytes(file.size)}) … `);
     try {
-      const result = await downloadFile(file.path, file.size);
+      const result = await downloadFile(file.path, file.outName, file.size);
       if (result.dryRun) {
         console.log('would fetch');
       } else if (result.skipped) {

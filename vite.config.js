@@ -60,7 +60,6 @@ export default defineConfig({
         { src: 'data', dest: '.' },
         { src: 'doc', dest: '.' },
         { src: 'favicon.svg', dest: '.' },
-        { src: 'tests', dest: '.' },
       ],
     }),
   ],
