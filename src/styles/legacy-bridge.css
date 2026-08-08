@@ -1,0 +1,41 @@
+/**
+ * Map legacy Vanduo framework CSS variables used by vanilla Labs modules
+ * (ai-chat.js, neptune-search.js) onto vd3 `--vd-*` tokens.
+ */
+:root,
+[data-theme] {
+  --bg-primary: var(--vd-bg-primary);
+  --bg-secondary: var(--vd-bg-secondary);
+  --bg-tertiary: var(--vd-bg-tertiary);
+  --bg-dark: var(--vd-bg-dark);
+  --bg-darker: var(--vd-bg-darker);
+
+  --text-primary: var(--vd-text-primary);
+  --text-secondary: var(--vd-text-secondary);
+  --text-muted: var(--vd-text-muted);
+
+  --border-color: var(--vd-border-color);
+  --border-color-light: var(--vd-border-color-light, var(--vd-border-color));
+  --border-color-dark: var(--vd-border-color-dark, var(--vd-border-color));
+
+  --color-primary: var(--vd-color-primary);
+  --color-primary-rgb: var(--vd-color-primary-rgb);
+  --color-primary-hover: var(--vd-color-primary-hover);
+  --color-primary-dark: var(--vd-color-primary-dark);
+  --color-primary-light: var(--vd-color-primary-light);
+  --color-primary-alpha-10: var(--vd-color-primary-alpha-10);
+  --color-primary-alpha-20: var(--vd-color-primary-alpha-20);
+
+  --color-info: var(--vd-color-info);
+  --color-success: var(--vd-color-success);
+  --color-warning: var(--vd-color-warning);
+  --color-danger: var(--vd-color-danger, var(--vd-color-error));
+  --color-error: var(--vd-color-error);
+
+  --radius-sm: var(--vd-border-radius-sm);
+  --radius-md: var(--vd-border-radius-md);
+  --radius-lg: var(--vd-border-radius-lg);
+  --card-border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md));
+
+  --font-mono: var(--vd-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}

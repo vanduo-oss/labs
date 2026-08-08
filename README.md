@@ -11,7 +11,7 @@ Current component versions:
 | Component | Version | Module |
 |------|------|------|
 | `vd-neptune-search` | `0.0.2` | [`neptune-search.js`](./neptune-search.js) |
-| `vd-ai-chat` | `0.0.4` | [`ai-chat.js`](./ai-chat.js) |
+| `vd-ai-chat` | `0.0.5` | [`ai-chat.js`](./ai-chat.js) |
 
 ### Shared Guardrails Modules
 
@@ -96,18 +96,25 @@ pnpm index   # runs node utils/neptune-indexer.mjs
 
 ### Demo
 
-From this `labs/` directory (repository root for the static server), run:
+The Labs site is a Vite + Vue 3 app on [`@vanduo-oss/vd3`](https://www.npmjs.com/package/@vanduo-oss/vd3). From the repo root:
 
 ```bash
-pnpm run demo:serve
+pnpm install
+pnpm dev
 ```
 
 Then open:
 
-- `http://localhost:3000/` for the standalone **Vanduo Labs** page (navbar + hero + demos)
-- `http://localhost:3000/demo/neptune-demo` (or `/demo/neptune-demo.html`) for the focused Neptune demo page
+- `http://localhost:3000/` for the **Vanduo Labs** site (navbar + hero + demos)
+- `http://localhost:3000/demo/neptune-demo.html` for the focused Neptune demo page
+- `http://localhost:3000/demo/ai-chat-demo.html` for the focused AI Chat demo page
 
-Serving only `demo/` breaks module and data URLs (`../neptune-search.js` and `../data/*` must resolve under the same origin).
+Production build / preview:
+
+```bash
+pnpm build
+pnpm preview
+```
 
 ---
 
@@ -133,9 +140,9 @@ ui.mount();
 
 ### Notes
 
-- Defaults to smaller Gemma 2B for fast startup, with additional Balanced/Quality/Coder model tiers.
+- Defaults to **Gemma 4 E2B**, with Gemma 4 E4B as the quality tier; optional small/fast models (SmolLM2, Qwen2.5, Llama 3.2, Qwen Coder) remain available.
 - Detects runtime hardware capabilities (WebGPU + `shader-f16`) and shows system compatibility info in setup UI.
-- Automatically applies compatible fallback variants on lower-capability devices when needed.
+- Automatically applies compatible fallback variants on lower-capability devices when needed (optional built-ins).
 - Model download is user-triggered and cached by the browser.
 - Includes deterministic regex guardrails that block known prompt-injection patterns before generation.
 

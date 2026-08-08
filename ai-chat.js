@@ -28,54 +28,77 @@ const CDN = {
   webllm: 'https://esm.run/@mlc-ai/web-llm'
 };
 
-export const VD_AI_CHAT_VERSION = '0.0.4';
+export const VD_AI_CHAT_VERSION = '0.0.5';
 
 let _webllmModule = null;
 
+const MODEL_GROUPS = [
+  { id: 'gemma4', label: 'Gemma 4' },
+  { id: 'optional', label: 'Optional' },
+];
+
 const MODEL_OPTIONS = [
   {
-    id: 'gemma-2b-it-q4f16_1-MLC',
-    label: 'Gemma 2B (~1.5GB) - Fast (Default)',
+    id: 'gemma-4-E2B-it-q4f16_1-MLC',
+    label: 'Gemma 4 E2B (~2.7GB) - Fast (Default)',
     tier: 'Fast',
+    group: 'gemma4',
     requires: ['shader-f16'],
-    fallbackId: 'gemma-2b-it-q4f32_1-MLC'
+    overrides: {
+      context_window_size: 4096,
+      sliding_window_size: -1,
+    },
+    modelUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC',
+    modelLibUrl:
+      'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E2B-it-q4f16_1-MLC-webgpu.wasm',
+  },
+  {
+    id: 'gemma-4-E4B-it-q4f16_1-MLC',
+    label: 'Gemma 4 E4B (~4.0GB) - Quality',
+    tier: 'Quality',
+    group: 'gemma4',
+    requires: ['shader-f16'],
+    experimental: true,
+    overrides: {
+      context_window_size: 4096,
+      sliding_window_size: -1,
+    },
+    modelUrl: 'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC',
+    modelLibUrl:
+      'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E4B-it-q4f16_1-MLC-webgpu.wasm',
+  },
+  {
+    id: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+    label: 'SmolLM2 360M (~0.3GB) - Tiny',
+    tier: 'Tiny',
+    group: 'optional',
+    requires: ['shader-f16'],
+    fallbackId: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
   },
   {
     id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 1.5B (~1.6GB) - Balanced',
     tier: 'Balanced',
+    group: 'optional',
     requires: [],
-    fallbackId: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC'
+    fallbackId: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC',
   },
   {
     id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    label: 'Llama 3.2 3B (~2.3GB) - Quality',
-    tier: 'Quality',
+    label: 'Llama 3.2 3B (~2.3GB) - Alt Quality',
+    tier: 'Alt Quality',
+    group: 'optional',
     requires: [],
-    fallbackId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC'
+    fallbackId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
   },
   {
     id: 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 Coder 1.5B (~1.6GB) - Coder',
     tier: 'Coder',
+    group: 'optional',
     requires: [],
-    fallbackId: 'Qwen2.5-Coder-1.5B-Instruct-q4f32_1-MLC'
+    fallbackId: 'Qwen2.5-Coder-1.5B-Instruct-q4f32_1-MLC',
   },
-  // Gemma 4 E2B temporarily disabled: upstream artifact returns empty responses (zero tokens generated).
-  // Re-enable when welcoma/gemma-4-E2B-it-q4f16_1-MLC releases a fixed version.
-  // {
-  //   id: 'gemma-4-E2B-it-q4f16_1-MLC',
-  //   label: 'Gemma 4 E2B (~2.7GB)',
-  //   tier: 'Gemma 4',
-  //   requires: ['shader-f16'],
-  //   experimental: true,
-  //   overrides: {
-  //     context_window_size: 4096,
-  //     sliding_window_size: -1
-  //   },
-  //   modelUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC',
-  //   modelLibUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E2B-it-q4f16_1-MLC-webgpu.wasm'
-  // }
 ];
 
 const MODEL_CACHE_FLAG_PREFIX = 'vd-ai-chat-model-cached:';
@@ -994,10 +1017,16 @@ export class AiChatUI {
 
   _renderModelOptions() {
     const { modelSelect } = this._elements;
-    const optionsMarkup = MODEL_OPTIONS.map((m) => {
+    const renderOption = (m) => {
       const selected = m.id === this._selectedModelId ? 'selected' : '';
       const disabled = this._resolveModelForSystem(m.id).unavailable ? 'disabled' : '';
       return `<option value="${m.id}" ${selected} ${disabled}>${this._buildModelOptionLabel(m.id)}</option>`;
+    };
+
+    const optionsMarkup = MODEL_GROUPS.map((group) => {
+      const models = MODEL_OPTIONS.filter((m) => (m.group || 'optional') === group.id);
+      if (!models.length) return '';
+      return `<optgroup label="${group.label}">${models.map(renderOption).join('')}</optgroup>`;
     }).join('');
 
     if (modelSelect) modelSelect.innerHTML = optionsMarkup;
