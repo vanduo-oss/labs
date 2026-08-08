@@ -16,6 +16,7 @@ import {
   assessLoadCapacity,
   buildWeakDeviceConfirmCopy,
   collectDeviceSignals,
+  getLiteRTRuntimeBlockReason,
   getModelDisplayName,
   getModelOption,
   shouldFocusChatComposer,
@@ -113,8 +114,23 @@ function markModelCached(modelId) {
 
 function resolveModelForSystem(modelId) {
   const option = getModelOption(modelId);
-  if (!option || !systemInfo.value) {
-    return { modelId, changed: false, unavailable: false, reason: '' };
+  if (!option) {
+    return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
+  }
+
+  const runtimeBlock = getLiteRTRuntimeBlockReason(option);
+  if (runtimeBlock) {
+    return {
+      modelId,
+      changed: false,
+      unavailable: false,
+      loadBlocked: true,
+      reason: runtimeBlock,
+    };
+  }
+
+  if (!systemInfo.value) {
+    return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
   }
   const missing = (option.requires || []).filter((feature) => {
     if (feature === 'shader-f16') return !systemInfo.value.shaderF16;
@@ -125,6 +141,7 @@ function resolveModelForSystem(modelId) {
       modelId: option.fallbackId,
       changed: true,
       unavailable: false,
+      loadBlocked: false,
       reason: `Using compatibility fallback (${option.fallbackId}) because shader-f16 is not available.`,
     };
   }
@@ -133,10 +150,11 @@ function resolveModelForSystem(modelId) {
       modelId,
       changed: false,
       unavailable: true,
+      loadBlocked: false,
       reason: `This model requires ${missing.join(', ')}. Choose another model on this device.`,
     };
   }
-  return { modelId, changed: false, unavailable: false, reason: '' };
+  return { modelId, changed: false, unavailable: false, loadBlocked: false, reason: '' };
 }
 
 function buildOptionLabel(model, resolved) {
@@ -145,10 +163,16 @@ function buildOptionLabel(model, resolved) {
   else if (model.litertKind === 'portable') flags.push('LiteRT portable');
   else if (model.litertKind === 'spike') flags.push('LiteRT spike');
   if (model.experimental) flags.push('Experimental');
+  if (resolved.loadBlocked) flags.push('Runtime unsupported');
   if (isModelLikelyCached(model.id)) flags.push('Cached');
   if (resolved.unavailable) flags.push('Unavailable');
   return `${model.label}${flags.length ? ` — ${flags.join(' — ')}` : ''}`;
 }
+
+const selectedResolved = computed(() => resolveModelForSystem(selectedModelId.value));
+const loadDisabled = computed(
+  () => loading.value || selectedResolved.value.unavailable || selectedResolved.value.loadBlocked,
+);
 
 async function detectSystemInfo() {
   const info = {
@@ -176,6 +200,10 @@ async function detectSystemInfo() {
 
 function refreshCapacityNote(modelId = selectedModelId.value) {
   const resolved = resolveModelForSystem(modelId);
+  if (resolved.loadBlocked || resolved.unavailable) {
+    capacityNote.value = '';
+    return;
+  }
   const assessment = assessLoadCapacity({
     modelId: resolved.modelId,
     systemInfo: systemInfo.value || {},
@@ -195,12 +223,19 @@ function refreshCapacityNote(modelId = selectedModelId.value) {
 function applySelection(modelId) {
   selectedModelId.value = modelId;
   const resolved = resolveModelForSystem(modelId);
-  fallbackNote.value = resolved.changed || resolved.unavailable ? resolved.reason : '';
-  cacheHint.value = isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
-    ? 'This model looks cached in your browser — reload should skip a full download.'
-    : 'First load downloads model weights into browser cache.';
+  fallbackNote.value = resolved.changed || resolved.unavailable || resolved.loadBlocked
+    ? resolved.reason
+    : '';
+  if (resolved.loadBlocked) {
+    errorBanner.value = '';
+  }
+  cacheHint.value = resolved.loadBlocked
+    ? ''
+    : (isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
+      ? 'This model looks cached in your browser — reload should skip a full download.'
+      : 'First load downloads model weights into browser cache.');
   refreshCapacityNote(modelId);
-  if (!loaded.value && chat) {
+  if (!loaded.value && chat && !resolved.loadBlocked && !resolved.unavailable) {
     void chat.setModelId(resolved.modelId).catch(() => {
       /* ignore while loading */
     });
@@ -297,8 +332,9 @@ async function loadModel() {
   if (!chat || loading.value) return;
   const catalogId = selectedModelId.value;
   const resolved = resolveModelForSystem(catalogId);
-  if (resolved.unavailable) {
+  if (resolved.unavailable || resolved.loadBlocked) {
     errorBanner.value = resolved.reason;
+    progressText.value = '';
     return;
   }
 
@@ -343,8 +379,9 @@ async function loadModel() {
   } catch (err) {
     statusTone.value = 'danger';
     statusText.value = 'Error';
-    progressText.value = err?.message || 'Failed to load model.';
-    errorBanner.value = progressText.value;
+    // Keep the message only in the error banner (avoid muted + red duplicates).
+    progressText.value = '';
+    errorBanner.value = err?.message || 'Failed to load model.';
     freezeHint.value = '';
   } finally {
     loading.value = false;
@@ -355,8 +392,9 @@ async function loadModel() {
 async function switchModel() {
   if (!chat || loading.value || streaming.value) return;
   const resolved = resolveModelForSystem(selectedModelId.value);
-  if (resolved.unavailable) {
+  if (resolved.unavailable || resolved.loadBlocked) {
     errorBanner.value = resolved.reason;
+    progressText.value = '';
     return;
   }
   if (resolved.modelId === chat.modelId && loaded.value) return;
@@ -518,7 +556,8 @@ onMounted(async () => {
       progressText.value = data.message || 'Ready';
       freezeHint.value = '';
     } else if (data.stage === 'error') {
-      progressText.value = data.message || 'Error';
+      // Surface via errorBanner from load/generate catch — don't duplicate in progress.
+      progressText.value = '';
       freezeHint.value = '';
       statusTone.value = 'danger';
       statusText.value = 'Error';
@@ -609,7 +648,7 @@ watch(loaded, async (isLoaded, wasLoaded) => {
               </option>
             </optgroup>
           </select>
-          <p v-if="fallbackNote" class="vdl-ai-note">{{ fallbackNote }}</p>
+          <p v-if="fallbackNote && !selectedResolved.loadBlocked" class="vdl-ai-note">{{ fallbackNote }}</p>
           <p v-if="cacheHint" class="vdl-ai-note">{{ cacheHint }}</p>
           <p v-if="capacityNote" class="vdl-ai-capacity-note" role="status">{{ capacityNote }}</p>
           <div class="vdl-ai-cache-badges">
@@ -674,24 +713,28 @@ watch(loaded, async (isLoaded, wasLoaded) => {
             :key="'compat-' + model.id"
             class="vdl-ai-mini-badge"
             :data-state="
-              resolveModelForSystem(model.id).unavailable
-                ? 'unavailable'
-                : resolveModelForSystem(model.id).changed
-                  ? 'fallback'
-                  : model.experimental
-                    ? 'experimental'
-                    : 'native'
+              resolveModelForSystem(model.id).loadBlocked
+                ? 'unsupported'
+                : resolveModelForSystem(model.id).unavailable
+                  ? 'unavailable'
+                  : resolveModelForSystem(model.id).changed
+                    ? 'fallback'
+                    : model.experimental
+                      ? 'experimental'
+                      : 'native'
             "
           >
             {{ model.tier }}:
             {{
-              resolveModelForSystem(model.id).unavailable
-                ? 'unavailable'
-                : resolveModelForSystem(model.id).changed
-                  ? 'fallback'
-                  : model.experimental
-                    ? 'experimental'
-                    : 'native'
+              resolveModelForSystem(model.id).loadBlocked
+                ? 'unsupported'
+                : resolveModelForSystem(model.id).unavailable
+                  ? 'unavailable'
+                  : resolveModelForSystem(model.id).changed
+                    ? 'fallback'
+                    : model.experimental
+                      ? 'experimental'
+                      : 'native'
             }}
           </span>
         </div>
@@ -702,18 +745,25 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         lighter download. Inference stays in your browser.
       </p>
 
-      <div v-if="loading || progressText" class="vdl-ai-progress">
+      <div v-if="(loading || progressText) && !errorBanner" class="vdl-ai-progress">
         <VdProgress :value="progressPct" />
         <div class="vd-text-sm vd-text-muted">{{ progressText }}</div>
         <p v-if="freezeHint" class="vdl-ai-freeze-hint">{{ freezeHint }}</p>
       </div>
 
-      <p v-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
+      <p
+        v-if="fallbackNote && selectedResolved.loadBlocked"
+        class="vdl-ai-error"
+        role="status"
+      >
+        {{ fallbackNote }}
+      </p>
+      <p v-else-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
 
       <div class="vdl-ai-setup-actions">
-        <VdButton variant="primary" :loading="loading" :disabled="loading" @click="loadModel">
+        <VdButton variant="primary" :loading="loading" :disabled="loadDisabled" @click="loadModel">
           <VdIcon name="download-simple" />
-          Load AI Model
+          {{ selectedResolved.loadBlocked ? 'Runtime unsupported' : 'Load AI Model' }}
         </VdButton>
         <VdButton variant="secondary" :disabled="loading" @click="clearModalOpen = true">
           <VdIcon name="trash" />
@@ -1006,6 +1056,7 @@ watch(loaded, async (isLoaded, wasLoaded) => {
   color: var(--vd-color-warning, #f59e0b);
 }
 
+.vdl-ai-mini-badge[data-state='unsupported'],
 .vdl-ai-mini-badge[data-state='unavailable'] {
   border-color: rgba(var(--vd-color-danger-rgb, 239, 68, 68), 0.45);
   color: var(--vd-color-danger, #ef4444);

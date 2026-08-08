@@ -51,7 +51,7 @@ pnpm dev                   # serves mirror at /models/<id>/
 ### Features
 
 - Default model is **Gemma 4 E2B** (`gemma-4-E2B-it-web`) via Google **LiteRT-LM** (`@litert-lm/core`) with real multi-turn conversation context.
-- **Multi-architecture intent:** Gemma stays on LiteRT web-official; Tiny is **WebLLM Qwen3 0.6B** (SmolLM2 removed). LiteRT Qwen3 / Ministral remain experimental spikes.
+- **Multi-architecture intent:** Gemma stays on LiteRT web-official; Tiny is **WebLLM Qwen3 0.6B** (SmolLM2 removed). LiteRT Qwen3 / Ministral remain catalog spikes but **load is blocked** until PrefillDecode works in LiteRT-LM.js.
 - Legacy community **WebLLM/MLC** Gemma packages remain available but experimental: native multi-turn context is unreliable there (latest-turn-only workaround).
 - Model picker is grouped:
   - **Gemma 4:** E2B (Fast / default, web-official), E4B (Quality)
@@ -63,11 +63,11 @@ pnpm dev                   # serves mirror at /models/<id>/
 
 | Artifact | HF resolve | Browser status with `@litert-lm/core` (CDN) |
 |----------|------------|-----------------------------------------------|
-| Gemma `*-it-web.litertlm` | public | **Works** (WebGPU / gpu_artisan stream load) |
-| `Qwen3-0.6B.litertlm` | public | **Fails** — runtime converts Blob/URL → ReadableStream; PrefillDecode hits `Streaming … not supported yet` / `JS Stream Error [TypeError]: network error` |
-| Ministral `model.litertlm` | public | Same PrefillDecode class — left as spike; not Tiny |
+| Gemma `*-it-web.litertlm` | public | **Works** (WebGPU / `GPU_ARTISAN` stream load) |
+| `Qwen3-0.6B.litertlm` | public | **Blocked in Labs UI** — PrefillDecode; `GPU_ARTISAN` → `Streaming … not supported yet`; `Backend.GPU` non-stream `createEngine` → `null function` |
+| Ministral `model.litertlm` | public | Same PrefillDecode class — catalog spike only; Load disabled with clear reason |
 
-Google’s JS docs still list only Gemma web builds as supported. Community “portable Qwen3 in Chrome” claims do not hold on current LiteRT-LM.js stream loader.
+Google’s JS docs still list only Gemma web builds as supported. Labs keeps the spikes visible (labeled **Runtime unsupported**) so the gap is honest, but `AiChat.load()` refuses before download. Prefer Gemma 4 LiteRT or WebLLM Tiny (Qwen3 0.6B MLC) for chat.
 
 SmolLM2-360M was removed: it hallucinated Labs branding (e.g. “Vandouno”) and is unsuitable as Tiny.
 

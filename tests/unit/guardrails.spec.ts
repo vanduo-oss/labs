@@ -484,6 +484,46 @@ test.describe('Guardrails Unit', () => {
     expect(result.qwenLiteRT?.litertKind).toBe('spike');
   });
 
+  test('PrefillDecode LiteRT spikes are detected and blocked before load', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const qwen = mod.getModelOption('qwen3-0.6B-litert');
+      const ministral = mod.getModelOption('ministral-3-3B-litert');
+      const gemma = mod.getModelOption('gemma-4-E2B-it-web');
+      const chat = new mod.AiChat({ modelId: 'ministral-3-3B-litert' });
+      let loadError = '';
+      try {
+        await chat.load();
+      } catch (err) {
+        loadError = String(err?.message || err);
+      }
+      return {
+        qwenUnsupported: mod.isLiteRTPrefillDecodeUnsupported(qwen),
+        ministralUnsupported: mod.isLiteRTPrefillDecodeUnsupported('ministral-3-3B-litert'),
+        gemmaUnsupported: mod.isLiteRTPrefillDecodeUnsupported(gemma),
+        qwenRuntime: qwen?.litertRuntime,
+        reason: mod.getLiteRTRuntimeBlockReason('qwen3-0.6B-litert'),
+        rewritten: mod.rewriteLiteRTLoadError(
+          new Error('Streaming kTfLitePrefillDecode models is not supported yet.'),
+        ).message,
+        passthrough: mod.rewriteLiteRTLoadError(new Error('disk full')).message,
+        loadError,
+        loaded: chat.isLoaded(),
+      };
+    });
+
+    expect(result.qwenUnsupported).toBe(true);
+    expect(result.ministralUnsupported).toBe(true);
+    expect(result.gemmaUnsupported).toBe(false);
+    expect(result.qwenRuntime).toBe('prefilldecode-unsupported');
+    expect(result.reason).toMatch(/PrefillDecode/i);
+    expect(result.reason).toMatch(/LiteRT-LM\.js/i);
+    expect(result.rewritten).toBe(result.reason);
+    expect(result.passthrough).toBe('disk full');
+    expect(result.loadError).toBe(result.reason);
+    expect(result.loaded).toBe(false);
+  });
+
   test('assessLoadCapacity flags low RAM and low GPU storage limits', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
