@@ -23,7 +23,13 @@ const props = defineProps({
   chat: { type: Object, default: null },
 });
 
-const engine = ref(null);
+/**
+ * WebLLM WASM cannot live inside Vue reactivity (Proxy breaks Tokenizer bindings)
+ * and only one runtime may exist per tab. Keep AiChat as a plain module singleton.
+ * @type {AiChat | null}
+ */
+let chat = null;
+
 const selectedModelId = ref(MODEL_OPTIONS[0].id);
 const systemInfo = ref(null);
 const loaded = ref(false);
@@ -148,9 +154,9 @@ function applySelection(modelId) {
   cacheHint.value = isModelLikelyCached(resolved.modelId)
     ? 'This model looks cached in your browser — reload should skip a full download.'
     : 'First load downloads model weights into browser cache.';
-  if (!loaded.value && engine.value) {
+  if (!loaded.value && chat) {
     try {
-      engine.value.setModelId(resolved.modelId);
+      chat.setModelId(resolved.modelId);
     } catch {
       /* ignore while loading */
     }
@@ -187,7 +193,7 @@ function formatBytes(n) {
 }
 
 async function loadModel() {
-  if (!engine.value || loading.value) return;
+  if (!chat || loading.value) return;
   const resolved = resolveModelForSystem(selectedModelId.value);
   if (resolved.unavailable) {
     errorBanner.value = resolved.reason;
@@ -195,7 +201,7 @@ async function loadModel() {
   }
   errorBanner.value = '';
   applySelection(selectedModelId.value);
-  engine.value.setModelId(resolved.modelId, { resetMessages: true });
+  chat.setModelId(resolved.modelId, { resetMessages: true });
   selectedModelId.value = resolved.modelId;
   loading.value = true;
   progressPct.value = 0;
@@ -203,7 +209,7 @@ async function loadModel() {
   statusTone.value = 'warn';
   statusText.value = 'Loading…';
   try {
-    await engine.value.load();
+    await chat.load();
     markModelCached(resolved.modelId);
     loaded.value = true;
     statusTone.value = 'ok';
@@ -221,22 +227,22 @@ async function loadModel() {
 }
 
 async function switchModel() {
-  if (!engine.value || loading.value || streaming.value) return;
+  if (!chat || loading.value || streaming.value) return;
   const resolved = resolveModelForSystem(selectedModelId.value);
   if (resolved.unavailable) {
     errorBanner.value = resolved.reason;
     return;
   }
-  if (resolved.modelId === engine.value.modelId && loaded.value) return;
+  if (resolved.modelId === chat.modelId && loaded.value) return;
   loaded.value = false;
   messages.value = [];
   tokenCount.value = null;
-  engine.value.reset();
+  chat.reset();
   await loadModel();
 }
 
 async function sendMessage() {
-  if (!engine.value || !loaded.value || streaming.value) return;
+  if (!chat || !loaded.value || streaming.value) return;
   const text = inputText.value.trim();
   if (!text) return;
   errorBanner.value = '';
@@ -246,7 +252,7 @@ async function sendMessage() {
   const assistantIdx = messages.value.length - 1;
   streaming.value = true;
   try {
-    await engine.value.generate(
+    await chat.generate(
       text,
       (partial) => {
         messages.value[assistantIdx] = { role: 'assistant', content: partial };
@@ -333,16 +339,20 @@ function renderMarkdown(text) {
 }
 
 onMounted(async () => {
-  engine.value = props.chat || new AiChat();
-  selectedModelId.value = engine.value.modelId || MODEL_OPTIONS[0].id;
+  // Reuse one AiChat/WebLLM runtime for the tab (HMR / v-if remount safe).
+  if (props.chat) chat = props.chat;
+  else if (!chat) chat = new AiChat();
+
+  selectedModelId.value = chat.modelId || MODEL_OPTIONS[0].id;
   systemInfo.value = await detectSystemInfo();
   applySelection(selectedModelId.value);
-  loaded.value = !!engine.value.isLoaded?.();
+  loaded.value = !!chat.isLoaded?.();
   if (loaded.value) {
     statusTone.value = 'ok';
-    statusText.value = `Online (${getModelDisplayName(engine.value.modelId)})`;
+    statusText.value = `Online (${getModelDisplayName(chat.modelId)})`;
   }
-  unsubProgress = engine.value.onProgress((data) => {
+  if (unsubProgress) unsubProgress();
+  unsubProgress = chat.onProgress((data) => {
     if (data.stage === 'init') {
       progressText.value = data.message || 'Initializing…';
     } else if (data.stage === 'downloading') {
@@ -364,20 +374,18 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (unsubProgress) unsubProgress();
-  document.removeEventListener('visibilitychange', refreshStoragePanel);
-  try {
-    engine.value?.engine?.unload?.();
-  } catch {
-    /* ignore */
+  // Do not unload the WASM engine here — remount / HMR must reuse the same runtime.
+  if (unsubProgress) {
+    unsubProgress();
+    unsubProgress = null;
   }
-  engine.value = null;
+  document.removeEventListener('visibilitychange', refreshStoragePanel);
 });
 
 watch(
   () => props.chat,
   (next) => {
-    if (next) engine.value = next;
+    if (next) chat = next;
   },
 );
 </script>
