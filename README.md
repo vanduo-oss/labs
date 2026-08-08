@@ -139,6 +139,13 @@ await chat.generate('Hello');
 
 Labs UI: Vue + vd3 component `VdAiChatUI` (headless `AiChat` remains a vanilla ES module).
 
+Optional local Gemma E2B mirror for faster `pnpm dev` loads (gitignored, not shipped in `dist/`):
+
+```bash
+pnpm models:fetch   # ~2.7GB → .models/… ; served at /models/…
+pnpm dev
+```
+
 ### Notes
 
 - Defaults to **Gemma 4 E2B**, with Gemma 4 E4B as the quality tier; optional small/fast models (SmolLM2, Qwen2.5, Llama 3.2, Qwen Coder) remain available.

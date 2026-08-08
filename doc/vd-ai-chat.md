@@ -33,6 +33,18 @@ import VdAiChatUI from './src/components/VdAiChatUI.vue';
 
 Legacy imperative `AiChatUI` remains exported from `ai-chat.js` for compatibility; the Labs site uses `VdAiChatUI`.
 
+### Local model mirror (dev)
+
+For faster local loads of the default **Gemma 4 E2B** package (~2.7GB), prefetch once into a gitignored folder and let Vite serve it (not included in `pnpm build` / GitHub Pages):
+
+```bash
+pnpm models:fetch          # downloads into .models/gemma-4-E2B-it-q4f16_1-MLC/
+pnpm models:fetch -- --dry-run
+pnpm dev                   # serves mirror at /models/<id>/
+```
+
+`AiChat.load()` probes `/models/<id>/mlc-chat-config.json` and prefers that mirror when present; otherwise it uses the Hugging Face URLs.
+
 ### Features
 
 - Default model is **Gemma 4 E2B** (`gemma-4-E2B-it-q4f16_1-MLC`) for the Gemma 4 family.

@@ -42,6 +42,7 @@
     "preview": "vite preview",
     "demo:serve": "vite",
     "index": "node utils/neptune-indexer.mjs",
+    "models:fetch": "node utils/fetch-ai-models.mjs",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",

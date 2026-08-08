@@ -1,14 +1,52 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const localModelsDir = path.join(root, '.models');
+
+/** Dev-only: serve `.models/<id>/…` at `/models/<id>/…` (never copied into `dist/`). */
+function localModelsPlugin() {
+  return {
+    name: 'labs-local-models',
+    configureServer(server) {
+      server.middlewares.use('/models', (req, res, next) => {
+        try {
+          const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+          const rel = urlPath.replace(/^\/+/, '');
+          if (!rel || rel.includes('..')) {
+            res.statusCode = 400;
+            res.end('Bad path');
+            return;
+          }
+          const filePath = path.join(localModelsDir, rel);
+          if (!filePath.startsWith(localModelsDir)) {
+            res.statusCode = 400;
+            res.end('Bad path');
+            return;
+          }
+          if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+            res.statusCode = 404;
+            res.end('Not found');
+            return;
+          }
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          fs.createReadStream(filePath).pipe(res);
+        } catch (err) {
+          next(err);
+        }
+      });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     vue(),
+    localModelsPlugin(),
     viteStaticCopy({
       targets: [
         { src: 'ai-chat.js', dest: '.' },

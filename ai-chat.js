@@ -118,19 +118,69 @@ export function getModelDisplayName(modelId) {
   return option.label.split('(~')[0].replace(/\s+-\s+\w+$/, '').trim();
 }
 
-function buildModelAppConfig(modelId) {
+const localModelProbeCache = new Map();
+
+function absoluteUrl(pathname) {
+  if (typeof location === 'undefined' || !location?.origin) return pathname;
+  return new URL(pathname, location.origin).href;
+}
+
+/**
+ * Prefer a local Vite mirror at `/models/<id>/` (from `pnpm models:fetch`) when present.
+ * Falls back to the Hugging Face URLs on MODEL_OPTIONS.
+ */
+async function resolveModelSource(option) {
+  if (!option?.modelUrl || !option?.modelLibUrl) {
+    return { modelUrl: option?.modelUrl, modelLibUrl: option?.modelLibUrl, local: false };
+  }
+
+  const localRoot = `/models/${option.id}`;
+  if (localModelProbeCache.has(option.id)) {
+    const hit = localModelProbeCache.get(option.id);
+    return hit
+      ? {
+          modelUrl: absoluteUrl(`${localRoot}/`),
+          modelLibUrl: absoluteUrl(`${localRoot}/libs/${option.id}-webgpu.wasm`),
+          local: true,
+        }
+      : { modelUrl: option.modelUrl, modelLibUrl: option.modelLibUrl, local: false };
+  }
+
+  try {
+    const probe = await fetch(`${localRoot}/mlc-chat-config.json`, { method: 'GET', cache: 'no-store' });
+    const ok = probe.ok;
+    localModelProbeCache.set(option.id, ok);
+    if (ok) {
+      return {
+        modelUrl: absoluteUrl(`${localRoot}/`),
+        modelLibUrl: absoluteUrl(`${localRoot}/libs/${option.id}-webgpu.wasm`),
+        local: true,
+      };
+    }
+  } catch {
+    localModelProbeCache.set(option.id, false);
+  }
+
+  return { modelUrl: option.modelUrl, modelLibUrl: option.modelLibUrl, local: false };
+}
+
+async function buildModelAppConfig(modelId) {
   const option = getModelOption(modelId);
   if (!option?.modelUrl || !option?.modelLibUrl) return null;
+  const source = await resolveModelSource(option);
+  if (source.local) {
+    console.info(`[AiChat] Using local model mirror for ${option.id}: ${source.modelUrl}`);
+  }
   return {
     model_list: [
       {
-        model: option.modelUrl,
+        model: source.modelUrl,
         model_id: option.id,
-        model_lib: option.modelLibUrl,
+        model_lib: source.modelLibUrl,
         required_features: option.requires || [],
-        overrides: option.overrides || undefined
-      }
-    ]
+        overrides: option.overrides || undefined,
+      },
+    ],
   };
 }
 
@@ -268,7 +318,7 @@ export class AiChat {
       
       this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
 
-      const appConfig = buildModelAppConfig(this.modelId);
+      const appConfig = await buildModelAppConfig(this.modelId);
       const engineConfig = {
         initProgressCallback: (progress) => {
           this._emitProgress({
