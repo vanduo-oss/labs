@@ -12,8 +12,13 @@ import {
   AiChat,
   MODEL_GROUPS,
   MODEL_OPTIONS,
+  LOAD_FREEZE_HINT,
+  assessLoadCapacity,
+  buildWeakDeviceConfirmCopy,
+  collectDeviceSignals,
   getModelDisplayName,
   getModelOption,
+  shouldFocusChatComposer,
 } from '../../ai-chat.js';
 import { labsMarkdownToHtml } from '../../labs-md-to-html.js';
 
@@ -51,11 +56,25 @@ const storageQuota = ref('—');
 const storagePct = ref(0);
 const errorBanner = ref('');
 const messagesEl = ref(null);
+const composerInput = ref(null);
 const stickToBottom = ref(true);
+const capacityNote = ref('');
+const freezeHint = ref('');
 
 let unsubProgress = null;
 
 const displayTitle = computed(() => `AI Chat (${getModelDisplayName(selectedModelId.value)})`);
+
+const deviceSummary = computed(() => {
+  const info = systemInfo.value;
+  if (!info) return 'Checking…';
+  const mem = info.deviceMemory != null ? `~${info.deviceMemory} GB RAM*` : 'RAM n/a';
+  const cores = info.hardwareConcurrency != null ? `${info.hardwareConcurrency} cores` : 'cores n/a';
+  const buf = info.maxStorageBufferBindingSize != null
+    ? `buf ${(info.maxStorageBufferBindingSize / (1024 * 1024)).toFixed(0)} MB`
+    : '';
+  return [mem, cores, buf].filter(Boolean).join(' · ');
+});
 
 const groupedModels = computed(() =>
   MODEL_GROUPS.map((group) => ({
@@ -134,6 +153,7 @@ async function detectSystemInfo() {
     adapterName: null,
     shaderF16: false,
     error: null,
+    ...collectDeviceSignals(null),
   };
   if (!navigator.gpu) return info;
   try {
@@ -144,10 +164,29 @@ async function detectSystemInfo() {
     }
     info.adapterName = adapter.name || 'Unknown adapter';
     info.shaderF16 = !!(adapter.features && adapter.features.has('shader-f16'));
+    Object.assign(info, collectDeviceSignals(adapter));
   } catch (err) {
     info.error = err?.message || 'Adapter detection failed';
   }
   return info;
+}
+
+function refreshCapacityNote(modelId = selectedModelId.value) {
+  const resolved = resolveModelForSystem(modelId);
+  const assessment = assessLoadCapacity({
+    modelId: resolved.modelId,
+    systemInfo: systemInfo.value || {},
+  });
+  if (assessment.level === 'ok') {
+    capacityNote.value = '';
+    return;
+  }
+  const prefer = assessment.recommendedLabel
+    ? ` Prefer ${assessment.recommendedLabel} on weaker devices.`
+    : '';
+  capacityNote.value = `${assessment.level === 'high' ? 'Warning' : 'Caution'}: ${
+    assessment.reasons[0] || 'This device may struggle with the selected model.'
+  }${prefer}`;
 }
 
 function applySelection(modelId) {
@@ -157,6 +196,7 @@ function applySelection(modelId) {
   cacheHint.value = isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
     ? 'This model looks cached in your browser — reload should skip a full download.'
     : 'First load downloads model weights into browser cache.';
+  refreshCapacityNote(modelId);
   if (!loaded.value && chat) {
     void chat.setModelId(resolved.modelId).catch(() => {
       /* ignore while loading */
@@ -180,6 +220,44 @@ async function scrollToLatest(force = false) {
   if (force || stickToBottom.value) {
     el.scrollTop = el.scrollHeight;
     stickToBottom.value = true;
+  }
+}
+
+function isOtherInteractiveControl(el) {
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el === composerInput.value) return false;
+  if (typeof el.closest === 'function' && el.closest('[role="dialog"], .vd-modal')) return true;
+  const tag = el.tagName;
+  return tag === 'SELECT' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'A'
+    || el.isContentEditable === true;
+}
+
+/**
+ * Keep keyboard UX on the composer after send/stream/load, without stealing
+ * focus from model select / modal / other controls.
+ * @param {{ force?: boolean }} [opts]
+ */
+async function focusComposer(opts = {}) {
+  const force = !!opts.force;
+  const active = typeof document !== 'undefined' ? document.activeElement : null;
+  const chatReady = loaded.value && !loading.value;
+  if (!shouldFocusChatComposer({
+    force,
+    modalOpen: clearModalOpen.value,
+    chatReady,
+    activeIsComposer: active === composerInput.value,
+    activeIsOtherControl: isOtherInteractiveControl(active),
+  })) {
+    return;
+  }
+  await nextTick();
+  const el = composerInput.value;
+  if (!el || clearModalOpen.value || !loaded.value || loading.value) return;
+  if (el.disabled) return;
+  try {
+    el.focus({ preventScroll: true });
+  } catch {
+    /* ignore */
   }
 }
 
@@ -220,6 +298,21 @@ async function loadModel() {
     errorBanner.value = resolved.reason;
     return;
   }
+
+  const assessment = assessLoadCapacity({
+    modelId: resolved.modelId,
+    systemInfo: systemInfo.value || {},
+  });
+  if (assessment.level === 'high' || assessment.level === 'caution') {
+    const ok = window.confirm(
+      buildWeakDeviceConfirmCopy({
+        approxGb: assessment.approxGb,
+        recommendedLabel: assessment.recommendedLabel,
+      }),
+    );
+    if (!ok) return;
+  }
+
   errorBanner.value = '';
   applySelection(catalogId);
   await chat.setModelId(resolved.modelId, { resetMessages: true });
@@ -227,6 +320,7 @@ async function loadModel() {
   selectedModelId.value = catalogId;
   loading.value = true;
   progressPct.value = 0;
+  freezeHint.value = '';
   progressText.value = getModelOption(catalogId)?.backend === 'litert'
     ? 'Initializing LiteRT WebGPU engine…'
     : 'Initializing WebGPU engine…';
@@ -240,6 +334,7 @@ async function loadModel() {
     statusTone.value = 'ok';
     statusText.value = `Online (${getModelDisplayName(catalogId)})`;
     progressText.value = '';
+    freezeHint.value = '';
     stickToBottom.value = true;
     await refreshStoragePanel();
   } catch (err) {
@@ -247,9 +342,11 @@ async function loadModel() {
     statusText.value = 'Error';
     progressText.value = err?.message || 'Failed to load model.';
     errorBanner.value = progressText.value;
+    freezeHint.value = '';
   } finally {
     loading.value = false;
   }
+  if (loaded.value) await focusComposer();
 }
 
 async function switchModel() {
@@ -280,6 +377,8 @@ async function sendMessage() {
   streaming.value = true;
   stickToBottom.value = true;
   await scrollToLatest(true);
+  // Keep caret on the composer while streaming (readonly, not disabled).
+  await focusComposer({ force: true });
   try {
     await chat.generate(
       text,
@@ -301,6 +400,7 @@ async function sendMessage() {
   } finally {
     streaming.value = false;
     await scrollToLatest(true);
+    await focusComposer({ force: true });
   }
 }
 
@@ -389,26 +489,40 @@ onMounted(async () => {
   if (loaded.value) {
     statusTone.value = 'ok';
     statusText.value = `Online (${getModelDisplayName(chat.modelId)})`;
+    await focusComposer();
   }
   if (unsubProgress) unsubProgress();
   unsubProgress = chat.onProgress((data) => {
     if (data.stage === 'init') {
       progressText.value = data.message || 'Initializing…';
+      freezeHint.value = '';
     } else if (data.stage === 'downloading') {
       progressPct.value = Math.round((data.loaded || 0) * 100);
-      progressText.value = data.text || 'Preparing model…';
+      progressText.value = data.text
+        ? `${data.message || 'Preparing model…'} ${data.text}`
+        : (data.message || 'Preparing model…');
       statusText.value = `Loading ${progressPct.value}%`;
+      statusTone.value = 'warn';
+      freezeHint.value = '';
+    } else if (data.stage === 'compiling') {
+      progressPct.value = 100;
+      progressText.value = data.message || LOAD_FREEZE_HINT;
+      freezeHint.value = data.message || LOAD_FREEZE_HINT;
+      statusText.value = 'Compiling…';
       statusTone.value = 'warn';
     } else if (data.stage === 'ready') {
       progressPct.value = 100;
       progressText.value = data.message || 'Ready';
+      freezeHint.value = '';
     } else if (data.stage === 'error') {
       progressText.value = data.message || 'Error';
+      freezeHint.value = '';
       statusTone.value = 'danger';
       statusText.value = 'Error';
     }
   });
   await refreshStoragePanel();
+  refreshCapacityNote(selectedModelId.value);
   document.addEventListener('visibilitychange', refreshStoragePanel);
 });
 
@@ -427,10 +541,37 @@ watch(
     if (next) chat = next;
   },
 );
+
+watch(clearModalOpen, async (open, wasOpen) => {
+  if (wasOpen && !open && loaded.value && !loading.value) {
+    await focusComposer();
+  }
+});
+
+watch(loaded, async (isLoaded, wasLoaded) => {
+  if (isLoaded && !wasLoaded && !loading.value && !clearModalOpen.value) {
+    await focusComposer();
+  }
+});
 </script>
 
 <template>
-  <VdCard class="vdl-ai-chat-wrap vdl-card-glow vd-glass">
+  <VdCard class="vdl-ai-chat-wrap vdl-card-glow vd-glass" :aria-busy="loading ? 'true' : 'false'">
+    <div
+      v-if="loading"
+      class="vdl-ai-load-overlay"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="vdl-ai-load-overlay-card">
+        <VdSpinner size="sm" />
+        <div class="vdl-ai-load-overlay-title">Loading model…</div>
+        <div class="vd-text-sm vd-text-muted">
+          {{ freezeHint || progressText || 'Please wait — interaction is paused while WebGPU initializes.' }}
+        </div>
+      </div>
+    </div>
+
     <div class="vdl-ai-header">
       <div class="vdl-ai-header-left">
         <VdIcon name="robot" />
@@ -467,6 +608,7 @@ watch(
           </select>
           <p v-if="fallbackNote" class="vdl-ai-note">{{ fallbackNote }}</p>
           <p v-if="cacheHint" class="vdl-ai-note">{{ cacheHint }}</p>
+          <p v-if="capacityNote" class="vdl-ai-capacity-note" role="status">{{ capacityNote }}</p>
           <div class="vdl-ai-cache-badges">
             <span
               v-for="model in MODEL_OPTIONS"
@@ -520,6 +662,9 @@ watch(
               : 'Checking…'
           }}
         </div>
+        <div class="vd-text-sm vd-text-muted" :title="'deviceMemory is browser-capped/approximate; GPU VRAM is not exposed to web pages.'">
+          Device: {{ deviceSummary }}
+        </div>
         <div class="vdl-ai-compat-row">
           <span
             v-for="model in MODEL_OPTIONS"
@@ -557,6 +702,7 @@ watch(
       <div v-if="loading || progressText" class="vdl-ai-progress">
         <VdProgress :value="progressPct" />
         <div class="vd-text-sm vd-text-muted">{{ progressText }}</div>
+        <p v-if="freezeHint" class="vdl-ai-freeze-hint">{{ freezeHint }}</p>
       </div>
 
       <p v-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
@@ -620,12 +766,13 @@ watch(
 
       <form class="vdl-ai-form" @submit.prevent="sendMessage">
         <textarea
+          ref="composerInput"
           v-model="inputText"
           class="vdl-ai-input"
           rows="3"
           maxlength="2000"
           placeholder="Message the local model… (Enter to send, Shift+Enter for newline)"
-          :disabled="streaming"
+          :readonly="streaming"
           @keydown="onComposerKeydown"
         ></textarea>
         <div class="vdl-ai-form-meta">
@@ -662,6 +809,54 @@ watch(
 <style scoped>
 .vdl-ai-chat-wrap {
   width: 100%;
+  position: relative;
+}
+
+.vdl-ai-load-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg-primary, #fff) 72%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: all;
+}
+
+.vdl-ai-load-overlay-card {
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.vdl-ai-load-overlay-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.vdl-ai-capacity-note {
+  margin: 0.55rem 0 0;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  border-radius: var(--radius-sm, 0.5rem);
+  border: 1px solid var(--vd-color-warning, #f59e0b);
+  background: color-mix(in srgb, var(--vd-color-warning, #f59e0b) 12%, transparent);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.vdl-ai-freeze-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .vdl-ai-header {
