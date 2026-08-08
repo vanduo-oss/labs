@@ -274,6 +274,13 @@ async function sendMessage() {
   }
 }
 
+function onComposerKeydown(event) {
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    event.preventDefault();
+    sendMessage();
+  }
+}
+
 function isLikelyModelStorageName(name) {
   return /(webllm|mlc|onnx|wasm|gguf|gemma|llama|qwen|smol|model)/i.test(String(name || ''));
 }
@@ -580,8 +587,9 @@ watch(
           class="vd-ai-input"
           rows="3"
           maxlength="2000"
-          placeholder="Message the local model…"
+          placeholder="Message the local model… (⌘/Ctrl+Enter to send)"
           :disabled="streaming"
+          @keydown="onComposerKeydown"
         ></textarea>
         <div class="vd-ai-form-meta">
           <span class="vd-text-sm vd-text-muted">{{ inputText.length }} / 2000</span>

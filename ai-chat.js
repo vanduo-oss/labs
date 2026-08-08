@@ -44,10 +44,7 @@ export const MODEL_OPTIONS = [
     tier: 'Fast',
     group: 'gemma4',
     requires: ['shader-f16'],
-    overrides: {
-      context_window_size: 4096,
-      sliding_window_size: -1,
-    },
+    // Keep mlc-chat-config defaults (sliding_window_size: 512). Do not override to -1.
     modelUrl: 'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC',
     modelLibUrl:
       'https://huggingface.co/welcoma/gemma-4-E2B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E2B-it-q4f16_1-MLC-webgpu.wasm',
@@ -59,10 +56,6 @@ export const MODEL_OPTIONS = [
     group: 'gemma4',
     requires: ['shader-f16'],
     experimental: true,
-    overrides: {
-      context_window_size: 4096,
-      sliding_window_size: -1,
-    },
     modelUrl: 'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC',
     modelLibUrl:
       'https://huggingface.co/welcoma/gemma-4-E4B-it-q4f16_1-MLC/resolve/main/libs/gemma-4-E4B-it-q4f16_1-MLC-webgpu.wasm',
@@ -160,6 +153,28 @@ async function resolveModelSource(option) {
   }
 
   return { modelUrl: option.modelUrl, modelLibUrl: option.modelLibUrl, local: false };
+}
+
+function modelSupportsSystemRole(modelId) {
+  const option = getModelOption(modelId);
+  // Gemma 4 instruction template only defines user/model roles (no system).
+  return option?.group !== 'gemma4';
+}
+
+function buildChatPayload(modelId, historyMessages) {
+  const system = buildChatSystemPrompt();
+  if (modelSupportsSystemRole(modelId)) {
+    return [{ role: 'system', content: system }, ...historyMessages];
+  }
+  return historyMessages.map((message, index) => {
+    if (index === 0 && message.role === 'user') {
+      return {
+        role: 'user',
+        content: `${system}\n\n${message.content}`,
+      };
+    }
+    return message;
+  });
 }
 
 async function buildModelAppConfig(modelId) {
@@ -373,13 +388,14 @@ export class AiChat {
     }
 
     this.messages.push({ role: 'user', content: userText });
-
-    const payload = [
-      { role: 'system', content: buildChatSystemPrompt() },
-      ...this.messages
-    ];
+    const payload = buildChatPayload(this.modelId, this.messages);
 
     try {
+      // Explicit message list is authoritative; clear any residual engine chat state.
+      if (typeof this.engine.resetChat === 'function') {
+        await this.engine.resetChat();
+      }
+
       const chunks = await this.engine.chat.completions.create({
         messages: payload,
         ...DEFAULT_GENERATION_CONFIG,
@@ -399,6 +415,9 @@ export class AiChat {
       }
 
       if (!reply.trim()) {
+        if (typeof this.engine.resetChat === 'function') {
+          await this.engine.resetChat();
+        }
         const completion = await this.engine.chat.completions.create({
           messages: payload,
           ...DEFAULT_GENERATION_CONFIG,
@@ -410,12 +429,23 @@ export class AiChat {
       }
 
       if (!reply.trim()) {
-        throw new Error(`Model ${this.modelId} returned an empty response.`);
+        this.messages.pop();
+        throw new Error(
+          `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model (Gemma 4 builds are experimental).`,
+        );
       }
       this.messages.push({ role: 'assistant', content: reply });
       if (onFinish && usage) onFinish(usage);
       return reply;
     } catch (err) {
+      // Drop the optimistic user turn if generation failed before an assistant reply.
+      if (
+        this.messages.length &&
+        this.messages[this.messages.length - 1]?.role === 'user' &&
+        this.messages[this.messages.length - 1]?.content === userText
+      ) {
+        this.messages.pop();
+      }
       console.error('[AiChat] Generation error:', err);
       throw err;
     }
