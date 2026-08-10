@@ -3,6 +3,8 @@ import {
   buildChatSystemPrompt,
   DEFAULT_LLM_GUARD_PATTERNS,
   validateLlmInput,
+  validateLlmOutput,
+  LLM_OUTPUT_BLOCK_MESSAGE,
   validateToolCall,
   parseXmlToolCalls,
   formatXmlToolResult,
@@ -592,6 +594,20 @@ export function sanitizeModelReply(text) {
   out = out.replace(/<\/?turn\|>/g, '');
   out = out.replace(/<\|turn>(?:user|model|system)?/g, '');
   return out.trim();
+}
+
+/**
+ * Replace jailbreak-compliance phrasing with a fixed safe reply.
+ * @param {string} text
+ * @returns {string}
+ */
+export function applyOutputGuardrails(text) {
+  const cleaned = sanitizeModelReply(text) || String(text || '').trim();
+  const check = validateLlmOutput({ text: cleaned });
+  if (!check.allowed) {
+    return check.message || LLM_OUTPUT_BLOCK_MESSAGE;
+  }
+  return cleaned;
 }
 
 export function getModelOption(modelId) {
@@ -1288,7 +1304,7 @@ export class AiChat {
         const calls = nativeCalls.length > 0 ? nativeCalls : xmlParsed.calls;
 
         if (!calls.length) {
-          finalReply = reply.trim();
+          finalReply = applyOutputGuardrails(reply.trim());
           if (!finalReply) {
             this.messages.pop();
             throw new Error(
@@ -1297,6 +1313,7 @@ export class AiChat {
           }
           this.messages.push({ role: 'assistant', content: finalReply });
           if (onFinish) onFinish(null);
+          if (onUpdate) onUpdate(finalReply);
           return finalReply;
         }
 
@@ -1710,9 +1727,11 @@ export class AiChat {
             `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model.`,
           );
         }
-        this.messages.push({ role: 'assistant', content: reply });
+        const safeReply = applyOutputGuardrails(reply);
+        this.messages.push({ role: 'assistant', content: safeReply });
+        if (onUpdate && safeReply !== reply) onUpdate(safeReply);
         if (onFinish && usage) onFinish(usage);
-        return reply;
+        return safeReply;
       }
 
       // Community Gemma 4 MLC: native multi-turn history is unreliable — latest turn only.
@@ -1738,9 +1757,11 @@ export class AiChat {
           `Model ${this.modelId} returned an empty response. Hard-refresh and reload the model (Gemma 4 MLC builds are experimental).`,
         );
       }
-      this.messages.push({ role: 'assistant', content: reply });
+      const safeReply = applyOutputGuardrails(reply);
+      this.messages.push({ role: 'assistant', content: safeReply });
+      if (onUpdate && safeReply !== reply) onUpdate(safeReply);
       if (onFinish && usage) onFinish(usage);
-      return reply;
+      return safeReply;
     } catch (err) {
       if (
         this.messages.length &&

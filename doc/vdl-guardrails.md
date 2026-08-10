@@ -111,11 +111,15 @@ Produced error shape:
 
 Default deterministic block patterns for common prompt-injection/jailbreak classes:
 
-- instruction override attempts
+- instruction override attempts (including typo-normalized scans and “do anything now”)
 - system prompt extraction attempts
 - role/persona rebinding
 - delimiter breakout framing
 - jailbreak framing patterns
+
+#### `normalizeJailbreakScanText(text): string`
+
+Folds common typos (e.g. `gonre` → `ignore`, `previousi` → `previous`) so override regexes still match.
 
 #### `validateLlmInput(input): GuardrailResult`
 
@@ -123,11 +127,15 @@ Validates prompt text (`string` or options object) and returns allow/block resul
 
 - Blocks empty input (`llm.input.empty`)
 - Blocks over-length input (`llm.input.too_long`)
-- Blocks matched guard patterns (`llm.input.blocked`)
+- Blocks matched guard patterns on raw and typo-normalized text (`llm.input.blocked`)
+
+#### `validateLlmOutput(input): GuardrailResult`
+
+Lightweight assistant-output check for jailbreak-compliance phrasing (e.g. “I will disregard previous instructions”). Used by `AiChat` after generation (`llm.output.blocked`).
 
 #### `buildChatSystemPrompt(options?): string`
 
-Returns `BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT` and appends normalized `extraRules` when provided.
+Returns `BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT` (role lock included), optional product/tools/`extra` policy, then `FOSS_SYSTEM_PROMPT_TRAILER` (sandwich / primacy-recency reminder).
 
 #### `chatGuardrails`
 
