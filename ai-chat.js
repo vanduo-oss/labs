@@ -34,7 +34,7 @@ const CDN = {
   litert: 'https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm',
 };
 
-export const VDL_AI_CHAT_VERSION = '0.0.15';
+export const VDL_AI_CHAT_VERSION = '0.0.16';
 
 export const TOOLS_UNSUPPORTED_ERROR =
   'Tool calling is only supported on LiteRT Gemma (E2B/E4B) models.';
@@ -470,7 +470,12 @@ export function shouldFocusChatComposer(opts = {}) {
   return true;
 }
 
-const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
+/** localStorage flag prefix — set after a successful model load (weights may be in Cache Storage). */
+export const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
+
+/** Cache Storage bucket for LiteRT `.litertlm` weights (app-owned; not the opaque HTTP disk cache). */
+export const LITERT_MODEL_CACHE_NAME = 'vdl-litert-models';
+
 const DEFAULT_GENERATION_CONFIG = {
   max_tokens: 512,
   temperature: 0.7,
@@ -741,59 +746,126 @@ export function assessLoadCapacity(opts = {}) {
 }
 
 /**
- * Fetch model bytes as a ReadableStream with download progress.
- * Engine.create accepts URL | ReadableStream | Blob — streaming keeps UI updates alive during fetch.
- * @param {string} url
- * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ * @param {string} modelId
+ * @returns {string}
  */
-async function openProgressModelStream(url, onProgress) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch model (${res.status} ${res.statusText || ''}).`.trim());
-  }
-  const totalBytes = Number(res.headers.get('content-length')) || 0;
-  let received = 0;
-
-  if (!res.body || typeof res.body.pipeThrough !== 'function') {
-    const blob = await res.blob();
-    received = blob.size;
-    onProgress?.({
-      loaded: 1,
-      received,
-      totalBytes: totalBytes || received,
-    });
-    return typeof blob.stream === 'function' ? blob.stream() : blob;
-  }
-
-  return res.body.pipeThrough(
-    new TransformStream({
-      transform(chunk, controller) {
-        received += chunk.byteLength;
-        const loaded = totalBytes > 0 ? Math.min(1, received / totalBytes) : 0;
-        onProgress?.({ loaded, received, totalBytes });
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+export function modelCacheFlagKey(modelId) {
+  return `${MODEL_CACHE_FLAG_PREFIX}${modelId}`;
 }
 
 /**
- * Fetch model bytes into a Blob with download progress.
- * Required for portable/spike `.litertlm` files — LiteRT rejects streamed
- * kTfLitePrefillDecode models ("Streaming … is not supported yet").
- * @param {string} url
- * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ * Whether localStorage records a prior successful load for this model id.
+ * @param {string} modelId
+ * @returns {boolean}
  */
-async function openProgressModelBlob(url, onProgress) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch model (${res.status} ${res.statusText || ''}).`.trim());
+export function isModelMarkedCached(modelId) {
+  if (!modelId) return false;
+  try {
+    return localStorage.getItem(modelCacheFlagKey(modelId)) === '1';
+  } catch {
+    return false;
   }
-  const totalBytes = Number(res.headers.get('content-length')) || 0;
+}
+
+/**
+ * Record that weights for this model id were loaded successfully (Cache Storage and/or HTTP).
+ * @param {string} modelId
+ */
+export function markModelCached(modelId) {
+  if (!modelId) return;
+  try {
+    localStorage.setItem(modelCacheFlagKey(modelId), '1');
+  } catch {
+    // private mode / disabled storage
+  }
+}
+
+/**
+ * @returns {Promise<Cache | null>}
+ */
+export async function openLiteRTModelCache() {
+  if (typeof caches === 'undefined' || typeof caches.open !== 'function') return null;
+  try {
+    return await caches.open(LITERT_MODEL_CACHE_NAME);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} url
+ * @returns {Promise<Response | null>}
+ */
+export async function matchCachedModel(url) {
+  const cache = await openLiteRTModelCache();
+  if (!cache || !url) return null;
+  try {
+    const hit = await cache.match(url);
+    return hit || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist model bytes under the LiteRT Cache Storage bucket.
+ * @param {string} url
+ * @param {Blob} blob
+ * @returns {Promise<boolean>}
+ */
+export async function putCachedModel(url, blob) {
+  const cache = await openLiteRTModelCache();
+  if (!cache || !url || !blob) return false;
+  try {
+    const headers = new Headers({
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(blob.size),
+    });
+    await cache.put(url, new Response(blob, { status: 200, headers }));
+    return true;
+  } catch {
+    // QuotaExceededError or Cache API unavailable for this origin size
+    return false;
+  }
+}
+
+/**
+ * Delete the LiteRT model Cache Storage bucket (best-effort).
+ * @returns {Promise<boolean>}
+ */
+export async function deleteLiteRTModelCache() {
+  if (typeof caches === 'undefined' || typeof caches.delete !== 'function') return false;
+  try {
+    return await caches.delete(LITERT_MODEL_CACHE_NAME);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Report progress while reading a Response/Blob body into a Blob.
+ * @param {Response | Blob} source
+ * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ * @param {number} [knownTotal]
+ * @returns {Promise<Blob>}
+ */
+async function readBodyToBlobWithProgress(source, onProgress, knownTotal = 0) {
+  if (source instanceof Blob) {
+    onProgress?.({
+      loaded: 1,
+      received: source.size,
+      totalBytes: source.size,
+    });
+    return source;
+  }
+
+  const totalBytes = knownTotal
+    || Number(source.headers?.get?.('content-length'))
+    || 0;
   let received = 0;
 
-  if (!res.body || typeof res.body.getReader !== 'function') {
-    const blob = await res.blob();
+  if (!source.body || typeof source.body.getReader !== 'function') {
+    const blob = await source.blob();
     onProgress?.({
       loaded: 1,
       received: blob.size,
@@ -802,7 +874,7 @@ async function openProgressModelBlob(url, onProgress) {
     return blob;
   }
 
-  const reader = res.body.getReader();
+  const reader = source.body.getReader();
   const chunks = [];
   while (true) {
     const { done, value } = await reader.read();
@@ -820,6 +892,74 @@ async function openProgressModelBlob(url, onProgress) {
   });
   return blob;
 }
+
+/**
+ * Load LiteRT model bytes from Cache Storage or network, then optionally stream.
+ * Always buffers once so we can persist a durable Cache Storage entry.
+ *
+ * @param {string} url
+ * @param {{
+ *   asStream?: boolean,
+ *   urlIsLocal?: boolean,
+ *   onProgress?: (p: { loaded: number, received: number, totalBytes: number }) => void,
+ * }} [options]
+ * @returns {Promise<{ modelSource: Blob | ReadableStream, source: 'cache' | 'local' | 'network' }>}
+ */
+export async function loadLiteRTModelBytes(url, options = {}) {
+  const asStream = options.asStream === true;
+  const urlIsLocal = options.urlIsLocal === true;
+  const onProgress = options.onProgress;
+
+  const cached = await matchCachedModel(url);
+  if (cached) {
+    const blob = await readBodyToBlobWithProgress(cached, onProgress);
+    const modelSource = asStream && typeof blob.stream === 'function'
+      ? blob.stream()
+      : blob;
+    return { modelSource, source: 'cache' };
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch model (${res.status} ${res.statusText || ''}).`.trim());
+  }
+  const totalBytes = Number(res.headers.get('content-length')) || 0;
+  const blob = await readBodyToBlobWithProgress(res, onProgress, totalBytes);
+  await putCachedModel(url, blob);
+
+  const networkSource = urlIsLocal ? 'local' : 'network';
+  const modelSource = asStream && typeof blob.stream === 'function'
+    ? blob.stream()
+    : blob;
+  return { modelSource, source: networkSource };
+}
+
+/**
+ * Fetch model bytes as a ReadableStream with download progress (cache-aware).
+ * @param {string} url
+ * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ */
+async function openProgressModelStream(url, onProgress) {
+  const { modelSource } = await loadLiteRTModelBytes(url, {
+    asStream: true,
+    onProgress,
+  });
+  return modelSource;
+}
+
+/**
+ * Fetch model bytes into a Blob with download progress (cache-aware).
+ * @param {string} url
+ * @param {(p: { loaded: number, received: number, totalBytes: number }) => void} [onProgress]
+ */
+async function openProgressModelBlob(url, onProgress) {
+  const { modelSource } = await loadLiteRTModelBytes(url, {
+    asStream: false,
+    onProgress,
+  });
+  return modelSource;
+}
+
 
 const localModelProbeCache = new Map();
 
@@ -1440,6 +1580,7 @@ export class AiChat {
       }
       this._isLoaded = true;
       this._needsEngineReload = false;
+      markModelCached(this.modelId);
       this._emitProgress({ stage: 'ready', message: 'Model loaded and ready!' });
     } catch (err) {
       const normalized = isLiteRTModel(this.modelId) ? rewriteLiteRTLoadError(err) : err;
@@ -1499,12 +1640,15 @@ export class AiChat {
     const modelUrl = await resolveLiteRTModelUrl(option);
     const displayName = getModelDisplayName(this.modelId);
     const isLocal = /\/models\//.test(String(modelUrl || ''));
-    const loadSource = isLocal ? 'local' : 'network';
+    const alreadyCached = Boolean(await matchCachedModel(modelUrl));
+    let loadSource = alreadyCached ? 'cache' : (isLocal ? 'local' : 'network');
     this._emitProgress({
       stage: 'downloading',
-      message: isLocal
-        ? `Using local LiteRT model for ${displayName}…`
-        : `Downloading / reading ${displayName} (LiteRT)…`,
+      message: alreadyCached
+        ? `Loading ${displayName} from browser cache…`
+        : isLocal
+          ? `Using local LiteRT model for ${displayName}…`
+          : `Downloading / reading ${displayName} (LiteRT)…`,
       text: modelUrl,
       loaded: 0,
       source: loadSource,
@@ -1512,9 +1656,11 @@ export class AiChat {
 
     // Engine accepts URL | ReadableStream | Blob.
     // Official Gemma web builds use the default GPU_ARTISAN streaming loader.
-    // Non-web-official PrefillDecode artifacts are blocked earlier via litertRuntime;
-    // Blob buffering alone does not help — the runtime always streams GPU_ARTISAN loads.
+    // Bytes are buffered once so we can persist Cache Storage across refresh.
     const streamOk = option?.litertKind === 'web-official';
+    if (!streamOk) {
+      console.info(`[AiChat] Buffering portable LiteRT model as Blob: ${option.id}`);
+    }
     const onFetchProgress = ({ loaded, received, totalBytes }) => {
       const pct = totalBytes > 0
         ? `${Math.round(loaded * 100)}%`
@@ -1525,19 +1671,21 @@ export class AiChat {
           ? `${pct} · ${(received / (1024 * 1024)).toFixed(0)} / ${(totalBytes / (1024 * 1024)).toFixed(0)} MB`
           : pct,
         loaded: totalBytes > 0 ? loaded : Math.min(0.95, received / (2 * GiB)),
-        message: isLocal
-          ? 'Reading local model weights…'
-          : 'Fetching model weights…',
+        message: loadSource === 'cache'
+          ? 'Reading cached model weights…'
+          : isLocal
+            ? 'Reading local model weights…'
+            : 'Fetching model weights…',
         source: loadSource,
       });
     };
-    let modelSource;
-    if (streamOk) {
-      modelSource = await openProgressModelStream(modelUrl, onFetchProgress);
-    } else {
-      console.info(`[AiChat] Buffering portable LiteRT model as Blob: ${option.id}`);
-      modelSource = await openProgressModelBlob(modelUrl, onFetchProgress);
-    }
+    const loadedBytes = await loadLiteRTModelBytes(modelUrl, {
+      asStream: streamOk,
+      urlIsLocal: isLocal,
+      onProgress: onFetchProgress,
+    });
+    loadSource = loadedBytes.source;
+    const modelSource = loadedBytes.modelSource;
 
     this._emitProgress({
       stage: 'compiling',
@@ -2662,11 +2810,7 @@ export class AiChatUI {
   }
 
   _isModelLikelyCached(modelId) {
-    try {
-      return localStorage.getItem(this._cacheFlagKey(modelId)) === '1';
-    } catch {
-      return false;
-    }
+    return isModelMarkedCached(modelId);
   }
 
   _hasAnyModelCacheFlags() {
@@ -2684,11 +2828,7 @@ export class AiChatUI {
   }
 
   _markModelCached(modelId) {
-    try {
-      localStorage.setItem(this._cacheFlagKey(modelId), '1');
-    } catch {
-      // Ignore storage errors (private mode / disabled storage).
-    }
+    markModelCached(modelId);
   }
 
   _renderCacheHint(modelId) {
@@ -3126,7 +3266,7 @@ export class AiChatUI {
 
   _isLikelyModelStorageName(name) {
     const normalized = String(name || '').toLowerCase();
-    return /(webllm|mlc|onnx|wasm|gguf|gemma|llama|qwen|model)/.test(normalized);
+    return /(webllm|mlc|onnx|wasm|gguf|gemma|llama|qwen|model|litert|vdl-litert)/.test(normalized);
   }
 
   _clearModelCacheFlags() {
@@ -3152,9 +3292,14 @@ export class AiChatUI {
     let deletedDatabases = 0;
     const deletedFlags = this._clearModelCacheFlags();
 
+    if (await deleteLiteRTModelCache()) {
+      deletedCacheStores += 1;
+    }
+
     if (typeof caches !== 'undefined' && typeof caches.keys === 'function') {
       const keys = await caches.keys();
       for (const key of keys) {
+        if (key === LITERT_MODEL_CACHE_NAME) continue;
         if (!this._isLikelyModelStorageName(key)) continue;
         const removed = await caches.delete(key);
         if (removed) deletedCacheStores += 1;

@@ -103,11 +103,15 @@ This is documentation of the preferred hardening path; a full pin/SRI pass acros
 
 ### Browser Caching & Loading Behavior
 
-The `vdl-ai-chat` component requires the user to explicitly click "Load AI Model" to initiate the WebGPU engine. This is an intentional design choice to prevent hijacking the user's GPU and network bandwidth immediately upon page load. 
+The `vdl-ai-chat` component requires the user to explicitly click "Load AI Model" to initiate the WebGPU engine. This is an intentional design choice to prevent hijacking the user's GPU and network bandwidth immediately upon page load.
 
 **What happens when the page is refreshed?**
-- **The Download is Cached:** WebLLM automatically utilizes the browser's native Cache API. After the initial multi‑GB network download (model-dependent), the model weights are stored securely on the user's hard drive.
-- **VRAM Initialization:** Even though the files are cached locally, a page refresh destroys the active WebAssembly memory and WebGPU context. When the user clicks "Load AI Model" *after* a refresh, the component skips the network download and rapidly reads the weights from the local cache directly into the GPU's VRAM. This process takes only a few seconds depending on the user's hardware.
+- **VRAM Initialization:** A page refresh destroys the active WebAssembly memory and WebGPU context. The user must click **Load** again; GPU upload / shader compile still takes a few seconds.
+- **LiteRT Gemma weights (default E2B/E4B path):** After the first successful download, Labs stores the `.litertlm` bytes in the origin **Cache Storage** bucket `vdl-litert-models` and sets a `vdl-ai-chat-model-cached:<modelId>` localStorage flag. Later loads prefer that bucket and report progress source `cache` (UI: “From cache”) instead of re-fetching Hugging Face. Profile / clear-storage deletes that bucket.
+- **WebLLM / MLC models:** Continue to rely on WebLLM’s own Cache API behavior for multi-file MLC packages.
+- **Dev `/models/` mirror:** When `pnpm models:fetch` has populated `.models/`, LiteRT prefers same-origin `/models/<id>/…` and reports source `local`.
+
+Do **not** assume the opaque HTTP disk cache alone is enough for Hugging Face LFS URLs — the explicit Cache Storage layer is the durable path for LiteRT.
 
 ### Acknowledgments, Technologies & Attribution
 
