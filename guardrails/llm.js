@@ -160,10 +160,10 @@ export const DEFAULT_LLM_OUTPUT_GUARD_PATTERNS = [
 ];
 
 export const LLM_BLOCK_MESSAGE =
-  'I cannot fulfill this request. It appears to contain instructions that attempt to bypass my safety constraints or extract system configuration.';
+  'That behaviour is not welcome. Attempts to bypass safety rules or extract system configuration are blocked. Stay within the assigned product tutor role and ask a legitimate question.';
 
 export const LLM_OUTPUT_BLOCK_MESSAGE =
-  'I stay within my assigned tutor role and do not ignore prior instructions. Ask a product or curriculum question and I will help.';
+  'That behaviour is not welcome. I stay in my assigned tutor role and do not ignore prior instructions. Ask a product or curriculum question.';
 
 /**
  * Fold common jailbreak typos so deterministic regexes still match

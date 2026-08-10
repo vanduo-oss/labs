@@ -23,6 +23,7 @@ test.describe('Guardrails Unit', () => {
     expect(result.allowed).toBe(false);
     expect(result.code).toBe('llm.input.blocked');
     expect(result.matchedPatternIds?.length ?? 0).toBeGreaterThan(0);
+    expect(result.message).toMatch(/not welcome/i);
   });
 
   test('LLM guardrails block typo jailbreak (observed Ask AI phrasing)', async ({ page }) => {
@@ -55,6 +56,7 @@ test.describe('Guardrails Unit', () => {
     });
     expect(result.bad.allowed).toBe(false);
     expect(result.bad.code).toBe('llm.output.blocked');
+    expect(result.bad.message).toMatch(/not welcome/i);
     expect(result.ok.allowed).toBe(true);
   });
 
