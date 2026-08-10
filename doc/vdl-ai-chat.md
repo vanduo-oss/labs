@@ -81,6 +81,8 @@ For architecture A/B reports, see [vdl-model-eval](./vdl-model-eval.md) (`#tools
 - System context (`buildChatSystemPrompt`) is sent for LiteRT Gemma and optional WebLLM models that support a system role. Community MLC Gemma (`gemma4` + WebLLM) omits system messages (template limitation that truncates replies); those runs rely on the deterministic input scanner only.
 - Includes a deterministic regex scanner to fast-reject known prompt injections and jailbreaks before they reach the model.
 - Enforces deterministic input validation in both UI and headless API (`AiChat.generate()`), so non-UI consumers cannot bypass guardrails.
+- **Tool calling (LiteRT Gemma only):** `registerTools(defs)` + `generateWithTools(text, { execute, maxRounds })` run an allowlisted tool loop. Prefers native LiteRT `Preface.tools` when the runtime accepts it; otherwise uses a constrained XML `<tool_call>` protocol with the same host `execute` callback. WebLLM / experimental models throw `TOOLS_UNSUPPORTED_ERROR`.
+- Injectable product context via `systemPromptOptions` / `setSystemPromptOptions({ product, extra })` composed through `buildChatSystemPrompt`.
 - Labs UI is `VdlAiChatUI` (Vue + `@vanduo-oss/vd3`); headless `AiChat` stays a vanilla ES module.
 - Composer: **Enter** sends, **Shift+Enter** inserts a newline. The message list sticks to the latest reply while you are near the bottom.
 

@@ -1,0 +1,61 @@
+import js from '@eslint/js';
+
+/** @type {import('eslint').Linter.Config[]} */
+export default [
+  js.configs.recommended,
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.models/**',
+      'data/**',
+      'playwright-report/**',
+      'test-results/**',
+      'src/**',
+      'demo/**',
+      'utils/**',
+    ],
+  },
+  {
+    files: ['ai-chat.js', 'neptune-search.js', 'model-eval.js', 'guardrails/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        navigator: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        URL: 'readonly',
+        Blob: 'readonly',
+        TextEncoder: 'readonly',
+        ReadableStream: 'readonly',
+        TransformStream: 'readonly',
+        AbortController: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        requestAnimationFrame: 'readonly',
+        performance: 'readonly',
+        caches: 'readonly',
+        self: 'readonly',
+        HTMLElement: 'readonly',
+        customElements: 'readonly',
+        CSS: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        location: 'readonly',
+        alert: 'readonly',
+        indexedDB: 'readonly',
+        GiB: 'writable',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': 'off',
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+];

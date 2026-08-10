@@ -1,7 +1,7 @@
 {
-  "name": "@vanduo-oss/labs-vdl-neptune-search",
-  "version": "0.0.2",
-  "description": "vdl-neptune-search — in-browser hybrid fuzzy + semantic search for Vanduo Docs (ES modules)",
+  "name": "@vanduo-oss/vdl-engines",
+  "version": "0.1.1",
+  "description": "Vanduo Labs headless engines — Neptune hybrid search, in-browser AiChat (Gemma), and FOSS guardrails",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -17,7 +17,10 @@
     "fuse",
     "semantic",
     "transformers",
-    "hybrid"
+    "hybrid",
+    "ai-chat",
+    "gemma",
+    "guardrails"
   ],
   "exports": {
     ".": "./neptune-search.js",
@@ -26,15 +29,19 @@
     "./model-eval.js": "./model-eval.js",
     "./guardrails/core.js": "./guardrails/core.js",
     "./guardrails/llm.js": "./guardrails/llm.js",
-    "./guardrails/search.js": "./guardrails/search.js"
+    "./guardrails/search.js": "./guardrails/search.js",
+    "./guardrails/tools.js": "./guardrails/tools.js",
+    "./labs-md-to-html.js": "./labs-md-to-html.js"
   },
   "files": [
     "neptune-search.js",
     "ai-chat.js",
+    "labs-md-to-html.js",
     "model-eval.js",
     "guardrails/core.js",
     "guardrails/llm.js",
     "guardrails/search.js",
+    "guardrails/tools.js",
     "data/search-index.json",
     "data/vectors.json",
     "data/model-eval-reports",
@@ -42,6 +49,9 @@
     "NEPTUNE-SEARCH.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -50,16 +60,23 @@
     "index": "node utils/neptune-indexer.mjs",
     "models:fetch": "node utils/fetch-ai-models.mjs",
     "model-eval": "node utils/model-eval-runner.mjs",
+    "lint": "eslint ai-chat.js neptune-search.js model-eval.js guardrails/",
+    "format": "prettier --write \"ai-chat.js\" \"neptune-search.js\" \"model-eval.js\" \"guardrails/**/*.js\"",
+    "format:check": "prettier --check \"ai-chat.js\" \"neptune-search.js\" \"model-eval.js\" \"guardrails/**/*.js\"",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
+    "test:unit": "playwright test tests/unit",
     "report": "playwright show-report"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@huggingface/transformers": "^3.8.1",
     "@playwright/test": "^1.59.1",
     "@vitejs/plugin-vue": "^5.2.4",
+    "eslint": "^9.39.2",
     "fuse.js": "^7.3.0",
+    "prettier": "^3.6.2",
     "vite": "^6.4.3",
     "vite-plugin-static-copy": "^2.3.2"
   },

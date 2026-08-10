@@ -1,8 +1,29 @@
 # Vanduo Labs
 
-Experimental components for the Vanduo ecosystem. Shipped as **ES modules** with zero runtime npm dependencies.
+Experimental components for the Vanduo ecosystem. Headless engines ship as **ES modules** via npm package `@vanduo-oss/vdl-engines`. Labs Vue demos (`Vdl*UI`) are site-local and are not the product API.
 
 Live demos are hosted on GitHub Pages at **https://labs.vanduo.dev**.
+
+## npm package (`@vanduo-oss/vdl-engines`)
+
+```bash
+pnpm add @vanduo-oss/vdl-engines
+# local/unpublished: pnpm add file:../labs
+```
+
+```javascript
+import { NeptuneSearch } from '@vanduo-oss/vdl-engines/neptune-search.js';
+import { AiChat } from '@vanduo-oss/vdl-engines/ai-chat.js';
+import { validateToolCall } from '@vanduo-oss/vdl-engines/guardrails/tools.js';
+
+// Bundle Fuse for strict CSP hosts:
+import Fuse from 'fuse.js';
+const search = new NeptuneSearch({
+  indexUrl: '/search/search-index.json',
+  vectorsUrl: '/search/vectors.json',
+  loadFuse: async () => ({ default: Fuse }),
+});
+```
 
 ## Experimental Component Versions
 
@@ -11,7 +32,7 @@ Current component versions:
 | Component | Version | Module |
 |------|------|------|
 | `vdl-neptune-search` | `0.0.3` | [`neptune-search.js`](./neptune-search.js) |
-| `vdl-ai-chat` | `0.0.9` | [`ai-chat.js`](./ai-chat.js) |
+| `vdl-ai-chat` | `0.0.11` | [`ai-chat.js`](./ai-chat.js) |
 | `vdl-model-eval` | `0.0.1` | [`model-eval.js`](./model-eval.js) |
 
 ### Shared Guardrails Modules
@@ -21,6 +42,7 @@ Current component versions:
 - Shared service version: `0.0.1` (exported as `VD_GUARDRAILS_VERSION`)
 
 - `./guardrails/llm.js`: LLM-facing input validation + system-prompt composition for `vdl-ai-chat`.
+- `./guardrails/tools.js`: tool-call allowlist validation + XML fallback helpers.
 - `./guardrails/search.js`: deterministic query/index/vector and render-path hardening for `vdl-neptune-search`.
 - `./guardrails/core.js`: shared result/error helpers used by both policy families.
 

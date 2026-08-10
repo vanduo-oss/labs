@@ -57,7 +57,8 @@ export const DEFAULT_LLM_GUARD_PATTERNS = [
   {
     id: 'exfiltrate.system-prompt',
     category: 'prompt-extraction',
-    regex: /(repeat|show|print|output|display|reveal)\s+(your\s+)?(system\s+)?(prompt|instructions|rules|programming)/i,
+    regex:
+      /(repeat|show|print|output|display|reveal)\s+(your\s+)?(system\s+)?(prompt|instructions|rules|programming)/i,
     severity: 'block',
   },
   {
@@ -155,7 +156,9 @@ export function validateLlmInput(input) {
       code: 'llm.input.blocked',
       message: LLM_BLOCK_MESSAGE,
       matchedPatternIds,
-      meta: { categories: patterns.filter((p) => matchedPatternIds.includes(p.id)).map((p) => p.category) },
+      meta: {
+        categories: patterns.filter((p) => matchedPatternIds.includes(p.id)).map((p) => p.category),
+      },
     });
   }
 
@@ -163,13 +166,44 @@ export function validateLlmInput(input) {
 }
 
 /**
- * @param {{ extraRules?: string }} options
+ * @param {{
+ *   product?: string,
+ *   extra?: string,
+ *   extraRules?: string,
+ *   toolsEnabled?: boolean,
+ *   toolNames?: string[],
+ * }} options
  */
 export function buildChatSystemPrompt(options = {}) {
-  const extraRules = normalizeText(options.extraRules || '');
-  if (!extraRules) return BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT;
-  return `${BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT}\nAdditional policy:\n- ${extraRules}`;
+  const product = normalizeText(options.product || '');
+  const extraRules = normalizeText(options.extra || options.extraRules || '');
+  const toolsEnabled = Boolean(options.toolsEnabled);
+  const toolNames = Array.isArray(options.toolNames)
+    ? options.toolNames.map((n) => normalizeText(n)).filter(Boolean)
+    : [];
+
+  let prompt = BASE_FOSS_GUARDRAILS_SYSTEM_PROMPT;
+
+  if (product) {
+    prompt += `\nYou are assisting users of ${product}. Prefer that product's domain language and cite its routes or lesson ids when relevant.`;
+  }
+
+  if (toolsEnabled) {
+    const list = toolNames.length ? toolNames.join(', ') : '(host-registered tools)';
+    prompt += `\nYou may call tools when needed. Allowed tools: ${list}.
+When using the XML fallback protocol, emit exactly:
+<tool_call name="TOOL_NAME">{"arg":"value"}</tool_call>
+Do not invent tool names. After tool results arrive, answer the user concisely.`;
+  }
+
+  if (extraRules) {
+    prompt += `\nAdditional policy:\n- ${extraRules}`;
+  }
+
+  return prompt;
 }
+
+export { validateToolCall, parseXmlToolCalls, formatXmlToolResult } from './tools.js';
 
 export const chatGuardrails = {
   validateInput: validateLlmInput,

@@ -579,6 +579,85 @@ test.describe('Guardrails Unit', () => {
     expect(result.freezeHint).toMatch(/freeze/i);
   });
 
+  test('describeLoadProgress maps stages for host UIs', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const init = mod.describeLoadProgress({
+        stage: 'init',
+        message: 'Initializing LiteRT WebGPU engine…',
+      });
+      const local = mod.describeLoadProgress({
+        stage: 'downloading',
+        message: 'Using local LiteRT model for Gemma…',
+        text: '12% · 240 / 2000 MB',
+        loaded: 0.12,
+        source: 'local',
+      });
+      const network = mod.describeLoadProgress({
+        stage: 'downloading',
+        message: 'Fetching model weights…',
+        text: '50% · 1000 / 2000 MB',
+        loaded: 0.5,
+        source: 'network',
+      });
+      const compiling = mod.describeLoadProgress({
+        stage: 'compiling',
+        message: mod.LOAD_FREEZE_HINT,
+        loaded: 1,
+      });
+      return {
+        initStatus: init.statusText,
+        localSource: local.source,
+        localStatus: local.statusText,
+        localText: local.progressText,
+        networkSource: network.source,
+        networkStatus: network.statusText,
+        compilingStatus: compiling.statusText,
+        compilingHint: compiling.freezeHint,
+        inferredLocal: mod.inferLoadSource('/models/gemma/x.litertlm'),
+      };
+    });
+
+    expect(result.initStatus).toBe('Loading…');
+    expect(result.localSource).toBe('local');
+    expect(result.localStatus).toBe('Loading 12%');
+    expect(result.localText).toMatch(/local/i);
+    expect(result.networkSource).toBe('network');
+    expect(result.networkStatus).toBe('Loading 50%');
+    expect(result.compilingStatus).toBe('Compiling…');
+    expect(result.compilingHint).toMatch(/freeze/i);
+    expect(result.inferredLocal).toBe('local');
+  });
+
+  test('loadLiteRT option does not shadow _loadLiteRT method', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/ai-chat.js');
+      const customLoader = async () => ({ Engine: { create: async () => null } });
+      const chat = new mod.AiChat({
+        modelId: 'gemma-4-E2B-it-web',
+        loadLiteRT: customLoader,
+      });
+      const ownLoadLiteRT = Object.prototype.hasOwnProperty.call(chat, '_loadLiteRT');
+      const ownCustom = Object.prototype.hasOwnProperty.call(chat, '_customLoadLiteRT');
+      // Before the fix, constructing with loadLiteRT replaced the method with the import fn.
+      const methodIsCustomLoader = chat._loadLiteRT === customLoader;
+      return {
+        version: mod.VDL_AI_CHAT_VERSION,
+        ownLoadLiteRT,
+        ownCustom,
+        methodIsCustomLoader,
+        methodIsFn: typeof chat._loadLiteRT === 'function',
+        customMatches: chat._customLoadLiteRT === customLoader,
+      };
+    });
+
+    expect(result.ownLoadLiteRT).toBe(false);
+    expect(result.ownCustom).toBe(true);
+    expect(result.methodIsCustomLoader).toBe(false);
+    expect(result.methodIsFn).toBe(true);
+    expect(result.customMatches).toBe(true);
+  });
+
   test('shouldFocusChatComposer respects modal and other controls', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const mod = await import('/ai-chat.js');
@@ -644,5 +723,72 @@ test.describe('Guardrails Unit', () => {
     expect(result.onlyUnclosedChannel).toBe('partial');
     // Callers use `sanitize(...) || reply`; non-empty orphan strip means no raw-tag fallback.
     expect(result.emptyFallback).toBe('partial');
+  });
+
+  test('validateToolCall allowlist and size limits', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/guardrails/tools.js');
+      const allowlist = [{ name: 'search_curriculum', parameters: { type: 'object' } }];
+      const ok = mod.validateToolCall({
+        name: 'search_curriculum',
+        args: { query: 'narrowing' },
+        allowlist,
+      });
+      const blocked = mod.validateToolCall({
+        name: 'delete_everything',
+        args: {},
+        allowlist,
+      });
+      const empty = mod.validateToolCall({ name: '', args: {}, allowlist });
+      const huge = mod.validateToolCall({
+        name: 'search_curriculum',
+        args: { blob: 'x'.repeat(20_000) },
+        allowlist,
+        maxArgsBytes: 100,
+      });
+      const badArgs = mod.validateToolCall({
+        name: 'search_curriculum',
+        args: ['not', 'object'],
+        allowlist,
+      });
+      return { ok, blocked, empty, huge, badArgs };
+    });
+    expect(result.ok.allowed).toBe(true);
+    expect(result.blocked.allowed).toBe(false);
+    expect(result.blocked.code).toBe('tool.name.not_allowed');
+    expect(result.empty.allowed).toBe(false);
+    expect(result.huge.allowed).toBe(false);
+    expect(result.huge.code).toBe('tool.args.too_large');
+    expect(result.badArgs.allowed).toBe(false);
+  });
+
+  test('parseXmlToolCalls extracts name and JSON args', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/guardrails/tools.js');
+      return mod.parseXmlToolCalls(
+        'Looking up…\n<tool_call name="search_curriculum">{"query":"any"}</tool_call>\nThanks',
+      );
+    });
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0].name).toBe('search_curriculum');
+    expect(result.calls[0].args).toEqual({ query: 'any' });
+    expect(result.remainder).toContain('Looking up');
+  });
+
+  test('buildChatSystemPrompt accepts product and toolsEnabled', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const mod = await import('/guardrails/llm.js');
+      return mod.buildChatSystemPrompt({
+        product: 'TypeScript School',
+        extra: 'Cite lesson routes.',
+        toolsEnabled: true,
+        toolNames: ['search_curriculum', 'apply_ts_edit'],
+      });
+    });
+    expect(result).toContain('TypeScript School');
+    expect(result).toContain('Cite lesson routes.');
+    expect(result).toContain('search_curriculum');
+    expect(result).toContain('<tool_call');
+    expect(result).toContain('FOSS');
   });
 });

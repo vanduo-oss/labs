@@ -3,6 +3,9 @@ import {
   buildChatSystemPrompt,
   DEFAULT_LLM_GUARD_PATTERNS,
   validateLlmInput,
+  validateToolCall,
+  parseXmlToolCalls,
+  formatXmlToolResult,
 } from './guardrails/llm.js';
 import { toGuardrailError } from './guardrails/core.js';
 
@@ -29,7 +32,12 @@ const CDN = {
   litert: 'https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm',
 };
 
-export const VDL_AI_CHAT_VERSION = '0.0.10';
+export const VDL_AI_CHAT_VERSION = '0.0.15';
+
+export const TOOLS_UNSUPPORTED_ERROR =
+  'Tool calling is only supported on LiteRT Gemma (E2B/E4B) models.';
+
+/** @typedef {{ name: string, description?: string, parameters?: Record<string, unknown> }} AiToolDefinition */
 
 let _webllmModule = null;
 let _litertModule = null;
@@ -217,6 +225,143 @@ export const LOAD_FREEZE_HINT =
   'Uploading weights to the GPU and compiling shaders — the tab may freeze for several seconds. This is normal for in-browser WebGPU.';
 
 /**
+ * Infer whether a progress `text` / URL looks like cache, local `/models`, or network.
+ * Prefer an explicit `source` field on progress events when AiChat provides one.
+ *
+ * @param {unknown} progressText
+ * @returns {'cache' | 'local' | 'network' | 'unknown'}
+ */
+export function inferLoadSource(progressText) {
+  const text = String(progressText || '').toLowerCase();
+  if (!text) return 'unknown';
+  if (/\/models\//.test(text) || /\blocal\b/.test(text)) return 'local';
+  if (/(cache|cached|indexeddb)/.test(text)) return 'cache';
+  if (/(download|fetch|http|https|network|transfer|bytes|\bkb\b|\bmb\b|\bgb\b)/.test(text)) {
+    return 'network';
+  }
+  return 'unknown';
+}
+
+/**
+ * Map an AiChat `onProgress` payload into UI-ready load status fields.
+ * Shared by Labs VdlAiChatUI / AiChatUI and host apps (e.g. ts-school).
+ *
+ * @param {Record<string, unknown> | null | undefined} data
+ * @param {{ likelyCached?: boolean, freezeHint?: string }} [options]
+ * @returns {{
+ *   stage: string,
+ *   progressPct: number,
+ *   progressText: string,
+ *   statusText: string,
+ *   statusTone: 'muted' | 'warn' | 'ok' | 'danger',
+ *   freezeHint: string,
+ *   source: 'cache' | 'local' | 'network' | 'unknown',
+ * }}
+ */
+export function describeLoadProgress(data, options = {}) {
+  const stage = String(data?.stage || '');
+  const loaded = typeof data?.loaded === 'number' ? data.loaded : 0;
+  const pct = Math.max(0, Math.min(100, Math.round(loaded * 100)));
+  const message = String(data?.message || '');
+  const text = String(data?.text || '');
+  const freezeDefault = options.freezeHint || LOAD_FREEZE_HINT;
+  const likelyCached = options.likelyCached === true;
+  const explicitSource = data?.source;
+  let inferred = /** @type {'cache' | 'local' | 'network' | 'unknown'} */ ('unknown');
+  if (typeof explicitSource === 'string' && explicitSource) {
+    inferred = /** @type {'cache' | 'local' | 'network' | 'unknown'} */ (explicitSource);
+  } else {
+    inferred = inferLoadSource(text);
+    if (inferred === 'unknown') inferred = inferLoadSource(message);
+  }
+
+  if (stage === 'init') {
+    return {
+      stage,
+      progressPct: 0,
+      progressText: message || 'Initializing…',
+      statusText: 'Loading…',
+      statusTone: 'warn',
+      freezeHint: '',
+      source: 'unknown',
+    };
+  }
+
+  if (stage === 'downloading') {
+    let source = inferred;
+    if (source === 'unknown' && likelyCached) source = 'cache';
+
+    let prefix = message || 'Preparing model…';
+    if (source === 'local') {
+      prefix = message || 'Using local LiteRT model…';
+    } else if (source === 'network') {
+      prefix = message || 'Downloading model from web (first load may take a while).';
+    } else if (source === 'cache') {
+      prefix = message || 'Loading model from browser cache (no full re-download).';
+    } else if (likelyCached) {
+      prefix = message || 'Loading model from browser cache…';
+    }
+
+    return {
+      stage,
+      progressPct: pct,
+      progressText: text ? `${prefix} ${text}` : prefix,
+      statusText: `Loading ${pct}%`,
+      statusTone: 'warn',
+      freezeHint: '',
+      source,
+    };
+  }
+
+  if (stage === 'compiling') {
+    const hint = message || freezeDefault;
+    return {
+      stage,
+      progressPct: 100,
+      progressText: hint,
+      statusText: 'Compiling…',
+      statusTone: 'warn',
+      freezeHint: hint,
+      source: inferred === 'unknown' ? 'unknown' : inferred,
+    };
+  }
+
+  if (stage === 'ready') {
+    return {
+      stage,
+      progressPct: 100,
+      progressText: message || 'Ready',
+      statusText: 'Ready',
+      statusTone: 'ok',
+      freezeHint: '',
+      source: 'unknown',
+    };
+  }
+
+  if (stage === 'error') {
+    return {
+      stage,
+      progressPct: 0,
+      progressText: '',
+      statusText: 'Error',
+      statusTone: 'danger',
+      freezeHint: '',
+      source: 'unknown',
+    };
+  }
+
+  return {
+    stage: stage || 'unknown',
+    progressPct: pct,
+    progressText: message || text || '',
+    statusText: message || 'Loading…',
+    statusTone: 'warn',
+    freezeHint: '',
+    source: inferred,
+  };
+}
+
+/**
  * PrefillDecode `.litertlm` spikes (Qwen3 / Ministral) cannot load in current
  * `@litert-lm/core` web runtime:
  * - default `Backend.GPU_ARTISAN` always uses streaming ModelAssets →
@@ -255,9 +400,29 @@ export function getLiteRTRuntimeBlockReason(modelOrId) {
  * @param {unknown} err
  */
 export function rewriteLiteRTLoadError(err) {
+  // CSP / <script> load failures often surface as Event, not Error.
+  if (err && typeof err === 'object' && !(err instanceof Error) && 'type' in err) {
+    const target = /** @type {{ target?: { src?: string, href?: string } }} */ (err).target;
+    const src = target?.src || target?.href || '';
+    if (/jsdelivr|unpkg|esm\.run/i.test(src)) {
+      return new Error(
+        'LiteRT WASM was blocked by Content-Security-Policy (CDN script). Pass AiChat({ liteRtWasmPath }) to a same-origin /wasm/ directory.',
+      );
+    }
+    return new Error(
+      src
+        ? `Failed to load LiteRT runtime script (${src}).`
+        : 'Failed to load LiteRT runtime (script or network error).',
+    );
+  }
   const msg = String(err?.message || err || '');
   if (/PrefillDecode|Streaming kTfLite/i.test(msg)) {
     return new Error(LITERT_PREFILLDECODE_UNSUPPORTED_REASON);
+  }
+  if (/Content Security Policy|violates.*script-src/i.test(msg)) {
+    return new Error(
+      'LiteRT WASM was blocked by Content-Security-Policy. Pass AiChat({ liteRtWasmPath }) to a same-origin /wasm/ directory.',
+    );
   }
   return err instanceof Error ? err : new Error(msg || 'Failed to load model.');
 }
@@ -798,14 +963,18 @@ function formatBytes(bytes) {
   return `${v < 10 && u > 0 ? v.toFixed(1) : Math.round(v)} ${units[u]}`;
 }
 
-async function loadWebLLM() {
+async function loadWebLLM(customLoader = null) {
   if (_webllmModule) return _webllmModule;
   if (typeof window !== 'undefined' && window.__vdlWebLLMModule) {
     _webllmModule = window.__vdlWebLLMModule;
     return _webllmModule;
   }
   try {
-    _webllmModule = await import(/* @vite-ignore */ CDN.webllm);
+    if (typeof customLoader === 'function') {
+      _webllmModule = await customLoader();
+    } else {
+      _webllmModule = await import(/* @vite-ignore */ CDN.webllm);
+    }
     if (typeof window !== 'undefined') {
       if (window.__vdlWebLLMModule && window.__vdlWebLLMModule !== _webllmModule) {
         console.warn(
@@ -816,25 +985,29 @@ async function loadWebLLM() {
     }
     return _webllmModule;
   } catch (err) {
-    console.error('[AiChat] Failed to load WebLLM from CDN:', err);
+    console.error('[AiChat] Failed to load WebLLM:', err);
     throw err;
   }
 }
 
-async function loadLiteRT() {
+async function loadLiteRT(customLoader = null) {
   if (_litertModule) return _litertModule;
   if (typeof window !== 'undefined' && window.__vdlLiteRTModule) {
     _litertModule = window.__vdlLiteRTModule;
     return _litertModule;
   }
   try {
-    _litertModule = await import(/* @vite-ignore */ CDN.litert);
+    if (typeof customLoader === 'function') {
+      _litertModule = await customLoader();
+    } else {
+      _litertModule = await import(/* @vite-ignore */ CDN.litert);
+    }
     if (typeof window !== 'undefined') {
       window.__vdlLiteRTModule = _litertModule;
     }
     return _litertModule;
   } catch (err) {
-    console.error('[AiChat] Failed to load LiteRT-LM from CDN:', err);
+    console.error('[AiChat] Failed to load LiteRT-LM:', err);
     throw err;
   }
 }
@@ -875,10 +1048,70 @@ export class AiChat {
     this._isLoading = false;
     // WebLLM Gemma MLC: resetChat() does not reliably clear KV — next cold turn must reload.
     this._needsEngineReload = false;
+    /** @type {AiToolDefinition[]} */
+    this._tools = [];
+    this._systemPromptOptions = options.systemPromptOptions || {};
+    /** @type {'auto' | 'native' | 'xml'} */
+    this._toolProtocol = options.toolProtocol || 'auto';
+    this._nativeToolsSupported = null;
+    /** Optional host-provided loaders (bundle LiteRT/WebLLM for strict CSP).
+     * Named distinctly from `_loadLiteRT()` / `_loadWebLLM()` methods — an own
+     * property with the same name would shadow the prototype method and make
+     * `load()` import the package without ever calling Engine.create. */
+    this._customLoadLiteRT =
+      typeof options.loadLiteRT === 'function' ? options.loadLiteRT : null;
+    this._customLoadWebLLM =
+      typeof options.loadWebLLM === 'function' ? options.loadWebLLM : null;
+    /**
+     * Same-origin directory (or .js URL) for LiteRT WASM glue.
+     * Required under CSP `script-src 'self'` — the package default is jsDelivr.
+     * @type {string | null}
+     */
+    this._liteRtWasmPath =
+      typeof options.liteRtWasmPath === 'string' && options.liteRtWasmPath.trim()
+        ? options.liteRtWasmPath.trim()
+        : null;
+  }
+
+  /**
+   * @param {AiToolDefinition[]} defs
+   */
+  registerTools(defs) {
+    const list = Array.isArray(defs) ? defs : [];
+    this._tools = list
+      .map((d) => ({
+        name: String(d?.name || '').trim(),
+        description: String(d?.description || ''),
+        parameters: d?.parameters && typeof d.parameters === 'object' ? d.parameters : { type: 'object', properties: {} },
+      }))
+      .filter((d) => d.name);
+    // Conversation preface may include tools — force refresh on next turn.
+    this._needsEngineReload = true;
+    this._nativeToolsSupported = null;
+  }
+
+  /**
+   * @param {Record<string, unknown>} options
+   */
+  setSystemPromptOptions(options = {}) {
+    this._systemPromptOptions = options && typeof options === 'object' ? { ...options } : {};
+    this._needsEngineReload = true;
+  }
+
+  _composeSystemPrompt() {
+    return buildChatSystemPrompt({
+      ...this._systemPromptOptions,
+      toolsEnabled: this._tools.length > 0,
+      toolNames: this._tools.map((t) => t.name),
+    });
+  }
+
+  _toolsSupportedForModel() {
+    return isLiteRTModel(this.modelId) && !getLiteRTRuntimeBlockReason(this.modelId);
   }
 
   async setModelId(modelId, options = {}) {
-    const { resetMessages = false } = options;
+    const { resetMessages = false, force = false } = options;
     if (this._isLoading) {
       throw new Error('Cannot change model ID while loading.');
     }
@@ -886,7 +1119,8 @@ export class AiChat {
     const modelChanged = this.modelId !== modelId;
     // Always await teardown before pointing at a new backend — LiteRT/WebLLM
     // share the WebGPU adapter and racing dispose breaks subsequent loads.
-    if (modelChanged && (this._isLoaded || this.engine || this._conversation)) {
+    // `force` also tears down when reloading the same catalog id (host Reload).
+    if ((modelChanged || force) && (this._isLoaded || this.engine || this._conversation)) {
       await this._disposeEngine();
       this.engine = null;
       this._conversation = null;
@@ -939,17 +1173,229 @@ export class AiChat {
     if (this._conversation && typeof this._conversation.delete === 'function') {
       try { await this._conversation.delete(); } catch { /* ignore */ }
     }
+    const systemContent = this._composeSystemPrompt();
     const preface = modelSupportsSystemRole(this.modelId)
-      ? { messages: [{ role: 'system', content: buildChatSystemPrompt() }] }
+      ? { messages: [{ role: 'system', content: systemContent }] }
       : undefined;
+
+    // Prefer native tools when protocol allows and tools are registered.
+    if (
+      preface &&
+      this._tools.length > 0 &&
+      this._toolProtocol !== 'xml' &&
+      this._toolsSupportedForModel()
+    ) {
+      try {
+        preface.tools = this._tools.map((t) => ({
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          },
+        }));
+        this._conversation = await this.engine.createConversation({ preface });
+        this._nativeToolsSupported = true;
+        return this._conversation;
+      } catch (err) {
+        console.warn('[AiChat] Native Preface.tools rejected; falling back to XML protocol.', err);
+        this._nativeToolsSupported = false;
+        delete preface.tools;
+      }
+    }
+
     this._conversation = await this.engine.createConversation(
       preface ? { preface } : undefined,
     );
+    if (this._tools.length > 0 && this._nativeToolsSupported !== true) {
+      this._nativeToolsSupported = false;
+    }
     return this._conversation;
   }
 
+  /**
+   * Extract structured tool calls from a LiteRT message if present.
+   * @param {unknown} message
+   * @returns {Array<{ name: string, args: Record<string, unknown> }>}
+   */
+  _extractNativeToolCalls(message) {
+    const raw = message?.tool_calls || message?.toolCalls || [];
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    return raw.map((call) => {
+      const name = call?.function?.name || call?.name || '';
+      let args = call?.function?.arguments ?? call?.arguments ?? {};
+      if (typeof args === 'string') {
+        try { args = JSON.parse(args); } catch { args = { raw: args }; }
+      }
+      if (!args || typeof args !== 'object' || Array.isArray(args)) args = {};
+      return { name: String(name), args };
+    }).filter((c) => c.name);
+  }
+
+  /**
+   * @param {string} userText
+   * @param {{
+   *   execute: (name: string, args: Record<string, unknown>) => unknown | Promise<unknown>,
+   *   maxRounds?: number,
+   *   onUpdate?: (text: string) => void,
+   *   onFinish?: (usage: unknown) => void,
+   *   onTool?: (info: { name: string, args: Record<string, unknown>, result: unknown }) => void,
+   * }} options
+   */
+  async generateWithTools(userText, options = {}) {
+    const execute = options.execute;
+    const maxRounds = Math.max(1, Number(options.maxRounds) || 4);
+    const onUpdate = options.onUpdate;
+    const onFinish = options.onFinish;
+    const onTool = options.onTool;
+
+    if (typeof execute !== 'function') {
+      throw new Error('generateWithTools requires an execute(name, args) callback.');
+    }
+    if (!this._toolsSupportedForModel()) {
+      throw new Error(TOOLS_UNSUPPORTED_ERROR);
+    }
+    if (!this._tools.length) {
+      throw new Error('No tools registered. Call registerTools() first.');
+    }
+
+    const guardrailCheck = validateLlmInput({ text: userText });
+    if (!guardrailCheck.allowed) {
+      throw toGuardrailError(guardrailCheck);
+    }
+    if (!this._isLoaded || !this.engine) {
+      throw new Error('Model not loaded. Call load() first.');
+    }
+
+    const startingFreshConversation = this.messages.length === 0;
+    this.messages.push({ role: 'user', content: userText });
+
+    try {
+      if (startingFreshConversation && this._needsEngineReload) {
+        await this._reloadEngine('reset');
+      }
+
+      let pendingUserPayload = userText;
+      let finalReply = '';
+
+      for (let round = 0; round < maxRounds; round += 1) {
+        const { reply, rawMessage } = await this._completeOnceLiteRTDetailed(
+          pendingUserPayload,
+          onUpdate,
+        );
+        const nativeCalls = this._extractNativeToolCalls(rawMessage);
+        const xmlParsed = parseXmlToolCalls(reply);
+        const calls = nativeCalls.length > 0 ? nativeCalls : xmlParsed.calls;
+
+        if (!calls.length) {
+          finalReply = reply.trim();
+          if (!finalReply) {
+            this.messages.pop();
+            throw new Error(
+              `Model ${this.modelId} returned an empty response during tool loop.`,
+            );
+          }
+          this.messages.push({ role: 'assistant', content: finalReply });
+          if (onFinish) onFinish(null);
+          return finalReply;
+        }
+
+        this.messages.push({ role: 'assistant', content: reply });
+        const results = [];
+        for (const call of calls) {
+          const validation = validateToolCall({
+            name: call.name,
+            args: call.args,
+            allowlist: this._tools,
+          });
+          if (!validation.allowed) {
+            const errPayload = {
+              error: validation.code,
+              message: validation.message,
+            };
+            results.push({ name: call.name, result: errPayload });
+            if (onTool) onTool({ name: call.name, args: call.args, result: errPayload });
+            continue;
+          }
+          let result;
+          try {
+            result = await execute(call.name, call.args || {});
+          } catch (err) {
+            result = {
+              error: 'tool.execute_failed',
+              message: err?.message || String(err),
+            };
+          }
+          results.push({ name: call.name, result });
+          if (onTool) onTool({ name: call.name, args: call.args, result });
+        }
+
+        // Feed tool results back as the next user turn (XML protocol is portable).
+        pendingUserPayload = results
+          .map((r) => formatXmlToolResult(r.name, r.result))
+          .join('\n');
+        this.messages.push({ role: 'user', content: pendingUserPayload });
+      }
+
+      throw new Error(
+        `Tool loop exceeded maxRounds (${maxRounds}) without a final assistant reply.`,
+      );
+    } catch (err) {
+      if (
+        this.messages.length &&
+        this.messages[this.messages.length - 1]?.role === 'user' &&
+        this.messages[this.messages.length - 1]?.content === userText
+      ) {
+        this.messages.pop();
+      }
+      console.error('[AiChat] generateWithTools error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Like _completeOnceLiteRT but also returns the last raw message for tool_calls.
+   */
+  async _completeOnceLiteRTDetailed(userText, onUpdate) {
+    const conversation = await this._ensureLiteRTConversation(false);
+    let reply = '';
+    let rawMessage = null;
+
+    if (typeof conversation.sendMessageStreaming === 'function') {
+      for await (const chunk of iterateMessageStream(
+        conversation.sendMessageStreaming(userText),
+      )) {
+        rawMessage = chunk;
+        const delta = extractLiteRTText(chunk);
+        if (!delta) continue;
+        if (Array.isArray(chunk?.content)) {
+          reply += delta;
+        } else if (delta.startsWith(reply)) {
+          reply = delta;
+        } else {
+          reply += delta;
+        }
+        const cleanedPartial = sanitizeModelReply(reply) || reply;
+        if (onUpdate) onUpdate(cleanedPartial);
+      }
+    } else {
+      const response = await conversation.sendMessage(userText);
+      rawMessage = response;
+      reply = extractLiteRTText(response);
+      if (reply && onUpdate) onUpdate(sanitizeModelReply(reply) || reply);
+    }
+
+    reply = sanitizeModelReply(reply) || reply.trim();
+    return { reply, usage: null, rawMessage };
+  }
+
   async load() {
-    if (this._isLoaded) return;
+    // Heal inconsistent state: disposed engine with stale loaded flag would
+    // no-op forever and leave hosts showing Ready without a usable runtime.
+    if (this._isLoaded && this.engine) return;
+    if (this._isLoaded && !this.engine) {
+      this._isLoaded = false;
+    }
     if (this._isLoading) throw new Error('Model is already loading.');
 
     const runtimeBlock = getLiteRTRuntimeBlockReason(this.modelId);
@@ -971,6 +1417,9 @@ export class AiChat {
         await this._loadLiteRT();
       } else {
         await this._loadWebLLM();
+      }
+      if (!this.engine) {
+        throw new Error('Model engine failed to initialize.');
       }
       this._isLoaded = true;
       this._needsEngineReload = false;
@@ -1002,17 +1451,46 @@ export class AiChat {
       throw new Error(runtimeBlock);
     }
 
-    const { Engine } = await loadLiteRT();
+    const litert = await loadLiteRT(this._customLoadLiteRT);
+    const { Engine, loadLiteRtLm, hasGlobalLiteRtLm, hasGlobalLiteRtLmPromise } = litert;
+    if (typeof Engine?.create !== 'function') {
+      throw new Error('LiteRT module loaded without Engine.create — check loadLiteRT().');
+    }
+
+    // Default package path is jsDelivr; CSP hosts must pass liteRtWasmPath (same-origin).
+    if (
+      this._liteRtWasmPath
+      && typeof loadLiteRtLm === 'function'
+      && !hasGlobalLiteRtLmPromise?.()
+      && !hasGlobalLiteRtLm?.()
+    ) {
+      this._emitProgress({
+        stage: 'init',
+        message: 'Loading LiteRT WASM runtime (same-origin)…',
+      });
+      await yieldToMain();
+      try {
+        await loadLiteRtLm(this._liteRtWasmPath);
+      } catch (err) {
+        throw rewriteLiteRTLoadError(err);
+      }
+    }
+
     this._emitProgress({ stage: 'init', message: 'Initializing LiteRT WebGPU engine…' });
     await yieldToMain();
 
     const modelUrl = await resolveLiteRTModelUrl(option);
     const displayName = getModelDisplayName(this.modelId);
+    const isLocal = /\/models\//.test(String(modelUrl || ''));
+    const loadSource = isLocal ? 'local' : 'network';
     this._emitProgress({
       stage: 'downloading',
-      message: `Downloading / reading ${displayName} (LiteRT)…`,
+      message: isLocal
+        ? `Using local LiteRT model for ${displayName}…`
+        : `Downloading / reading ${displayName} (LiteRT)…`,
       text: modelUrl,
       loaded: 0,
+      source: loadSource,
     });
 
     // Engine accepts URL | ReadableStream | Blob.
@@ -1030,7 +1508,10 @@ export class AiChat {
           ? `${pct} · ${(received / (1024 * 1024)).toFixed(0)} / ${(totalBytes / (1024 * 1024)).toFixed(0)} MB`
           : pct,
         loaded: totalBytes > 0 ? loaded : Math.min(0.95, received / (2 * GiB)),
-        message: 'Fetching model weights…',
+        message: isLocal
+          ? 'Reading local model weights…'
+          : 'Fetching model weights…',
+        source: loadSource,
       });
     };
     let modelSource;
@@ -1063,7 +1544,7 @@ export class AiChat {
   }
 
   async _loadWebLLM() {
-    const { CreateMLCEngine } = await loadWebLLM();
+    const { CreateMLCEngine } = await loadWebLLM(this._customLoadWebLLM);
     this._emitProgress({ stage: 'init', message: 'Initializing WebGPU engine...' });
     await yieldToMain();
 
@@ -1783,48 +2264,36 @@ export class AiChatUI {
     });
 
     this.chat.onProgress((data) => {
+      const described = describeLoadProgress(data, {
+        likelyCached: this._isModelLikelyCached(this.chat.modelId),
+      });
+
       if (data.stage === 'init') {
         this._applyLoadSourceBadges({ mode: 'unknown', fromDownload: false, message: data.message });
-        this._setLoadOverlay(true, data.message || 'Initializing…');
+        this._setLoadOverlay(true, described.progressText);
         if (this._elements.progressWrap?.style.display === 'block') {
-          this._elements.progressText.textContent = data.message || 'Initializing...';
+          this._elements.progressText.textContent = described.progressText;
           this._elements.progressText.style.color = '';
         }
         this._setFreezeHint(false);
       } else if (data.stage === 'downloading') {
-        const source = this._inferLoadSource(data.text);
-        const likelyCached = this._isModelLikelyCached(this.chat.modelId);
-        let mode = source;
-        if (mode === 'unknown' && likelyCached) {
-          mode = 'cache';
-        }
-        this._applyLoadSourceBadges({ mode, fromDownload: true, message: data.text });
-
-        let prefix = 'Preparing model...';
-        if (source === 'network') {
-          prefix = 'Downloading model from web (first load may take a while).';
-        } else if (source === 'cache') {
-          prefix = 'Loading model from browser cache (no full re-download).';
-        } else if (likelyCached) {
-          prefix = 'Loading model from browser cache...';
-        } else {
-          prefix = 'Preparing model download...';
-        }
-
-        this._elements.progressText.textContent = data.text
-          ? `${prefix} ${data.text}`
-          : prefix;
-        this._elements.progressBar.style.width = `${(data.loaded || 0) * 100}%`;
+        this._applyLoadSourceBadges({
+          mode: described.source,
+          fromDownload: true,
+          message: data.text || data.message,
+        });
+        this._elements.progressText.textContent = described.progressText;
+        this._elements.progressBar.style.width = `${described.progressPct}%`;
         this._elements.statusIndicator.style.background = 'var(--vd-color-warning, #f59e0b)';
-        this._elements.statusText.textContent = `Loading ${Math.round((data.loaded || 0) * 100)}%`;
-        this._setLoadOverlay(true, data.message || prefix);
+        this._elements.statusText.textContent = described.statusText;
+        this._setLoadOverlay(true, data.message || described.progressText);
         this._setFreezeHint(false);
       } else if (data.stage === 'compiling') {
         this._elements.progressBar.style.width = '100%';
-        this._elements.progressText.textContent = data.message || LOAD_FREEZE_HINT;
-        this._elements.statusText.textContent = 'Compiling…';
-        this._setLoadOverlay(true, data.message || LOAD_FREEZE_HINT);
-        this._setFreezeHint(true, data.message || LOAD_FREEZE_HINT);
+        this._elements.progressText.textContent = described.progressText;
+        this._elements.statusText.textContent = described.statusText;
+        this._setLoadOverlay(true, described.freezeHint || described.progressText);
+        this._setFreezeHint(true, described.freezeHint || LOAD_FREEZE_HINT);
       } else if (data.stage === 'ready') {
         this._clearLoadSourceBadges();
         this._setLoadOverlay(false);
@@ -2303,11 +2772,7 @@ export class AiChatUI {
   }
 
   _inferLoadSource(progressText) {
-    const text = String(progressText || '').toLowerCase();
-    if (!text) return 'unknown';
-    if (/(cache|cached|indexeddb|local)/.test(text)) return 'cache';
-    if (/(download|fetch|http|https|network|transfer|bytes|kb|mb|gb)/.test(text)) return 'network';
-    return 'unknown';
+    return inferLoadSource(progressText);
   }
 
   _applyLoadSourceBadges({ mode, fromDownload, message }) {
@@ -2315,16 +2780,20 @@ export class AiChatUI {
     if (!badges || !badges.length) return;
 
     const isNetwork = mode === 'network';
-    const isCache = mode === 'cache';
+    const isCache = mode === 'cache' || mode === 'local';
     const label = isNetwork
       ? 'From web'
-      : isCache
-        ? 'From cache'
-        : (fromDownload ? 'Loading' : 'Preparing');
+      : mode === 'local'
+        ? 'Local /models'
+        : isCache
+          ? 'From cache'
+          : (fromDownload ? 'Loading' : 'Preparing');
 
     let title;
     if (isNetwork) {
       title = 'Downloading model from the web. First load may take a while.';
+    } else if (mode === 'local') {
+      title = 'Serving model bytes from this site’s /models path (no Hugging Face download).';
     } else if (isCache) {
       title = 'Loading from browser cache (no full re-download).';
     } else if (message) {
@@ -2862,3 +3331,4 @@ typingStyle.textContent = `
 if (typeof document !== 'undefined') {
   document.head.appendChild(typingStyle);
 }
+

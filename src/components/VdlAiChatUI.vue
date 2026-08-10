@@ -12,10 +12,10 @@ import {
   AiChat,
   MODEL_GROUPS,
   MODEL_OPTIONS,
-  LOAD_FREEZE_HINT,
   assessLoadCapacity,
   buildWeakDeviceConfirmCopy,
   collectDeviceSignals,
+  describeLoadProgress,
   getLiteRTRuntimeBlockReason,
   getModelDisplayName,
   getModelOption,
@@ -534,34 +534,22 @@ onMounted(async () => {
   }
   if (unsubProgress) unsubProgress();
   unsubProgress = chat.onProgress((data) => {
-    if (data.stage === 'init') {
-      progressText.value = data.message || 'Initializing…';
-      freezeHint.value = '';
-    } else if (data.stage === 'downloading') {
-      progressPct.value = Math.round((data.loaded || 0) * 100);
-      progressText.value = data.text
-        ? `${data.message || 'Preparing model…'} ${data.text}`
-        : (data.message || 'Preparing model…');
-      statusText.value = `Loading ${progressPct.value}%`;
-      statusTone.value = 'warn';
-      freezeHint.value = '';
-    } else if (data.stage === 'compiling') {
-      progressPct.value = 100;
-      progressText.value = data.message || LOAD_FREEZE_HINT;
-      freezeHint.value = data.message || LOAD_FREEZE_HINT;
-      statusText.value = 'Compiling…';
-      statusTone.value = 'warn';
-    } else if (data.stage === 'ready') {
-      progressPct.value = 100;
-      progressText.value = data.message || 'Ready';
-      freezeHint.value = '';
-    } else if (data.stage === 'error') {
+    const described = describeLoadProgress(data, {
+      likelyCached: isModelLikelyCached(chat.modelId),
+    });
+    if (described.stage === 'error') {
       // Surface via errorBanner from load/generate catch — don't duplicate in progress.
       progressText.value = '';
       freezeHint.value = '';
       statusTone.value = 'danger';
       statusText.value = 'Error';
+      return;
     }
+    progressPct.value = described.progressPct;
+    progressText.value = described.progressText;
+    freezeHint.value = described.freezeHint;
+    statusText.value = described.statusText;
+    statusTone.value = described.statusTone;
   });
   await refreshStoragePanel();
   refreshCapacityNote(selectedModelId.value);

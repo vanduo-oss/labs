@@ -14,3 +14,4 @@ gemma-4-debug.md
 # Experimental local Gemma smoke harnesses (not for Pages / production build)
 demo/gemma-*.html
 utils/gemma-smoke-runner.mjs
+*.tgz

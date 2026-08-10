@@ -34,8 +34,18 @@ LLM policy surface used by `vdl-ai-chat`:
 - `DEFAULT_LLM_GUARD_PATTERNS`
 - `LLM_BLOCK_MESSAGE`
 - `validateLlmInput(input)`
-- `buildChatSystemPrompt(options?)`
+- `buildChatSystemPrompt({ product?, extra?, extraRules?, toolsEnabled?, toolNames? })`
+- Re-exports tool helpers from `tools.js`
 - `chatGuardrails`
+
+### `./guardrails/tools.js`
+
+Tool-call validation and XML fallback protocol helpers:
+
+- `validateToolCall({ name, args, allowlist, maxArgsBytes? })`
+- `parseXmlToolCalls(text)`
+- `formatXmlToolResult(name, result)`
+- `DEFAULT_MAX_TOOL_ARGS_BYTES`
 
 ### `./guardrails/search.js`
 

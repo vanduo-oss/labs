@@ -129,6 +129,10 @@ export class NeptuneSearch {
     this.maxVectorDimensions = options.maxVectorDimensions ?? 4096;
     this.semanticBoost = options.semanticBoost ?? 1.0;
     this.modelName = options.modelName ?? 'Xenova/all-MiniLM-L6-v2';
+    /** Optional host-provided loaders (bundle Fuse/Transformers for strict CSP). */
+    this._loadFuse = typeof options.loadFuse === 'function' ? options.loadFuse : loadFuse;
+    this._loadTransformers =
+      typeof options.loadTransformers === 'function' ? options.loadTransformers : loadTransformers;
 
     this._fuse = null;
     this._fusePromise = null;
@@ -168,7 +172,7 @@ export class NeptuneSearch {
         this._docs = data.documents;
         this._docMap = new Map(this._docs.map(d => [d.id, d]));
 
-        const Fuse = await loadFuse();
+        const Fuse = await this._loadFuse();
         const FuseClass = Fuse.default ?? Fuse;
         this._fuse = new FuseClass(this._docs, {
           keys: [
@@ -215,7 +219,7 @@ export class NeptuneSearch {
 
         let vectorsData;
         try {
-          const transformers = await loadTransformers();
+          const transformers = await this._loadTransformers();
 
           this._extractor = transformers.pipeline('feature-extraction', this.modelName, {
             quantized: true,

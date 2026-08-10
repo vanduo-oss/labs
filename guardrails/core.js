@@ -52,7 +52,10 @@ export function block({ code, message, matchedPatternIds = undefined, meta = und
  * @param {string=} fallbackMessage
  * @returns {Error & { code?: string, reason?: string, guardrail?: GuardrailResult }}
  */
-export function toGuardrailError(result, fallbackMessage = 'Request blocked by deterministic guardrails.') {
+export function toGuardrailError(
+  result,
+  fallbackMessage = 'Request blocked by deterministic guardrails.',
+) {
   const err = new Error(result?.message || fallbackMessage);
   err.name = 'GuardrailError';
   err.code = result?.code || 'guardrail.blocked';

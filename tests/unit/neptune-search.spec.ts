@@ -181,4 +181,27 @@ test.describe('NeptuneSearch Unit', () => {
 
     expect(href).toBe('#');
   });
+
+  test('curriculum-shaped corpus loads via injectable Fuse loader', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { NeptuneSearch } = await import('/neptune-search.js');
+      const FuseMod = await import('https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.basic.mjs');
+      const indexRes = await fetch('/tests/fixtures/curriculum-search-index.json');
+      const index = await indexRes.json();
+      const blob = new Blob([JSON.stringify(index)], { type: 'application/json' });
+      const indexUrl = URL.createObjectURL(blob);
+      const search = new NeptuneSearch({
+        indexUrl,
+        loadFuse: async () => FuseMod,
+      });
+      await search.initFuzzy();
+      const hits = await search.fuzzySearch('truthiness');
+      return {
+        docCount: search._docs?.length ?? 0,
+        ids: hits.map((h) => h.item.id),
+      };
+    });
+    expect(result.docCount).toBe(2);
+    expect(result.ids).toContain('truthiness-narrowing');
+  });
 });
