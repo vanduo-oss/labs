@@ -23,3 +23,8 @@ Product apps like ts-school need to consume Labs headless engines from a version
 
 - Labs package rename (publishConfig public). Vue demo UI remains Labs-site-only.
 - Downstream: ts-school pins `@vanduo-oss/vdl-engines` (file: until registry publish).
+
+
+## SUPERSEDED
+
+Superseded by split packages `@vanduo-oss/vdl-ai-chat` and `@vanduo-oss/vdl-hybrid-search` (published). Do not publish `@vanduo-oss/vdl-engines`.

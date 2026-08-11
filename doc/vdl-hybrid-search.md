@@ -1,4 +1,4 @@
-# vdl-neptune-search — In-Browser Hybrid Search
+# vdl-hybrid-search — In-Browser Hybrid Search
 
 Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://vanduo-oss.github.io/vd3-docs/)** site. Combines instant fuzzy text matching with semantic vector search — entirely in the browser, no server API or LLM calls.
 
@@ -50,7 +50,7 @@ Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://v
 ## Features
 
 - **Zero runtime npm dependencies** (headless engine) — Fuse.js and Transformers.js load from CDN on demand
-- **Dual interface** — headless `NeptuneSearch` API + Labs Vue UI (`VdlNeptuneSearchUI`) on `@vanduo-oss/vd3` (legacy `NeptuneSearchUI` DOM helper remains for tests/compat)
+- **Dual interface** — headless `HybridSearch` API + Labs Vue UI (`VdlVdlHybridSearchUI`) on `@vanduo-oss/vd3` (legacy `VdlHybridSearchUI` DOM helper remains for tests/compat)
 - **vd3-docs corpus** — path routes (`/components/button`), category filters, and result links to GitHub Pages docs
 - **Graceful degradation** — falls back to fuzzy-only if semantic fails
 - **Keyboard accessible** — full Arrow/Enter/Escape navigation, Cmd+K shortcut
@@ -59,9 +59,9 @@ Zero-dependency, client-side hybrid search engine for the **[vd3 docs](https://v
 
 ## Security Model
 
-`vdl-neptune-search` does not run an instruction-following chat model in its semantic path. Semantic search uses embedding extraction (`feature-extraction`) + cosine similarity ranking, not chat completion. Because of that, classic prompt-jailbreak/system-prompt leakage attacks are not the primary risk surface here.
+`vdl-hybrid-search` does not run an instruction-following chat model in its semantic path. Semantic search uses embedding extraction (`feature-extraction`) + cosine similarity ranking, not chat completion. Because of that, classic prompt-jailbreak/system-prompt leakage attacks are not the primary risk surface here.
 
-Neptune guardrails focus on deterministic search safety (`guardrails/search.js`):
+Search guardrails focus on deterministic search safety (`(package) @vanduo-oss/vdl-hybrid-search/guardrails/search`):
 
 - Query hygiene (normalization, min/max length, pathological repetition clamp)
 - Search corpus schema validation (`search-index.json`) and duplicate-id rejection
@@ -86,9 +86,9 @@ Hybrid search parameters were tuned against a curated 81-query benchmark set cov
 ### Headless API
 
 ```javascript
-import { NeptuneSearch } from './neptune-search.js';
+import { HybridSearch } from '@vanduo-oss/vdl-hybrid-search';
 
-const search = new NeptuneSearch();
+const search = new HybridSearch();
 
 // Fuzzy search (instant, no network beyond index fetch)
 const fuzzy = await search.search('button', { mode: 'fuzzy' });
@@ -102,10 +102,10 @@ console.log(hybrid.merged); // [{ doc, score, source: 'semantic'|'fuzzy' }]
 ### UI Component
 
 ```javascript
-import { NeptuneSearch, NeptuneSearchUI } from './neptune-search.js';
+import { HybridSearch, VdlHybridSearchUI } from '@vanduo-oss/vdl-hybrid-search';
 
-const search = new NeptuneSearch();
-const ui = new NeptuneSearchUI({
+const search = new HybridSearch();
+const ui = new VdlHybridSearchUI({
   container: document.getElementById('search-mount'),
   search,
   onResultClick: (result) => {
@@ -130,9 +130,9 @@ ui.mount();
 ### Eager Semantic Preload + Lazy Fuzzy
 
 - **Fuzzy (Fuse.js)** loads on first use (`initFuzzy()` / first keystroke). The Vue UI also warms fuzzy on mount so category chips are ready.
-- **Transformers.js + MiniLM** (`Xenova/all-MiniLM-L6-v2`, ~23MB quantized) starts loading as soon as the search UI mounts (`NeptuneSearchUI` / `VdlNeptuneSearchUI`), in the background. Fuzzy typing stays available while it downloads; when the model becomes ready, the current query is re-run as hybrid automatically.
+- **Transformers.js + MiniLM** (`Xenova/all-MiniLM-L6-v2`, ~23MB quantized) starts loading as soon as the search UI mounts (`VdlHybridSearchUI` / `VdlVdlHybridSearchUI`), in the background. Fuzzy typing stays available while it downloads; when the model becomes ready, the current query is re-run as hybrid automatically.
 - Progress is shown via a non-blocking progress strip (`onSemanticProgress`), not by freezing the input.
-- The model download happens once per browser session; subsequent visits/uses hit the browser cache. `initSemantic()` is promise-cached per `NeptuneSearch` instance (and the Vue UI reuses a module singleton across HMR / `v-if` remounts).
+- The model download happens once per browser session; subsequent visits/uses hit the browser cache. `initSemantic()` is promise-cached per `HybridSearch` instance (and the Vue UI reuses a module singleton across HMR / `v-if` remounts).
 - Headless callers can still call `await search.initSemantic()` explicitly; UI mount already does this fire-and-forget.
 
 ### Graceful Degradation
@@ -146,7 +146,7 @@ ui.mount();
 | Malformed index/vector payloads | Deterministically rejected during initialization |
 | Unsafe route/base URL or icon payload | Sanitized/fallback handling in render path |
 | Vector references missing doc ID | Deterministically rejected during semantic init |
-| Semantic init failed on this instance | `_semanticFailed` is set. Direct `await initSemantic()` / `await semanticSearch()` throw; `search()` catches failures and degrades (hybrid → fuzzy-only). Create a new `NeptuneSearch` to retry semantic loading |
+| Semantic init failed on this instance | `_semanticFailed` is set. Direct `await initSemantic()` / `await semanticSearch()` throw; `search()` catches failures and degrades (hybrid → fuzzy-only). Create a new `HybridSearch` to retry semantic loading |
 
 ## API Reference
 
@@ -208,12 +208,12 @@ interface Chunk {
 }
 ```
 
-### NeptuneSearch
+### HybridSearch
 
 #### Constructor
 
 ```typescript
-new NeptuneSearch(options?: NeptuneSearchOptions)
+new HybridSearch(options?: HybridSearchOptions)
 ```
 
 | Option | Type | Default | Description |
@@ -247,7 +247,7 @@ const results = search.fuzzySearch('button');
 
 ##### `initSemantic(): Promise<void>`
 
-Initializes the semantic search layer. Downloads Transformers.js and the embedding model from CDN, then loads `vectors.json`. Idempotent — concurrent callers share the same in-flight promise. Emits progress events via `onSemanticProgress()`. If a previous init attempt failed, throws until you create a new `NeptuneSearch` instance.
+Initializes the semantic search layer. Downloads Transformers.js and the embedding model from CDN, then loads `vectors.json`. Idempotent — concurrent callers share the same in-flight promise. Emits progress events via `onSemanticProgress()`. If a previous init attempt failed, throws until you create a new `HybridSearch` instance.
 
 ```javascript
 await search.initSemantic();
@@ -343,30 +343,30 @@ const unsubscribe = search.onSemanticProgress((data) => {
 unsubscribe();
 ```
 
-##### `NeptuneSearch.resetCDNCache(): void` (static)
+##### `HybridSearch.resetCDNCache(): void` (static)
 
 Clears the module-level CDN module cache. After calling, the next `initFuzzy()` or `initSemantic()` will re-download libraries from CDN. Useful for testing or hot-reloading scenarios.
 
 ```javascript
-NeptuneSearch.resetCDNCache();
+HybridSearch.resetCDNCache();
 ```
 
 ### Named exports (testing / advanced)
 
-The module also exports **`cosineSimilarity(a, b)`** and **`rankBySimilarity(queryVec, vectors, threshold?)`** for unit tests and custom tooling. Typical site integrations should use **`NeptuneSearch`** only.
+The module also exports **`cosineSimilarity(a, b)`** and **`rankBySimilarity(queryVec, vectors, threshold?)`** for unit tests and custom tooling. Typical site integrations should use **`HybridSearch`** only.
 
-### NeptuneSearchUI
+### VdlHybridSearchUI
 
 #### Constructor
 
 ```typescript
-new NeptuneSearchUI(options: NeptuneSearchUIOptions)
+new VdlHybridSearchUI(options: VdlHybridSearchUIOptions)
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `container` | `HTMLElement` | *(required)* | DOM element to mount the search UI into |
-| `search` | `NeptuneSearch` | *(required)* | Headless search instance |
+| `search` | `HybridSearch` | *(required)* | Headless search instance |
 | `onResultClick` | `(result: MergedResult) => void` | `() => {}` | Callback fired when a result is clicked or selected via Enter |
 | `placeholder` | `string` | `'Search docs…'` | Input placeholder text |
 | `debounceMs` | `number` | `350` | Debounce delay for auto hybrid/fuzzy search on keystroke |
@@ -484,12 +484,12 @@ Each embedding is pre-normalized, so cosine similarity is a simple dot product.
 
 ## Indexer
 
-The indexer (`utils/neptune-indexer.mjs`) regenerates both data files from **vd3-docs**.
+The indexer (`utils/hybrid-search-indexer.mjs`) regenerates both data files from **vd3-docs**.
 
 ### Usage
 
 ```bash
-pnpm index   # or: node utils/neptune-indexer.mjs
+pnpm index   # or: node utils/hybrid-search-indexer.mjs
 # optional local nav.ts:
 VD3_DOCS_PATH=../vd3-docs pnpm index
 ```
@@ -526,7 +526,7 @@ pnpm report        # Show last test report
 | Test File | Type | Coverage |
 |-----------|------|----------|
 | `tests/unit/neptune-search.spec.ts` | Unit | Math helpers (cosine similarity), `rankBySimilarity`, `mergeResults` (capping, dedup, deterministic tie behavior, score-order merge, `semanticBoost`) |
-| `tests/e2e/vdl-neptune-search.spec.ts` | E2E | Fuzzy search, semantic search, hybrid merge, UI mounting, input debouncing, keyboard navigation (Arrow/Enter/Escape), Cmd+K focus, result click callback, mount/destroy/remount lifecycle, ARIA attributes |
+| `tests/e2e/vdl-hybrid-search.spec.ts` | E2E | Fuzzy search, semantic search, hybrid merge, UI mounting, input debouncing, keyboard navigation (Arrow/Enter/Escape), Cmd+K focus, result click callback, mount/destroy/remount lifecycle, ARIA attributes |
 | `tests/fixtures/neptune-harness.html` | Fixture | Test harness with mock data (3 docs, 384-dim vectors), mocked semantic extractor |
 
 Tests run against a local HTTP server (Python `http.server` on port 8790) using Playwright with Chromium (desktop + mobile viewport).
@@ -542,17 +542,17 @@ Tests run against a local HTTP server (Python `http.server` on port 8790) using 
 
 ### Caching Behavior
 
-- **Module-level singletons**: `_fuseModule` and `_transformersModule` are cached at module scope. Once loaded, all `NeptuneSearch` instances share the same library reference.
+- **Module-level singletons**: `_fuseModule` and `_transformersModule` are cached at module scope. Once loaded, all `HybridSearch` instances share the same library reference.
 - **Browser cache**: The Transformers.js model (~23MB) is cached by the browser after first download. Subsequent sessions skip the download.
-- **Reset**: Call `NeptuneSearch.resetCDNCache()` to clear module-level caches (useful for testing or hot-reloading).
+- **Reset**: Call `HybridSearch.resetCDNCache()` to clear module-level caches (useful for testing or hot-reloading).
 
 ## File Structure
 
 ```
 labs/
-├── neptune-search.js              # Core: NeptuneSearch + NeptuneSearchUI (~1000 lines)
-├── doc/vdl-neptune-search.md       # This documentation
-├── package.json                   # Package: @vanduo-oss/labs-vdl-neptune-search
+├── neptune-search.js              # Core: HybridSearch + VdlHybridSearchUI (~1000 lines)
+├── doc/vdl-hybrid-search.md       # This documentation
+├── package.json                   # Package: @vanduo-oss/labs-vdl-hybrid-search
 ├── data/
 │   ├── search-index.json          # Pre-built Fuse.js document corpus
 │   └── vectors.json               # Pre-computed 384-dim embeddings
@@ -564,7 +564,7 @@ labs/
 │   ├── unit/
 │   │   └── neptune-search.spec.ts # Unit tests
 │   ├── e2e/
-│   │   └── vdl-neptune-search.spec.ts # E2E tests
+│   │   └── vdl-hybrid-search.spec.ts # E2E tests
 │   └── fixtures/
 │       └── neptune-harness.html   # Test harness
 └── playwright.config.ts           # Playwright configuration

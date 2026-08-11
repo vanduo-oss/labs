@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const HARNESS = '/tests/fixtures/neptune-harness.html';
 
-test.describe('NeptuneSearch Unit', () => {
+test.describe('HybridSearch Unit', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(HARNESS);
   });
@@ -144,7 +144,7 @@ test.describe('NeptuneSearch Unit', () => {
     const result = await page.evaluate(async () => {
       const badPayload = { documents: [{ id: 'x', title: 'Only title' }] };
       const toBase64 = (str: string) => btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
-      const search = new (await import('/neptune-search.js')).NeptuneSearch({
+      const search = new (await import('/node_modules/@vanduo-oss/vdl-hybrid-search/dist/index.js')).HybridSearch({
         indexUrl: 'data:application/json;base64,' + toBase64(JSON.stringify(badPayload)),
       });
       try {
@@ -184,13 +184,13 @@ test.describe('NeptuneSearch Unit', () => {
 
   test('curriculum-shaped corpus loads via injectable Fuse loader', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const { NeptuneSearch } = await import('/neptune-search.js');
+      const { HybridSearch } = await import('/node_modules/@vanduo-oss/vdl-hybrid-search/dist/index.js');
       const FuseMod = await import('https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.basic.mjs');
       const indexRes = await fetch('/tests/fixtures/curriculum-search-index.json');
       const index = await indexRes.json();
       const blob = new Blob([JSON.stringify(index)], { type: 'application/json' });
       const indexUrl = URL.createObjectURL(blob);
-      const search = new NeptuneSearch({
+      const search = new HybridSearch({
         indexUrl,
         loadFuse: async () => FuseMod,
       });

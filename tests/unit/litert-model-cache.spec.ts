@@ -12,7 +12,7 @@ test.describe('LiteRT model Cache Storage', () => {
 
   test('loadLiteRTModelBytes caches on miss and reuses on hit', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const mod = await import('/ai-chat.js');
+      const mod = await import('/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js');
       const url = 'https://example.test/models/demo.litertlm';
       const bytes = new Uint8Array([1, 2, 3, 4, 5]);
       let fetchCount = 0;

@@ -29,7 +29,7 @@ const { documents: docs } = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
 const vectorsData = JSON.parse(fs.readFileSync(vectorsPath, 'utf-8'));
 const queries = JSON.parse(fs.readFileSync(queriesPath, 'utf-8'));
 
-const docMap = new Map(docs.map(d => [d.id, d]));
+const docMap = new Map(docs.map((d) => [d.id, d]));
 const vectors = vectorsData.documents;
 
 // ── Parse CLI overrides ────────────────────────────────────────────────
@@ -40,7 +40,8 @@ for (const arg of process.argv.slice(2)) {
   if (m) {
     const val = m[2];
     const num = Number(val);
-    const finalVal = val === 'true' ? true : val === 'false' ? false : (!isNaN(num) && val !== '') ? num : val;
+    const finalVal =
+      val === 'true' ? true : val === 'false' ? false : !isNaN(num) && val !== '' ? num : val;
     const keys = m[1].split('.');
     if (keys.length === 1) {
       overrides[keys[0]] = finalVal;
@@ -55,7 +56,7 @@ for (const arg of process.argv.slice(2)) {
   }
 }
 
-// ── Default config (matches neptune-search.js defaults) ───────────────
+// ── Default config (matches @vanduo-oss/vdl-hybrid-search defaults) ───────────────
 
 const defaultKeys = [
   { name: 'title', weight: 2.5 },
@@ -68,18 +69,22 @@ const defaultKeys = [
 
 const config = {
   fuseThreshold: 0.45,
-  semanticThreshold: 0.30,
+  semanticThreshold: 0.3,
   maxResults: 20,
   semanticBoost: 1.0,
   modelName: 'Xenova/all-MiniLM-L6-v2',
   mergeMode: 'interleave', // 'concat' = semantic-first blocks, 'interleave' = score-sorted
   fuseKeys: [
-    ...defaultKeys.map(k => ({
+    ...defaultKeys.map((k) => ({
       ...k,
       weight: overrides.fuseKeys?.[k.name] ?? k.weight,
     })),
-    ...(overrides.fuseKeys?.category !== undefined ? [{ name: 'category', weight: overrides.fuseKeys.category }] : []),
-    ...(overrides.fuseKeys?.tab !== undefined ? [{ name: 'tab', weight: overrides.fuseKeys.tab }] : []),
+    ...(overrides.fuseKeys?.category !== undefined
+      ? [{ name: 'category', weight: overrides.fuseKeys.category }]
+      : []),
+    ...(overrides.fuseKeys?.tab !== undefined
+      ? [{ name: 'tab', weight: overrides.fuseKeys.tab }]
+      : []),
   ],
   ...Object.fromEntries(Object.entries(overrides).filter(([k]) => !['fuseKeys'].includes(k))),
 };
@@ -90,7 +95,7 @@ console.log('Docs:', docs.length);
 console.log('Config:', JSON.stringify(config, null, 2));
 console.log('');
 
-// ── Math helpers (identical to neptune-search.js) ─────────────────────
+// ── Math helpers (identical to @vanduo-oss/vdl-hybrid-search) ─────────────────────
 
 function cosineSimilarity(a, b) {
   let dot = 0;
@@ -100,8 +105,8 @@ function cosineSimilarity(a, b) {
 
 function rankBySimilarity(queryVec, vectors, threshold) {
   return vectors
-    .map(doc => ({ id: doc.id, score: cosineSimilarity(queryVec, doc.embedding) }))
-    .filter(r => r.score > threshold && isFinite(r.score))
+    .map((doc) => ({ id: doc.id, score: cosineSimilarity(queryVec, doc.embedding) }))
+    .filter((r) => r.score > threshold && isFinite(r.score))
     .sort((a, b) => b.score - a.score);
 }
 
@@ -121,15 +126,18 @@ function fuzzySearch(query) {
 
 function mergeResults(fuzzyResults, semanticResults) {
   const boosted = semanticResults
-    .map(sr => {
+    .map((sr) => {
       const doc = docMap.get(sr.id);
       if (!doc) return null;
       return { doc, score: sr.score * config.semanticBoost, source: 'semantic' };
     })
     .filter(Boolean);
 
-  const fuzzyMapped = fuzzyResults
-    .map(fr => ({ doc: fr.item, score: 1 - fr.score, source: 'fuzzy' }));
+  const fuzzyMapped = fuzzyResults.map((fr) => ({
+    doc: fr.item,
+    score: 1 - fr.score,
+    source: 'fuzzy',
+  }));
 
   if (config.mergeMode === 'interleave') {
     const seen = new Set();
@@ -153,9 +161,7 @@ function mergeResults(fuzzyResults, semanticResults) {
     seen.add(r.doc.id);
     merged.push(r);
   }
-  const filled = fuzzyMapped
-    .filter(fr => !seen.has(fr.doc.id))
-    .sort((a, b) => b.score - a.score);
+  const filled = fuzzyMapped.filter((fr) => !seen.has(fr.doc.id)).sort((a, b) => b.score - a.score);
   for (const r of filled) merged.push(r);
   return merged.slice(0, config.maxResults);
 }
@@ -181,7 +187,7 @@ async function semanticSearch(query) {
 // ── Scoring ────────────────────────────────────────────────────────────
 
 function scoreResult(expectedId, merged) {
-  const idx = merged.findIndex(r => r.doc.id === expectedId);
+  const idx = merged.findIndex((r) => r.doc.id === expectedId);
   if (idx === -1) return { rank: Infinity, reciprocal: 0, inTop1: 0, inTop3: 0, inTop5: 0 };
   const rank = idx + 1;
   return {
@@ -219,8 +225,8 @@ async function main() {
     if (s.rank !== Infinity) totalRank += s.rank;
     count++;
 
-    const bestSemantic = semantic.find(r => r.id === q.expected);
-    const bestFuzzy = fuzzy.find(r => r.item.id === q.expected);
+    const bestSemantic = semantic.find((r) => r.id === q.expected);
+    const bestFuzzy = fuzzy.find((r) => r.item.id === q.expected);
 
     results.push({
       query: q.query,
@@ -238,12 +244,12 @@ async function main() {
   console.log('Per-query results:');
   console.log('─'.repeat(110));
   console.log(
-    `${'Query'.padEnd(25)} | ${'Exp'.padEnd(18)} | ${'Rank'.padStart(4)} | ${'MRR'.padStart(6)} | ${'SemSc'.padStart(6)} | ${'FuzSc'.padStart(6)} | ${'TopDoc'.padEnd(18)} | ${'Src'.padEnd(5)}`
+    `${'Query'.padEnd(25)} | ${'Exp'.padEnd(18)} | ${'Rank'.padStart(4)} | ${'MRR'.padStart(6)} | ${'SemSc'.padStart(6)} | ${'FuzSc'.padStart(6)} | ${'TopDoc'.padEnd(18)} | ${'Src'.padEnd(5)}`,
   );
   console.log('─'.repeat(110));
   for (const r of results) {
     console.log(
-      `${r.query.slice(0, 25).padEnd(25)} | ${r.expected.slice(0, 18).padEnd(18)} | ${String(r.rank).padStart(4)} | ${r.reciprocal.padStart(6)} | ${r.semanticScore.padStart(6)} | ${r.fuzzyScore.padStart(6)} | ${r.topDoc.slice(0, 18).padEnd(18)} | ${r.topDocSource.padEnd(5)}`
+      `${r.query.slice(0, 25).padEnd(25)} | ${r.expected.slice(0, 18).padEnd(18)} | ${String(r.rank).padStart(4)} | ${r.reciprocal.padStart(6)} | ${r.semanticScore.padStart(6)} | ${r.fuzzyScore.padStart(6)} | ${r.topDoc.slice(0, 18).padEnd(18)} | ${r.topDocSource.padEnd(5)}`,
     );
   }
 
@@ -252,13 +258,13 @@ async function main() {
   console.log('─'.repeat(110));
   console.log('\n📊 Summary');
   console.log(`MRR:           ${(totalMRR / n).toFixed(4)}`);
-  console.log(`Top-1 Acc:     ${(totalTop1 / n * 100).toFixed(1)}% (${totalTop1}/${n})`);
-  console.log(`Top-3 Acc:     ${(totalTop3 / n * 100).toFixed(1)}% (${totalTop3}/${n})`);
-  console.log(`Top-5 Acc:     ${(totalTop5 / n * 100).toFixed(1)}% (${totalTop5}/${n})`);
+  console.log(`Top-1 Acc:     ${((totalTop1 / n) * 100).toFixed(1)}% (${totalTop1}/${n})`);
+  console.log(`Top-3 Acc:     ${((totalTop3 / n) * 100).toFixed(1)}% (${totalTop3}/${n})`);
+  console.log(`Top-5 Acc:     ${((totalTop5 / n) * 100).toFixed(1)}% (${totalTop5}/${n})`);
   console.log(`Avg Rank:      ${count > 0 ? (totalRank / count).toFixed(2) : '—'} (among found)`);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('💥 Benchmark failed:', err);
   process.exit(1);
 });

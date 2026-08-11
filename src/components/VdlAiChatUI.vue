@@ -1,13 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import {
-  VdButton,
-  VdCard,
-  VdIcon,
-  VdModal,
-  VdProgress,
-  VdSpinner,
-} from '@vanduo-oss/vd3';
+import { VdButton, VdCard, VdIcon, VdModal, VdProgress, VdSpinner } from '@vanduo-oss/vd3';
 import {
   AiChat,
   MODEL_GROUPS,
@@ -20,8 +13,8 @@ import {
   getModelDisplayName,
   getModelOption,
   shouldFocusChatComposer,
-} from '../../ai-chat.js';
-import { labsMarkdownToHtml } from '../../labs-md-to-html.js';
+} from '@vanduo-oss/vdl-ai-chat';
+import { labsMarkdownToHtml } from '@vanduo-oss/vdl-ai-chat/markdown';
 
 const MODEL_CACHE_FLAG_PREFIX = 'vdl-ai-chat-model-cached:';
 
@@ -70,10 +63,12 @@ const deviceSummary = computed(() => {
   const info = systemInfo.value;
   if (!info) return 'Checking…';
   const mem = info.deviceMemory != null ? `~${info.deviceMemory} GB RAM*` : 'RAM n/a';
-  const cores = info.hardwareConcurrency != null ? `${info.hardwareConcurrency} cores` : 'cores n/a';
-  const buf = info.maxStorageBufferBindingSize != null
-    ? `buf ${(info.maxStorageBufferBindingSize / (1024 * 1024)).toFixed(0)} MB`
-    : '';
+  const cores =
+    info.hardwareConcurrency != null ? `${info.hardwareConcurrency} cores` : 'cores n/a';
+  const buf =
+    info.maxStorageBufferBindingSize != null
+      ? `buf ${(info.maxStorageBufferBindingSize / (1024 * 1024)).toFixed(0)} MB`
+      : '';
   return [mem, cores, buf].filter(Boolean).join(' · ');
 });
 
@@ -223,17 +218,16 @@ function refreshCapacityNote(modelId = selectedModelId.value) {
 function applySelection(modelId) {
   selectedModelId.value = modelId;
   const resolved = resolveModelForSystem(modelId);
-  fallbackNote.value = resolved.changed || resolved.unavailable || resolved.loadBlocked
-    ? resolved.reason
-    : '';
+  fallbackNote.value =
+    resolved.changed || resolved.unavailable || resolved.loadBlocked ? resolved.reason : '';
   if (resolved.loadBlocked) {
     errorBanner.value = '';
   }
   cacheHint.value = resolved.loadBlocked
     ? ''
-    : (isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
+    : isModelLikelyCached(modelId) || isModelLikelyCached(resolved.modelId)
       ? 'This model looks cached in your browser — reload should skip a full download.'
-      : 'First load downloads model weights into browser cache.');
+      : 'First load downloads model weights into browser cache.';
   refreshCapacityNote(modelId);
   if (!loaded.value && chat && !resolved.loadBlocked && !resolved.unavailable) {
     void chat.setModelId(resolved.modelId).catch(() => {
@@ -266,8 +260,14 @@ function isOtherInteractiveControl(el) {
   if (el === composerInput.value) return false;
   if (typeof el.closest === 'function' && el.closest('[role="dialog"], .vd-modal')) return true;
   const tag = el.tagName;
-  return tag === 'SELECT' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'A'
-    || el.isContentEditable === true;
+  return (
+    tag === 'SELECT' ||
+    tag === 'BUTTON' ||
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'A' ||
+    el.isContentEditable === true
+  );
 }
 
 /**
@@ -279,13 +279,15 @@ async function focusComposer(opts = {}) {
   const force = !!opts.force;
   const active = typeof document !== 'undefined' ? document.activeElement : null;
   const chatReady = loaded.value && !loading.value;
-  if (!shouldFocusChatComposer({
-    force,
-    modalOpen: clearModalOpen.value,
-    chatReady,
-    activeIsComposer: active === composerInput.value,
-    activeIsOtherControl: isOtherInteractiveControl(active),
-  })) {
+  if (
+    !shouldFocusChatComposer({
+      force,
+      modalOpen: clearModalOpen.value,
+      chatReady,
+      activeIsComposer: active === composerInput.value,
+      activeIsOtherControl: isOtherInteractiveControl(active),
+    })
+  ) {
     return;
   }
   await nextTick();
@@ -360,9 +362,10 @@ async function loadModel() {
   loading.value = true;
   progressPct.value = 0;
   freezeHint.value = '';
-  progressText.value = getModelOption(catalogId)?.backend === 'litert'
-    ? 'Initializing LiteRT WebGPU engine…'
-    : 'Initializing WebGPU engine…';
+  progressText.value =
+    getModelOption(catalogId)?.backend === 'litert'
+      ? 'Initializing LiteRT WebGPU engine…'
+      : 'Initializing WebGPU engine…';
   statusTone.value = 'warn';
   statusText.value = 'Loading…';
   try {
@@ -521,7 +524,11 @@ function renderMarkdown(text) {
 onMounted(async () => {
   // Reuse one AiChat/WebLLM runtime for the tab (HMR / v-if remount safe).
   if (props.chat) chat = props.chat;
-  else if (!chat) chat = new AiChat();
+  else if (!chat) {
+    chat = new AiChat({
+      loadLiteRT: async () => import('@litert-lm/core'),
+    });
+  }
 
   selectedModelId.value = chat.modelId || MODEL_OPTIONS[0].id;
   systemInfo.value = await detectSystemInfo();
@@ -587,17 +594,16 @@ watch(loaded, async (isLoaded, wasLoaded) => {
 
 <template>
   <VdCard class="vdl-ai-chat-wrap vdl-card-glow vd-glass" :aria-busy="loading ? 'true' : 'false'">
-    <div
-      v-if="loading"
-      class="vdl-ai-load-overlay"
-      role="status"
-      aria-live="polite"
-    >
+    <div v-if="loading" class="vdl-ai-load-overlay" role="status" aria-live="polite">
       <div class="vdl-ai-load-overlay-card">
         <VdSpinner size="sm" />
         <div class="vdl-ai-load-overlay-title">Loading model…</div>
         <div class="vd-text-sm vd-text-muted">
-          {{ freezeHint || progressText || 'Please wait — interaction is paused while WebGPU initializes.' }}
+          {{
+            freezeHint ||
+            progressText ||
+            'Please wait — interaction is paused while WebGPU initializes.'
+          }}
         </div>
       </div>
     </div>
@@ -636,7 +642,9 @@ watch(loaded, async (isLoaded, wasLoaded) => {
               </option>
             </optgroup>
           </select>
-          <p v-if="fallbackNote && !selectedResolved.loadBlocked" class="vdl-ai-note">{{ fallbackNote }}</p>
+          <p v-if="fallbackNote && !selectedResolved.loadBlocked" class="vdl-ai-note">
+            {{ fallbackNote }}
+          </p>
           <p v-if="cacheHint" class="vdl-ai-note">{{ cacheHint }}</p>
           <p v-if="capacityNote" class="vdl-ai-capacity-note" role="status">{{ capacityNote }}</p>
           <div class="vdl-ai-cache-badges">
@@ -662,7 +670,8 @@ watch(loaded, async (isLoaded, wasLoaded) => {
             <div class="vdl-ai-storage-meter-fill" :style="{ width: storagePct + '%' }"></div>
           </div>
           <p class="vdl-ai-fineprint">
-            Includes Cache Storage / IndexedDB for this page. GPU memory is not available to the page.
+            Includes Cache Storage / IndexedDB for this page. GPU memory is not available to the
+            page.
           </p>
         </aside>
       </div>
@@ -672,11 +681,7 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         <div class="vd-text-sm vd-text-muted">
           WebGPU:
           {{
-            systemInfo
-              ? systemInfo.webgpuSupported
-                ? 'Supported'
-                : 'Not supported'
-              : 'Checking…'
+            systemInfo ? (systemInfo.webgpuSupported ? 'Supported' : 'Not supported') : 'Checking…'
           }}
         </div>
         <div class="vd-text-sm vd-text-muted">
@@ -684,15 +689,12 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         </div>
         <div class="vd-text-sm vd-text-muted">
           shader-f16:
-          {{
-            systemInfo
-              ? systemInfo.shaderF16
-                ? 'Supported'
-                : 'Unavailable'
-              : 'Checking…'
-          }}
+          {{ systemInfo ? (systemInfo.shaderF16 ? 'Supported' : 'Unavailable') : 'Checking…' }}
         </div>
-        <div class="vd-text-sm vd-text-muted" :title="'deviceMemory is browser-capped/approximate; GPU VRAM is not exposed to web pages.'">
+        <div
+          class="vd-text-sm vd-text-muted"
+          :title="'deviceMemory is browser-capped/approximate; GPU VRAM is not exposed to web pages.'"
+        >
           Device: {{ deviceSummary }}
         </div>
         <div class="vdl-ai-compat-row">
@@ -739,11 +741,7 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         <p v-if="freezeHint" class="vdl-ai-freeze-hint">{{ freezeHint }}</p>
       </div>
 
-      <p
-        v-if="fallbackNote && selectedResolved.loadBlocked"
-        class="vdl-ai-error"
-        role="status"
-      >
+      <p v-if="fallbackNote && selectedResolved.loadBlocked" class="vdl-ai-error" role="status">
         {{ fallbackNote }}
       </p>
       <p v-else-if="errorBanner" class="vdl-ai-error" role="alert">{{ errorBanner }}</p>
@@ -779,10 +777,20 @@ watch(loaded, async (isLoaded, wasLoaded) => {
             </option>
           </optgroup>
         </select>
-        <VdButton size="sm" variant="secondary" :disabled="loading || streaming" @click="switchModel">
+        <VdButton
+          size="sm"
+          variant="secondary"
+          :disabled="loading || streaming"
+          @click="switchModel"
+        >
           Switch model
         </VdButton>
-        <VdButton size="sm" variant="ghost" :disabled="loading || streaming" @click="clearModalOpen = true">
+        <VdButton
+          size="sm"
+          variant="ghost"
+          :disabled="loading || streaming"
+          @click="clearModalOpen = true"
+        >
           Clear storage
         </VdButton>
       </div>
@@ -793,16 +801,13 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         aria-live="polite"
         @scroll.passive="onMessagesScroll"
       >
-        <div
-          v-for="(msg, idx) in messages"
-          :key="idx"
-          class="vdl-ai-message"
-          :data-role="msg.role"
-        >
+        <div v-for="(msg, idx) in messages" :key="idx" class="vdl-ai-message" :data-role="msg.role">
           <div class="vdl-ai-message-role">{{ msg.role === 'user' ? 'You' : 'Assistant' }}</div>
           <div class="vdl-ai-message-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
-        <div v-if="!messages.length" class="vdl-ai-empty">Ask anything. Answers stay on this device.</div>
+        <div v-if="!messages.length" class="vdl-ai-empty">
+          Ask anything. Answers stay on this device.
+        </div>
       </div>
 
       <form class="vdl-ai-form" @submit.prevent="sendMessage">
@@ -818,8 +823,15 @@ watch(loaded, async (isLoaded, wasLoaded) => {
         ></textarea>
         <div class="vdl-ai-form-meta">
           <span class="vd-text-sm vd-text-muted">{{ inputText.length }} / 2000</span>
-          <span v-if="tokenCount != null" class="vd-text-sm vd-text-muted">Tokens: {{ tokenCount }}</span>
-          <VdButton type="submit" variant="primary" :loading="streaming" :disabled="streaming || !inputText.trim()">
+          <span v-if="tokenCount != null" class="vd-text-sm vd-text-muted"
+            >Tokens: {{ tokenCount }}</span
+          >
+          <VdButton
+            type="submit"
+            variant="primary"
+            :loading="streaming"
+            :disabled="streaming || !inputText.trim()"
+          >
             <VdIcon v-if="!streaming" name="paper-plane-tilt" />
             <VdSpinner v-else size="sm" />
             Send

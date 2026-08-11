@@ -11,14 +11,11 @@ const DemoApp = {
       h('div', { class: 'demo-root' }, [
         h('header', { class: 'demo-header' }, [
           h('h1', 'AI Chat (WebGPU)'),
-          h(
-            'p',
-            [
-              'In-browser inference using LiteRT-LM for Gemma 4 (true multi-turn), plus optional WebLLM models.',
-              h('br'),
-              'Fully private, FOSS guardrails enforced. No server required.',
-            ],
-          ),
+          h('p', [
+            'In-browser inference using LiteRT-LM for Gemma 4 (true multi-turn), plus optional WebLLM models.',
+            h('br'),
+            'Fully private, FOSS guardrails enforced. No server required.',
+          ]),
           h(VdThemeSwitcher, { menu: false }),
         ]),
         h('div', { class: 'demo-chat-wrap' }, [h(VdlAiChatUI)]),

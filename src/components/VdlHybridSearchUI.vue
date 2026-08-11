@@ -1,16 +1,14 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { VdIcon, VdSpinner } from '@vanduo-oss/vd3';
-import {
-  DEFAULT_DOCS_BASE_URL,
-  NeptuneSearch,
-} from '../../neptune-search.js';
+import { DEFAULT_DOCS_BASE_URL, HybridSearch } from '@vanduo-oss/vdl-hybrid-search';
 import {
   normalizeSearchQuery,
   safeDocHref,
   sanitizeIconClass,
   validateSearchQuery,
-} from '../../guardrails/search.js';
+} from '@vanduo-oss/vdl-hybrid-search/guardrails/search';
+import Fuse from 'fuse.js';
 
 const props = defineProps({
   search: { type: Object, default: null },
@@ -32,9 +30,9 @@ const props = defineProps({
 const emit = defineEmits(['result-click']);
 
 /**
- * Reuse one NeptuneSearch per index/vectors URL across HMR / v-if remounts
+ * Reuse one HybridSearch per index/vectors URL across HMR / v-if remounts
  * so semantic preload is not restarted from scratch on every remount.
- * @type {import('../../neptune-search.js').NeptuneSearch | null}
+ * @type {import('@vanduo-oss/vdl-hybrid-search').HybridSearch | null}
  */
 let sharedEngine = null;
 let sharedEngineKey = '';
@@ -100,9 +98,11 @@ async function ensureEngine() {
     if (sharedEngine && sharedEngineKey === key) {
       engine = sharedEngine;
     } else {
-      engine = new NeptuneSearch({
+      engine = new HybridSearch({
         indexUrl: props.indexUrl,
         vectorsUrl: props.vectorsUrl,
+        loadFuse: async () => ({ default: Fuse }),
+        loadTransformers: async () => import('@huggingface/transformers'),
       });
       sharedEngine = engine;
       sharedEngineKey = key;
@@ -131,7 +131,7 @@ function preloadSemantic(eng) {
     return;
   }
   eng.initSemantic().catch((err) => {
-    console.warn('[VdlNeptuneSearchUI] Semantic preload failed:', err?.message || err);
+    console.warn('[VdlHybridSearchUI] Semantic preload failed:', err?.message || err);
   });
 }
 
@@ -165,12 +165,7 @@ function tryAutofocusInput() {
   if (ae?.closest?.('dialog, [role="dialog"], [aria-modal="true"]')) return;
   if (ae && ae !== inputEl.value) {
     const tag = ae.tagName;
-    if (
-      tag === 'INPUT' ||
-      tag === 'TEXTAREA' ||
-      tag === 'SELECT' ||
-      ae.isContentEditable
-    ) {
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable) {
       return;
     }
   }
@@ -218,7 +213,7 @@ async function runSearch(rawQuery, { forceHybrid = false } = {}) {
     results.value = result.merged;
     if (!results.value.length) statusMessage.value = props.emptyMessage;
   } catch (err) {
-    console.warn('[VdlNeptuneSearchUI] search failed', err);
+    console.warn('[VdlHybridSearchUI] search failed', err);
     if (seq !== semanticSeq) return;
     const fallback = await eng.search(normalized, { mode: 'fuzzy' });
     if (seq !== semanticSeq) return;
@@ -393,7 +388,12 @@ defineExpose({
 
 <template>
   <div ref="rootEl" class="vdl-neptune-search">
-    <div v-if="categories.length" class="vdl-neptune-filters" role="list" aria-label="Filter by category">
+    <div
+      v-if="categories.length"
+      class="vdl-neptune-filters"
+      role="list"
+      aria-label="Filter by category"
+    >
       <button
         type="button"
         class="vdl-neptune-filter-chip"
@@ -440,27 +440,16 @@ defineExpose({
         @keydown="onKeyDown"
         @focus="openDropdown"
       />
-      <span v-if="showSemanticHint" class="vdl-neptune-hint" aria-hidden="true">
-        AI · fuzzy
-      </span>
+      <span v-if="showSemanticHint" class="vdl-neptune-hint" aria-hidden="true"> AI · fuzzy </span>
     </div>
 
-    <div
-      :id="listboxId"
-      class="vdl-neptune-dropdown"
-      role="listbox"
-      :hidden="!dropdownOpen"
-    >
+    <div :id="listboxId" class="vdl-neptune-dropdown" role="listbox" :hidden="!dropdownOpen">
       <div v-if="loading" class="vdl-neptune-loader" role="status">
         <VdSpinner size="sm" />
         <span>{{ loadingMessage || 'Searching…' }}</span>
       </div>
 
-      <p
-        v-else-if="shortQueryHint || statusMessage"
-        class="vdl-neptune-empty"
-        role="status"
-      >
+      <p v-else-if="shortQueryHint || statusMessage" class="vdl-neptune-empty" role="status">
         {{ statusMessage || emptyMessage }}
       </p>
 
@@ -519,16 +508,8 @@ defineExpose({
       </div>
     </div>
 
-    <div
-      v-if="modelLoading"
-      class="vdl-neptune-progress"
-      role="status"
-      aria-live="polite"
-    >
-      <div
-        class="vdl-neptune-progress-bar"
-        :style="{ width: `${modelProgressPct}%` }"
-      />
+    <div v-if="modelLoading" class="vdl-neptune-progress" role="status" aria-live="polite">
+      <div class="vdl-neptune-progress-bar" :style="{ width: `${modelProgressPct}%` }" />
       <span class="vdl-neptune-progress-text">{{ modelProgressMessage }}</span>
     </div>
   </div>

@@ -2,13 +2,13 @@ import { createApp, h, ref } from 'vue';
 import { VanduoVue, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
-import { DEFAULT_DOCS_BASE_URL } from '../../neptune-search.js';
-import VdlNeptuneSearchUI from '../components/VdlNeptuneSearchUI.vue';
+import { DEFAULT_DOCS_BASE_URL } from '@vanduo-oss/vdl-hybrid-search';
+import VdlHybridSearchUI from '../components/VdlHybridSearchUI.vue';
 
 const lastDebug = ref('Type a query to see hybrid results (AI + fuzzy)…');
 
 const DemoApp = {
-  name: 'NeptuneDemo',
+  name: 'HybridSearchDemo',
   setup() {
     function onResultClick(result) {
       lastDebug.value = JSON.stringify(
@@ -31,7 +31,7 @@ const DemoApp = {
     return () =>
       h('div', { class: 'demo-root' }, [
         h('header', { class: 'demo-header' }, [
-          h('h1', 'Neptune Hybrid Search'),
+          h('h1', 'Vdl Hybrid Search'),
           h('p', [
             'Instant fuzzy search + semantic AI search over ',
             h('strong', 'vd3 docs'),
@@ -47,7 +47,7 @@ const DemoApp = {
           h(VdThemeSwitcher, { menu: false }),
         ]),
         h('div', { class: 'demo-search-wrap' }, [
-          h(VdlNeptuneSearchUI, {
+          h(VdlHybridSearchUI, {
             baseUrl: DEFAULT_DOCS_BASE_URL,
             placeholder: 'Search vd3 docs…',
             onResultClick,
@@ -60,7 +60,7 @@ const DemoApp = {
         h(
           'footer',
           { class: 'demo-footer' },
-          'Neptune Hybrid Search — Experimental Labs Component for Vanduo',
+          'Hybrid Search — Experimental Labs demo using @vanduo-oss/vdl-hybrid-search',
         ),
       ]);
   },
@@ -116,11 +116,11 @@ style.textContent = `
     border-radius: var(--radius-md);
     padding: 1rem;
     font-size: 0.75rem;
-    line-height: 1.5;
     overflow-x: auto;
     overflow-y: auto;
     max-height: 320px;
     color: var(--text-primary);
+    line-height: 1.5;
   }
   .demo-footer {
     margin-top: auto;

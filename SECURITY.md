@@ -14,7 +14,7 @@ This is an **experimental** Labs repo of browser-local demos and ES modules:
 
 - Demos run in the browser (WebGPU / WASM); there is **no Labs backend** that holds production secrets by design.
 - Models and heavy deps are typically loaded from CDNs / Hugging Face (or optional local `.models/` mirrors for development).
-- Shared `guardrails/*` helpers are best-effort, deterministic checks — not a complete security product.
+- Shared package guardrails helpers are best-effort, deterministic checks — not a complete security product.
 
 ## Out of scope / expectations
 

@@ -9,7 +9,7 @@ test.describe('AiChat tool calling', () => {
 
   test('generateWithTools rejects non-LiteRT models', async ({ page }) => {
     const message = await page.evaluate(async () => {
-      const { AiChat, TOOLS_UNSUPPORTED_ERROR } = await import('/ai-chat.js');
+      const { AiChat, TOOLS_UNSUPPORTED_ERROR } = await import('/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js');
       const chat = new AiChat({ modelId: 'Qwen3-0.6B-q4f16_1-MLC' });
       chat.registerTools([{ name: 'ping', description: 'ping', parameters: { type: 'object' } }]);
       chat._isLoaded = true;
@@ -28,7 +28,7 @@ test.describe('AiChat tool calling', () => {
     page,
   }) => {
     const result = await page.evaluate(async () => {
-      const { AiChat } = await import('/ai-chat.js');
+      const { AiChat } = await import('/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js');
       const chat = new AiChat({
         modelId: 'gemma-4-E2B-it-web',
         toolProtocol: 'xml',
@@ -79,7 +79,7 @@ test.describe('AiChat tool calling', () => {
 
   test('generateWithTools blocks unknown tool names before execute', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const { AiChat } = await import('/ai-chat.js');
+      const { AiChat } = await import('/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js');
       const chat = new AiChat({ modelId: 'gemma-4-E2B-it-web', toolProtocol: 'xml' });
       chat.registerTools([{ name: 'search_curriculum', parameters: { type: 'object' } }]);
       chat._isLoaded = true;
@@ -111,7 +111,7 @@ test.describe('AiChat tool calling', () => {
 
   test('generateWithTools stops at maxRounds', async ({ page }) => {
     const message = await page.evaluate(async () => {
-      const { AiChat } = await import('/ai-chat.js');
+      const { AiChat } = await import('/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js');
       const chat = new AiChat({ modelId: 'gemma-4-E2B-it-web', toolProtocol: 'xml' });
       chat.registerTools([{ name: 'ping', parameters: { type: 'object' } }]);
       chat._isLoaded = true;

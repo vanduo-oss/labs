@@ -12,7 +12,7 @@ Fully private, running entirely locally in your browser. FOSS guardrails enforce
 **Headless engine (vanilla ESM):**
 
 ```javascript
-import { AiChat } from './ai-chat.js';
+import { AiChat } from '@vanduo-oss/vdl-ai-chat';
 
 const chat = new AiChat();
 await chat.load();
@@ -31,7 +31,7 @@ import VdlAiChatUI from './src/components/VdlAiChatUI.vue';
 </template>
 ```
 
-Legacy imperative `AiChatUI` remains exported from `ai-chat.js` for compatibility; the Labs site uses `VdlAiChatUI`.
+The Labs site uses Vue `VdlAiChatUI` on top of the published `@vanduo-oss/vdl-ai-chat` package.
 
 ### Local model mirror (dev)
 
@@ -77,7 +77,7 @@ For architecture A/B reports, see [vdl-model-eval](./vdl-model-eval.md) (`#tools
 - Automatically applies model fallbacks (typically `q4f32_1`) for optional built-in WebLLM models when required features are unavailable. Gemma 4 variants require `shader-f16`.
 - Downloads and caches the selected model directly in the browser.
 - Runs inference via WebGPU for high performance without a backend server.
-- Uses shared FOSS guardrails (`guardrails/llm.js`) to enforce harmlessness and objectivity.
+- Uses shared FOSS guardrails (`@vanduo-oss/vdl-ai-chat/guardrails/llm`) to enforce harmlessness and objectivity.
 - System context (`buildChatSystemPrompt`) is sent for LiteRT Gemma and optional WebLLM models that support a system role. Community MLC Gemma (`gemma4` + WebLLM) omits system messages (template limitation that truncates replies); those runs rely on the deterministic input scanner only.
 - Includes a deterministic regex scanner to fast-reject known prompt injections and jailbreaks before they reach the model.
 - Enforces deterministic input validation in both UI and headless API (`AiChat.generate()`), so non-UI consumers cannot bypass guardrails.

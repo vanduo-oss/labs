@@ -26,7 +26,9 @@ const installedTargets = new WeakSet();
  * @param {Storage} [storage]
  * @returns {boolean} true if this call installed the remap
  */
-export function installVdlThemeStorage(storage = typeof window !== 'undefined' ? window.localStorage : null) {
+export function installVdlThemeStorage(
+  storage = typeof window !== 'undefined' ? window.localStorage : null,
+) {
   if (!storage || typeof storage.getItem !== 'function') return false;
   if (installedTargets.has(storage)) return false;
   if (typeof window !== 'undefined' && storage === window.localStorage && window[INSTALL_FLAG]) {
@@ -61,7 +63,7 @@ export function installVdlThemeStorage(storage = typeof window !== 'undefined' ?
         enumerable: false,
         writable: false,
       });
-    } catch (_e) {
+    } catch {
       window[INSTALL_FLAG] = true;
     }
   }

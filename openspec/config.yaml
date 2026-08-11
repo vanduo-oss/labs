@@ -1,31 +1,33 @@
 schema: spec-driven
 
 context: |
-  Project: vanduo labs (@vanduo-oss/labs) — experimental Vue demos + headless ESM modules.
+  Project: vanduo labs (@vanduo-oss/labs) — experimental Vue demo playground.
 
   Naming (labs-owned):
   - Prefix labs UI/components/CSS/product ids with `vdl` / `Vdl` / `vdl-`
-    (e.g. VdlAiChatUI, VdlNeptuneSearchUI, .vdl-ai-*, .vdl-neptune-*, vdl-ai-chat).
+    (e.g. VdlAiChatUI, VdlHybridSearchUI, .vdl-ai-*, .vdl-neptune-*, vdl-ai-chat).
   - Do NOT rename `@vanduo-oss/vd3` or its design-system API (`VdButton`, `VdCard`,
     `VdModal`, `--vd-*` tokens, `.vd-btn` / `.vd-glass` / etc.). Those stay `vd` / `Vd`.
   - Do NOT rewrite vd3-docs corpus content in `data/search-index.json` / fixtures.
 
   Architecture:
-  - Headless ESM: `neptune-search.js` (hybrid fuzzy+semantic search), `ai-chat.js` (in-browser chat).
+  - Engines come from npm: `@vanduo-oss/vdl-hybrid-search` (`HybridSearch`) and
+    `@vanduo-oss/vdl-ai-chat` (`AiChat` + markdown). Labs does NOT publish engines
+    and MUST NOT reintroduce local engine SoT forks.
   - Labs Vue shell: Vite + Vue 3 + `@vanduo-oss/vd3` (`src/App.vue`, `src/components/Vdl*.vue`).
-  - Shared policy: `guardrails/{core,llm,search}.js` — docs in `doc/vdl-guardrails.md`.
-  - Default AI path: LiteRT Gemma (WebLLM fallback). Local model mirrors under `.models/`
-    (dev-served at `/models/…` via vite; never ship into dist). Fetch with `pnpm models:fetch`.
-  - Neptune corpus: regenerate with `pnpm index` (`utils/neptune-indexer.mjs`) from vd3-docs.
+  - Guardrails: package subpaths (`…/guardrails/llm`, `…/guardrails/search`, …).
+  - Default AI path: LiteRT Gemma (WebLLM fallback). Inject `loadLiteRT` / `loadFuse` /
+    `loadTransformers` in demos. Local model mirrors under `.models/` (dev-served at
+    `/models/…`; never ship into dist). Fetch with `pnpm models:fetch`.
+  - Hybrid corpus: regenerate with `pnpm index` (`utils/hybrid-search-indexer.mjs`).
 
   Key paths:
-  - Modules: `neptune-search.js`, `ai-chat.js`, `guardrails/`
-  - UI: `src/components/VdlAiChatUI.vue`, `src/components/VdlNeptuneSearchUI.vue`
-  - Docs: `doc/vdl-neptune-search.md`, `doc/vdl-ai-chat.md`, `doc/vdl-guardrails.md`, `README.md`
+  - UI: `src/components/VdlAiChatUI.vue`, `src/components/VdlHybridSearchUI.vue`
+  - Docs: `doc/vdl-hybrid-search.md`, `doc/vdl-ai-chat.md`, `doc/vdl-guardrails.md`, `README.md`
   - Tests: `tests/unit/*.spec.ts`, `tests/e2e/vdl-neptune-search.spec.ts` (Playwright)
   - Demos: `demo/*`, `src/demos/*`
 
-  Testing: `pnpm test` (Playwright). Prefer focused unit specs when changing guardrails/modules.
+  Testing: `pnpm test` (Playwright). Prefer focused unit specs when changing demos/harnesses.
 
 rules:
   proposal:

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const HARNESS = '/tests/fixtures/neptune-harness.html';
 
-test.describe('NeptuneSearch E2E', () => {
+test.describe('HybridSearch E2E', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(HARNESS);
   });

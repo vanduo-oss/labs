@@ -1,6 +1,6 @@
 /**
- * Map legacy Vanduo framework CSS variables used by vanilla Labs modules
- * (ai-chat.js, neptune-search.js) onto vd3 `--vd-*` tokens.
+ * Map legacy Vanduo framework CSS variables used by Labs demos / harnesses
+ * onto vd3 `--vd-*` tokens.
  */
 :root,
 [data-theme] {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Neptune Search Test Harness</title>
+  <title>Hybrid Search Test Harness</title>
   <style>
     :root {
       --bg-primary: #ffffff;
@@ -38,7 +38,12 @@
   <div id="mount"></div>
 
   <script type="module">
-    import { NeptuneSearch, NeptuneSearchUI, cosineSimilarity, rankBySimilarity } from '/neptune-search.js';
+    import {
+      HybridSearch,
+      cosineSimilarity,
+      rankBySimilarity,
+    } from '/node_modules/@vanduo-oss/vdl-hybrid-search/dist/index.js';
+    import { NeptuneSearchUI } from './hybrid-search-dom-ui.js';
 
     // Minimal mock data for fast tests
     const mockDocs = [
@@ -112,6 +117,7 @@
     // Expose globals for Playwright
     window.neptuneMath = { cosineSimilarity, rankBySimilarity };
     window.NeptuneSearchUI = NeptuneSearchUI;
+    window.HybridSearch = HybridSearch;
 
     // Unicode-safe base64 for data URLs
     function toBase64(str) {
@@ -119,7 +125,7 @@
     }
 
     window.createSearch = async (options = {}) => {
-      const search = new NeptuneSearch({
+      const search = new HybridSearch({
         indexUrl: 'data:application/json;base64,' + toBase64(JSON.stringify({ documents: mockDocs })),
         vectorsUrl: 'data:application/json;base64,' + toBase64(JSON.stringify(mockVectors)),
         ...options,

@@ -255,7 +255,11 @@ function parseCssColor(value) {
   const v = value.trim();
   if (v.startsWith('#')) {
     let hex = v.slice(1);
-    if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+    if (hex.length === 3)
+      hex = hex
+        .split('')
+        .map((c) => c + c)
+        .join('');
     if (hex.length !== 6) return null;
     return [
       Number.parseInt(hex.slice(0, 2), 16) / 255,

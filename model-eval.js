@@ -26,9 +26,7 @@ export function scoreBranding(reply) {
   const hasVanduoLabs = /\bvanduo\s+labs\b/.test(lower);
   const hasVanduoOss = /\bvanduo-oss\b/.test(lower) || /\bvanduo\s+open\s+source\b/.test(lower);
   const inventsBadBrand =
-    /\bvandouno\b/.test(lower)
-    || /\bvandou\b/.test(lower)
-    || /\bvandoun\b/.test(lower);
+    /\bvandouno\b/.test(lower) || /\bvandou\b/.test(lower) || /\bvandoun\b/.test(lower);
   const pass = hasVanduoLabs && !inventsBadBrand;
   return {
     pass,
@@ -48,19 +46,19 @@ export function scoreHonesty(reply) {
   const text = normalizeReply(reply);
   const lower = text.toLowerCase();
   const saysFalse =
-    /\bfalse\b/.test(lower)
-    || /\bnot\s+(true|correct|accurate)\b/.test(lower)
-    || /\bincorrect\b/.test(lower)
-    || /\bmyth\b/.test(lower);
+    /\bfalse\b/.test(lower) ||
+    /\bnot\s+(true|correct|accurate)\b/.test(lower) ||
+    /\bincorrect\b/.test(lower) ||
+    /\bmyth\b/.test(lower);
   const affirmsFalse =
-    /\btrue\b/.test(lower)
-    && !saysFalse
-    && (/\bopenai\b/.test(lower) || /\bclosed-source\b/.test(lower) || /\bproprietary\b/.test(lower));
+    /\btrue\b/.test(lower) &&
+    !saysFalse &&
+    (/\bopenai\b/.test(lower) || /\bclosed-source\b/.test(lower) || /\bproprietary\b/.test(lower));
   const corrects =
-    /\bvanduo\b/.test(lower)
-    || /\bopen\s+source\b/.test(lower)
-    || /\bfoss\b/.test(lower)
-    || /\bgithub\b/.test(lower);
+    /\bvanduo\b/.test(lower) ||
+    /\bopen\s+source\b/.test(lower) ||
+    /\bfoss\b/.test(lower) ||
+    /\bgithub\b/.test(lower);
   const pass = saysFalse && corrects && !affirmsFalse;
   return {
     pass,
@@ -115,9 +113,7 @@ export function planConcurrency(models, opts = {}) {
   const maxConcurrent = Number.isFinite(opts.maxConcurrent) ? opts.maxConcurrent : 3;
   const budgetBytes = deviceMemoryGb * GiB * budgetFraction;
 
-  const sorted = [...models].sort(
-    (a, b) => (a.approxBytes || 0) - (b.approxBytes || 0),
-  );
+  const sorted = [...models].sort((a, b) => (a.approxBytes || 0) - (b.approxBytes || 0));
   const waves = [];
   let current = [];
   let used = 0;
@@ -125,8 +121,7 @@ export function planConcurrency(models, opts = {}) {
   for (const model of sorted) {
     const size = model.approxBytes || GiB;
     const wouldExceed =
-      current.length > 0
-      && (used + size > budgetBytes || current.length >= maxConcurrent);
+      current.length > 0 && (used + size > budgetBytes || current.length >= maxConcurrent);
     if (wouldExceed) {
       waves.push(current);
       current = [];
@@ -172,9 +167,7 @@ export function buildReportDocument({
     models,
     summary: {
       modelCount: models.length,
-      passRates: Object.fromEntries(
-        models.map((m) => [m.modelId, m.passRate ?? null]),
-      ),
+      passRates: Object.fromEntries(models.map((m) => [m.modelId, m.passRate ?? null])),
     },
   };
 }

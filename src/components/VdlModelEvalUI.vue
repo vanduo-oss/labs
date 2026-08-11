@@ -126,8 +126,8 @@ const finishedLabel = computed(() => report.value?.finishedAt || '—');
       <p class="vdl-model-eval-kicker">vdl-model-eval · v{{ VDL_MODEL_EVAL_VERSION }}</p>
       <h3 class="vdl-model-eval-title">Published local eval report</h3>
       <p class="vdl-model-eval-lead">
-        Compare in-browser models on branding, honesty, and instruction-following.
-        Regenerate with <code>pnpm model-eval</code> (Vite + WebGPU).
+        Compare in-browser models on branding, honesty, and instruction-following. Regenerate with
+        <code>pnpm model-eval</code> (Vite + WebGPU).
       </p>
     </header>
 

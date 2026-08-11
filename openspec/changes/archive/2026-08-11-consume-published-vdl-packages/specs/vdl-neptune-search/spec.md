@@ -1,11 +1,7 @@
-# vdl-neptune-search Specification
+## ADDED Requirements
 
-## Purpose
-Hybrid in-browser docs search demo powered by `@vanduo-oss/vdl-hybrid-search`. The Vue UI warms the semantic path early and runs hybrid search automatically as the user types (no Enter required for AI results).
-
-## Requirements
 ### Requirement: HybridSearch engine comes from npm
-The labs hybrid search demo MUST construct search via `HybridSearch` from `@vanduo-oss/vdl-hybrid-search` (not a local engine SoT). Search guardrails MUST be imported from `@vanduo-oss/vdl-hybrid-search/guardrails/search`.
+The labs hybrid search demo MUST construct search via `HybridSearch` from `@vanduo-oss/vdl-hybrid-search` (not a local `neptune-search.js` / `NeptuneSearch` SoT). Search guardrails MUST be imported from `@vanduo-oss/vdl-hybrid-search/guardrails/search`.
 
 #### Scenario: Vue demo uses HybridSearch
 - **WHEN** the hybrid search Vue UI initializes without an injected engine
@@ -14,6 +10,8 @@ The labs hybrid search demo MUST construct search via `HybridSearch` from `@vand
 #### Scenario: Search guardrails from package subpath
 - **WHEN** the UI validates queries or sanitizes doc hrefs
 - **THEN** it uses helpers from `@vanduo-oss/vdl-hybrid-search/guardrails/search`
+
+## MODIFIED Requirements
 
 ### Requirement: Semantic preload on mount
 When the hybrid search UI mounts, the system MUST start preloading the semantic search path (embedding model / transformers stack) in the background without blocking the fuzzy search path.

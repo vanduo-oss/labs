@@ -417,9 +417,7 @@ export function pickNextHomeQuote(options = {}) {
   let cursor = 0;
   const lastRaw = safeGet(storage, keys.last);
   const lastIndex =
-    lastRaw != null && lastRaw !== '' && Number.isFinite(Number(lastRaw))
-      ? Number(lastRaw)
-      : null;
+    lastRaw != null && lastRaw !== '' && Number.isFinite(Number(lastRaw)) ? Number(lastRaw) : null;
 
   let cycle = 0;
   const cycleRaw = safeGet(storage, keys.cycle);
@@ -438,9 +436,7 @@ export function pickNextHomeQuote(options = {}) {
     }
     const cursorRaw = safeGet(storage, keys.cursor);
     cursor =
-      cursorRaw != null && Number.isFinite(Number(cursorRaw))
-        ? Math.max(0, Number(cursorRaw))
-        : 0;
+      cursorRaw != null && Number.isFinite(Number(cursorRaw)) ? Math.max(0, Number(cursorRaw)) : 0;
   } else {
     cycle = 0;
   }

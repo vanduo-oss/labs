@@ -30,25 +30,19 @@ const CATALOG = {
     kind: 'files',
     hfRepo: 'litert-community/gemma-4-E2B-it-litert-lm',
     approxBytes: 2.0e9,
-    files: [
-      { path: 'gemma-4-E2B-it-web.litertlm', outName: 'gemma-4-E2B-it-web.litertlm' },
-    ],
+    files: [{ path: 'gemma-4-E2B-it-web.litertlm', outName: 'gemma-4-E2B-it-web.litertlm' }],
   },
   'qwen3-0.6B-litert': {
     kind: 'files',
     hfRepo: 'litert-community/Qwen3-0.6B',
     approxBytes: 0.6e9,
-    files: [
-      { path: 'Qwen3-0.6B.litertlm', outName: 'Qwen3-0.6B.litertlm' },
-    ],
+    files: [{ path: 'Qwen3-0.6B.litertlm', outName: 'Qwen3-0.6B.litertlm' }],
   },
   'ministral-3-3B-litert': {
     kind: 'files',
     hfRepo: 'litert-community/Ministral-3-3B-Reasoning-2512',
     approxBytes: 2.2e9,
-    files: [
-      { path: 'model.litertlm', outName: 'model.litertlm' },
-    ],
+    files: [{ path: 'model.litertlm', outName: 'model.litertlm' }],
   },
   'gemma-4-E2B-it-q4f16_1-MLC': {
     kind: 'tree',
@@ -62,8 +56,7 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
 const modelFlagIdx = args.indexOf('--model');
-const modelId =
-  modelFlagIdx >= 0 ? args[modelFlagIdx + 1] : 'gemma-4-E2B-it-web';
+const modelId = modelFlagIdx >= 0 ? args[modelFlagIdx + 1] : 'gemma-4-E2B-it-web';
 
 if (!CATALOG[modelId]) {
   console.error(`Unknown model "${modelId}". Known: ${Object.keys(CATALOG).join(', ')}`);
@@ -147,7 +140,9 @@ async function downloadFile(relPath, destRel, expectedSize) {
 async function main() {
   console.log(`[models:fetch] model=${modelId}`);
   console.log(`[models:fetch] repo=https://huggingface.co/${entry.hfRepo}`);
-  console.log(`[models:fetch] out=${path.relative(ROOT, outDir)} (~${formatBytes(entry.approxBytes)})`);
+  console.log(
+    `[models:fetch] out=${path.relative(ROOT, outDir)} (~${formatBytes(entry.approxBytes)})`,
+  );
   if (dryRun) console.log('[models:fetch] dry-run — no files written');
 
   let files;

@@ -1,15 +1,15 @@
 # vdl-guardrails
 
-Canonical shared-service documentation for the public `guardrails/*` modules exported by Vanduo Labs.
+Canonical documentation for FOSS guardrails consumed from published VDL packages (not a labs-owned source tree).
 
 This module family centralizes deterministic validation and safety composition used across:
 
 - `vdl-ai-chat`
-- `vdl-neptune-search`
+- `vdl-hybrid-search` (`@vanduo-oss/vdl-hybrid-search`)
 
 ## Purpose and Scope
 
-`guardrails/*` exists to provide a single, reusable policy layer that works in both UI and headless code paths.
+Package guardrail subpaths exist to provide a single, reusable policy layer that works in both UI and headless code paths.
 
 - **Deterministic validation**: reject malformed or unsafe inputs before expensive runtime work.
 - **System-prompt guardrails**: compose explicit safety and behavior policies for LLM components.
@@ -17,7 +17,7 @@ This module family centralizes deterministic validation and safety composition u
 
 ## Module Map
 
-### `./guardrails/core.js`
+### `@vanduo-oss/vdl-ai-chat` / core helpers
 
 Shared contracts and helpers used by both LLM and search guardrails:
 
@@ -26,7 +26,7 @@ Shared contracts and helpers used by both LLM and search guardrails:
 - `block({ code, message, matchedPatternIds?, meta? })`
 - `toGuardrailError(result, fallbackMessage?)`
 
-### `./guardrails/llm.js`
+### `@vanduo-oss/vdl-ai-chat/guardrails/llm`
 
 LLM policy surface used by `vdl-ai-chat`:
 
@@ -38,7 +38,7 @@ LLM policy surface used by `vdl-ai-chat`:
 - Re-exports tool helpers from `tools.js`
 - `chatGuardrails`
 
-### `./guardrails/tools.js`
+### `@vanduo-oss/vdl-ai-chat/guardrails/tools`
 
 Tool-call validation and XML fallback protocol helpers:
 
@@ -47,9 +47,9 @@ Tool-call validation and XML fallback protocol helpers:
 - `formatXmlToolResult(name, result)`
 - `DEFAULT_MAX_TOOL_ARGS_BYTES`
 
-### `./guardrails/search.js`
+### `@vanduo-oss/vdl-hybrid-search/guardrails/search`
 
-Search-specific deterministic hardening used by `vdl-neptune-search`:
+Search-specific deterministic hardening used by hybrid search demos:
 
 - `normalizeSearchQuery(query, options?)`
 - `validateSearchQuery(query, options?)`
@@ -64,17 +64,17 @@ Search-specific deterministic hardening used by `vdl-neptune-search`:
 
 Guardrails are intentionally split by runtime behavior and risk surface.
 
-- **LLM guardrails (`./guardrails/llm.js`)**
+- **LLM guardrails (`llm.js`)**
   - Target instruction-following generators (`vdl-ai-chat`).
   - Combine deterministic input blocking (regex pattern matching, max length, empty checks) with system-prompt policy composition.
-- **Search guardrails (`./guardrails/search.js`)**
-  - Target retrieval/ranking workloads (`vdl-neptune-search`).
+- **Search guardrails (`search.js`)**
+  - Target retrieval/ranking workloads (`vdl-hybrid-search`).
   - Focus on deterministic query hygiene, payload/schema validation, finite-vector checks, and render-path sanitization.
   - Not framed as classic prompt-jailbreak defense, because semantic search is embedding extraction + ranking, not chat completion.
 
 ## API Reference
 
-### Core helpers (`./guardrails/core.js`)
+### Core helpers (`core.js`)
 
 #### `normalizeText(value): string`
 
@@ -105,7 +105,7 @@ Produced error shape:
 - `reason` (same text as message)
 - `guardrail` (attached original `GuardrailResult`)
 
-### LLM helpers (`./guardrails/llm.js`)
+### LLM helpers (`llm.js`)
 
 #### `DEFAULT_LLM_GUARD_PATTERNS`
 
@@ -145,7 +145,7 @@ Preset objects that bundle:
 - `buildSystemPrompt`
 - `patterns`
 
-### Search helpers (`./guardrails/search.js`)
+### Search helpers (`search.js`)
 
 #### `normalizeSearchQuery(query, options?): string`
 
@@ -187,7 +187,7 @@ Preset object bundling all search validation/sanitization helpers.
 
 ### `GuardrailResult`
 
-From `./guardrails/core.js` JSDoc:
+From `core.js` JSDoc:
 
 ```ts
 interface GuardrailResult {
@@ -216,8 +216,8 @@ type GuardrailError = Error & {
 ### Headless LLM input validation before generation
 
 ```javascript
-import { validateLlmInput } from './guardrails/llm.js';
-import { toGuardrailError } from './guardrails/core.js';
+import { validateLlmInput } from '@vanduo-oss/vdl-ai-chat/guardrails/llm';
+import { toGuardrailError } from '@vanduo-oss/vdl-ai-chat' /* or package core re-exports */;
 
 const check = validateLlmInput({
   text: userPrompt,
@@ -232,7 +232,7 @@ if (!check.allowed) {
 ### Custom system prompt building for chat
 
 ```javascript
-import { buildChatSystemPrompt } from './guardrails/llm.js';
+import { buildChatSystemPrompt } from '@vanduo-oss/vdl-ai-chat/guardrails/llm';
 
 const chatPrompt = buildChatSystemPrompt({
   extraRules: 'Prefer concise bullet points.',
@@ -242,8 +242,8 @@ const chatPrompt = buildChatSystemPrompt({
 ### Search index/vector validation at load time
 
 ```javascript
-import { validateSearchIndexPayload, validateVectorPayload } from './guardrails/search.js';
-import { toGuardrailError } from './guardrails/core.js';
+import { validateSearchIndexPayload, validateVectorPayload } from '@vanduo-oss/vdl-hybrid-search/guardrails/search';
+import { toGuardrailError } from '@vanduo-oss/vdl-ai-chat' /* or package core re-exports */;
 
 const indexCheck = validateSearchIndexPayload(indexPayload);
 if (!indexCheck.allowed) throw toGuardrailError(indexCheck);
@@ -255,7 +255,7 @@ if (!vectorCheck.allowed) throw toGuardrailError(vectorCheck);
 ### Safe link creation for UI render paths
 
 ```javascript
-import { safeDocHref, sanitizeIconClass } from './guardrails/search.js';
+import { safeDocHref, sanitizeIconClass } from '@vanduo-oss/vdl-hybrid-search/guardrails/search';
 
 const href = safeDocHref('https://vanduo.dev', doc.route);
 const icon = sanitizeIconClass(doc.icon);
@@ -263,9 +263,7 @@ const icon = sanitizeIconClass(doc.icon);
 
 ## Compatibility Notes
 
-`ai-chat.js` still exports `InputGuardrail` for compatibility with existing integrations.
-
-Preferred shared API for new code is `./guardrails/llm.js`, especially:
+Prefer the published package guardrail APIs:
 
 - `validateLlmInput()`
 - `buildChatSystemPrompt()`

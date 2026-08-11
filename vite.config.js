@@ -57,11 +57,7 @@ export default defineConfig({
     localModelsPlugin(),
     viteStaticCopy({
       targets: [
-        { src: 'ai-chat.js', dest: '.' },
-        { src: 'neptune-search.js', dest: '.' },
         { src: 'model-eval.js', dest: '.' },
-        { src: 'labs-md-to-html.js', dest: '.' },
-        { src: 'guardrails', dest: '.' },
         { src: 'data', dest: '.' },
         { src: 'doc', dest: '.' },
         { src: 'favicon.svg', dest: '.' },
@@ -75,7 +71,7 @@ export default defineConfig({
       input: {
         main: path.resolve(root, 'index.html'),
         'ai-chat-demo': path.resolve(root, 'demo/ai-chat-demo.html'),
-        'neptune-demo': path.resolve(root, 'demo/neptune-demo.html'),
+        'hybrid-search-demo': path.resolve(root, 'demo/hybrid-search-demo.html'),
         'model-eval-harness': path.resolve(root, 'demo/model-eval-harness.html'),
       },
     },

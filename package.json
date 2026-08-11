@@ -1,7 +1,8 @@
 {
-  "name": "@vanduo-oss/vdl-engines",
+  "name": "@vanduo-oss/labs",
   "version": "0.1.1",
-  "description": "Vanduo Labs headless engines — Neptune hybrid search, in-browser AiChat (Gemma), and FOSS guardrails",
+  "private": true,
+  "description": "Vanduo Labs — demo playground for published VDL engines (hybrid search, AiChat, model-eval)",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -13,56 +14,23 @@
   },
   "keywords": [
     "vanduo",
-    "search",
-    "fuse",
-    "semantic",
-    "transformers",
-    "hybrid",
+    "labs",
+    "demo",
+    "hybrid-search",
     "ai-chat",
-    "gemma",
-    "guardrails"
+    "model-eval"
   ],
-  "exports": {
-    ".": "./neptune-search.js",
-    "./neptune-search.js": "./neptune-search.js",
-    "./ai-chat.js": "./ai-chat.js",
-    "./model-eval.js": "./model-eval.js",
-    "./guardrails/core.js": "./guardrails/core.js",
-    "./guardrails/llm.js": "./guardrails/llm.js",
-    "./guardrails/search.js": "./guardrails/search.js",
-    "./guardrails/tools.js": "./guardrails/tools.js",
-    "./labs-md-to-html.js": "./labs-md-to-html.js"
-  },
-  "files": [
-    "neptune-search.js",
-    "ai-chat.js",
-    "labs-md-to-html.js",
-    "model-eval.js",
-    "guardrails/core.js",
-    "guardrails/llm.js",
-    "guardrails/search.js",
-    "guardrails/tools.js",
-    "data/search-index.json",
-    "data/vectors.json",
-    "data/model-eval-reports",
-    "README.md",
-    "NEPTUNE-SEARCH.md",
-    "LICENSE"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "demo:serve": "vite",
-    "index": "node utils/neptune-indexer.mjs",
+    "index": "node utils/hybrid-search-indexer.mjs",
     "models:fetch": "node utils/fetch-ai-models.mjs",
     "model-eval": "node utils/model-eval-runner.mjs",
-    "lint": "eslint ai-chat.js neptune-search.js model-eval.js guardrails/",
-    "format": "prettier --write \"ai-chat.js\" \"neptune-search.js\" \"model-eval.js\" \"guardrails/**/*.js\"",
-    "format:check": "prettier --check \"ai-chat.js\" \"neptune-search.js\" \"model-eval.js\" \"guardrails/**/*.js\"",
+    "lint": "eslint model-eval.js \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs}\"",
+    "format": "prettier --write \"model-eval.js\" \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs,vue,css}\"",
+    "format:check": "prettier --check \"model-eval.js\" \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs,vue,css}\"",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
@@ -71,18 +39,21 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@huggingface/transformers": "^3.8.1",
     "@playwright/test": "^1.59.1",
     "@vitejs/plugin-vue": "^5.2.4",
     "eslint": "^9.39.2",
-    "fuse.js": "^7.3.0",
     "prettier": "^3.6.2",
     "vite": "^6.4.3",
     "vite-plugin-static-copy": "^2.3.2"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@litert-lm/core": "^0.15.0",
     "@vanduo-oss/vd3": "^1.2.1",
     "@vanduo-oss/vd3-cbun": "^1.3.1",
+    "@vanduo-oss/vdl-ai-chat": "^0.1.0",
+    "@vanduo-oss/vdl-hybrid-search": "^0.1.1",
+    "fuse.js": "^7.3.0",
     "vue": "^3.5.41"
   }
 }

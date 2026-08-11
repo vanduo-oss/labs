@@ -39,11 +39,7 @@ const context = await chromium.launchPersistentContext(PROFILE, {
   channel: process.env.MODEL_EVAL_CHANNEL || 'chrome',
   // Local WebGPU/model eval only (isolated PROFILE). --disable-web-security
   // relaxes CORS for cross-origin model asset fetches — not for production web.
-  args: [
-    '--enable-unsafe-webgpu',
-    '--ignore-gpu-blocklist',
-    '--disable-web-security',
-  ],
+  args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--disable-web-security'],
   viewport: { width: 1200, height: 900 },
 });
 

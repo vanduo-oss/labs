@@ -9,11 +9,11 @@ import {
   VdThemeCustomizer,
   VdThemeSwitcher,
 } from '@vanduo-oss/vd3';
-import { DEFAULT_DOCS_BASE_URL, VDL_NEPTUNE_SEARCH_VERSION } from '../neptune-search.js';
-import { VDL_AI_CHAT_VERSION } from '../ai-chat.js';
+import { DEFAULT_DOCS_BASE_URL, VDL_HYBRID_SEARCH_VERSION } from '@vanduo-oss/vdl-hybrid-search';
+import { VDL_AI_CHAT_VERSION } from '@vanduo-oss/vdl-ai-chat';
 import { VDL_MODEL_EVAL_VERSION } from '../model-eval.js';
-import { labsMarkdownToHtml } from '../labs-md-to-html.js';
-import VdlNeptuneSearchUI from './components/VdlNeptuneSearchUI.vue';
+import { labsMarkdownToHtml } from '@vanduo-oss/vdl-ai-chat/markdown';
+import VdlHybridSearchUI from './components/VdlHybridSearchUI.vue';
 import VdlAiChatUI from './components/VdlAiChatUI.vue';
 import VdlModelEvalUI from './components/VdlModelEvalUI.vue';
 import VdlHomeAtmosphere from './components/VdlHomeAtmosphere.vue';
@@ -31,7 +31,7 @@ const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
 const HOME_QUOTE_FADE_MS = 180;
 
 const COMPONENT_VERSION_MAP = {
-  neptune: VDL_NEPTUNE_SEARCH_VERSION,
+  neptune: VDL_HYBRID_SEARCH_VERSION,
   aichat: VDL_AI_CHAT_VERSION,
   'model-eval': VDL_MODEL_EVAL_VERSION,
 };
@@ -118,7 +118,10 @@ function hydrateComponentVersionTokens(md, slug) {
 
 function parseLabsHash() {
   const raw = (location.hash || '#home').replace(/^#/, '').toLowerCase();
-  const segments = raw.split('/').map((s) => s.trim()).filter(Boolean);
+  const segments = raw
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
   let nextRoute = segments[0] || 'home';
   if (nextRoute === 'demos') {
     let nextDemo = segments.length > 1 ? segments[1] : null;
@@ -160,7 +163,7 @@ async function fetchDocumentationHtml(slug) {
   if (docHtmlCache[slug]) return docHtmlCache[slug];
   const path =
     slug === 'neptune'
-      ? '/doc/vdl-neptune-search.md'
+      ? '/doc/vdl-hybrid-search.md'
       : slug === 'model-eval'
         ? '/doc/vdl-model-eval.md'
         : '/doc/vdl-ai-chat.md';
@@ -183,7 +186,7 @@ async function loadDocumentationForSlug(slug) {
   } catch (err) {
     if (seq !== docLoadSeq) return;
     docError.value =
-      'Documentation could not be loaded. Check that <code>doc/vdl-neptune-search.md</code> and <code>doc/vdl-ai-chat.md</code> are present, serve this folder over HTTP (not file://), then refresh.';
+      'Documentation could not be loaded. Check that <code>doc/vdl-hybrid-search.md</code> and <code>doc/vdl-ai-chat.md</code> are present, serve this folder over HTTP (not file://), then refresh.';
     console.warn('[labs]', err);
   } finally {
     if (seq === docLoadSeq) docLoading.value = false;
@@ -211,7 +214,7 @@ function applyLabsRoute(nextRoute, nextDemoSlug, nextToolSlug) {
     maybeOpenDemosDisclaimer();
     if (nextDemoSlug) {
       liveRegionText.value =
-        (nextDemoSlug === 'neptune' ? 'vdl-neptune-search' : 'vdl-ai-chat') +
+        (nextDemoSlug === 'neptune' ? 'vdl-hybrid-search' : 'vdl-ai-chat') +
         ' demo and documentation opened.';
       loadDocumentationForSlug(nextDemoSlug);
       nextTick(() => {
@@ -313,7 +316,9 @@ watch(toolSlug, (slug) => {
             <circle cx="50" cy="50" r="5.5" fill="var(--vd-color-primary)"></circle>
           </svg>
           <span class="navbar-brand-title-text">
-            <span class="hero-title-brand">vanduo</span>&nbsp;<span class="vd-text-muted">labs</span>
+            <span class="hero-title-brand">vanduo</span>&nbsp;<span class="vd-text-muted"
+              >labs</span
+            >
           </span>
         </a>
       </div>
@@ -361,7 +366,12 @@ watch(toolSlug, (slug) => {
       <section class="hero">
         <h2
           class="hero-title"
-          style="color: var(--color-primary); display: flex; align-items: center; justify-content: center"
+          style="
+            color: var(--color-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          "
         >
           <svg
             class="hero-atom-icon"
@@ -434,7 +444,7 @@ watch(toolSlug, (slug) => {
               Vanduo Labs is where we ship ideas before they are polished—interactive demos, odd
               widgets, and half-serious prototypes that might graduate into the framework, or might
               just make us smile. Most demos are not guaranteed stable; that is the point. Some
-              components, like <code>vdl-neptune-search</code>, are experimental prototypes that may
+              components, like <code>vdl-hybrid-search</code>, are experimental prototypes that may
               graduate into the framework.
             </p>
             <div class="labs-about-grid">
@@ -493,7 +503,7 @@ watch(toolSlug, (slug) => {
               <span class="labs-demo-card-icon" aria-hidden="true">
                 <i class="ph ph-magnifying-glass" style="font-size: 3rem"></i>
               </span>
-              <span class="labs-demo-card-title">vdl-neptune-search</span>
+              <span class="labs-demo-card-title">vdl-hybrid-search</span>
               <span class="labs-demo-card-desc" id="labs-card-neptune-desc"
                 >In-browser hybrid fuzzy + semantic search over vd3 docs—no server required</span
               >
@@ -565,7 +575,7 @@ watch(toolSlug, (slug) => {
               <h2 id="labs-demos-detail-title">
                 {{
                   demoSlug === 'neptune'
-                    ? 'vdl-neptune-search'
+                    ? 'vdl-hybrid-search'
                     : demoSlug === 'aichat'
                       ? 'vdl-ai-chat'
                       : 'Component'
@@ -581,7 +591,7 @@ watch(toolSlug, (slug) => {
                   id="labs-demo-neptune"
                   :hidden="demoSlug !== 'neptune'"
                 >
-                  <VdlNeptuneSearchUI
+                  <VdlHybridSearchUI
                     v-if="demoSlug === 'neptune'"
                     :base-url="DOCS_BASE_URL"
                     placeholder="Search vd3 docs…"
@@ -599,17 +609,9 @@ watch(toolSlug, (slug) => {
 
             <div class="labs-detail-stack-section" aria-labelledby="labs-doc-heading">
               <h3 id="labs-doc-heading">Documentation</h3>
-              <div
-                id="labs-doc-panel"
-                :class="{ 'labs-doc-loading': docLoading }"
-              >
+              <div id="labs-doc-panel" :class="{ 'labs-doc-loading': docLoading }">
                 <template v-if="docLoading">Loading documentation…</template>
-                <p
-                  v-else-if="docError"
-                  class="labs-doc-error"
-                  role="alert"
-                  v-html="docError"
-                ></p>
+                <p v-else-if="docError" class="labs-doc-error" role="alert" v-html="docError"></p>
                 <div v-else-if="docHtml" class="labs-md-prose" v-html="docHtml"></div>
               </div>
             </div>
@@ -627,8 +629,8 @@ watch(toolSlug, (slug) => {
       <div class="vd-container-responsive labs-main">
         <section id="labs-tools" class="labs-section" aria-label="On-computer helper tools">
           <p class="labs-tools-lede vd-text-muted">
-            On-computer helper for Labs development — not an Interactive Demo. Prefetch models locally,
-            run evals, publish reports.
+            On-computer helper for Labs development — not an Interactive Demo. Prefetch models
+            locally, run evals, publish reports.
           </p>
 
           <VdCard

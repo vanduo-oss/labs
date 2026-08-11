@@ -9,6 +9,10 @@ allowBuilds:
   esbuild: true
   onnxruntime-node: true
 
+minimumReleaseAgeExclude:
+  - '@vanduo-oss/vdl-ai-chat@0.1.0'
+  - '@vanduo-oss/vdl-hybrid-search@0.1.1'
+
 # Security pins (Dependabot): nanoid DoS fix, sharp/libvips, protobufjs RCE/DoS cluster.
 # Prefer patched 3.3.17 over brand-new 3.3.18+ (Safe-chain minimumReleaseAge).
 overrides:

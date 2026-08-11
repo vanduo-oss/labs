@@ -11,13 +11,14 @@ export default [
       'data/**',
       'playwright-report/**',
       'test-results/**',
-      'src/**',
       'demo/**',
-      'utils/**',
+      'tests/**',
+      'src/**/*.vue',
+      'src/**/*.css',
     ],
   },
   {
-    files: ['ai-chat.js', 'neptune-search.js', 'model-eval.js', 'guardrails/**/*.js'],
+    files: ['model-eval.js', 'utils/**/*.{js,mjs}', 'src/**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -50,6 +51,10 @@ export default [
         alert: 'readonly',
         indexedDB: 'readonly',
         GiB: 'writable',
+        URLSearchParams: 'readonly',
+        getComputedStyle: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        crypto: 'readonly',
       },
     },
     rules: {

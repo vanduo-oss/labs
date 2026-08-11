@@ -26,3 +26,8 @@ Product apps (starting with ts-school) need in-browser Gemma chat that can call 
 
 - Touches labs `vdl` surface only (`ai-chat.js`, `guardrails/*`, docs, tests). Does not change `@vanduo-oss/vd3` APIs.
 - Downstream consumers (ts-school) will depend on the published engines package after `vdl-publish-engines`.
+
+
+## Status
+
+Engine tool-calling shipped in published `@vanduo-oss/vdl-ai-chat`. Labs will consume that package; this change is closed as done-elsewhere.

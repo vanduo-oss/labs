@@ -1,406 +1,20 @@
 /**
- * vdl-neptune-search — In-browser Hybrid Search for Vanduo Docs
- *
- * Provides both a headless API (NeptuneSearch) and a UI component
- * (NeptuneSearchUI) for fuzzy + semantic hybrid search over
- * documentation content.
- *
- * Zero runtime npm dependencies. Libraries loaded from CDN on demand.
- *
- * @example
- * import { NeptuneSearch, NeptuneSearchUI } from './neptune-search.js';
- *
- * const search = new NeptuneSearch();
- * const ui = new NeptuneSearchUI({ container: document.getElementById('app'), search });
- * ui.mount();
+ * Test-only DOM UI harness for HybridSearch.
+ * Production labs UI is Vue `VdlHybridSearchUI`; this preserves Playwright e2e coverage
+ * of the former NeptuneSearchUI behaviors against the published engine.
  */
-
 import {
   normalizeSearchQuery,
   safeDocHref,
   sanitizeIconClass,
-  validateSearchIndexPayload,
   validateSearchQuery,
-  validateVectorPayload,
-} from './guardrails/search.js';
+} from '/node_modules/@vanduo-oss/vdl-hybrid-search/dist/guardrails/search.js';
 
-// ═══════════════════════════════════════════════════════════════════════
-// CDN Configuration
-// ═══════════════════════════════════════════════════════════════════════
-
-const CDN = {
-  fuse: [
-    'https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.basic.mjs',
-    'https://unpkg.com/fuse.js@7/dist/fuse.basic.mjs',
-  ],
-  transformers: [
-    'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm',
-    'https://esm.sh/@huggingface/transformers@3',
-  ],
-};
-
-export const VDL_NEPTUNE_SEARCH_VERSION = '0.0.3';
-
-export const DEFAULT_DOCS_BASE_URL = 'https://vanduo-oss.github.io/vd3-docs';
-
-// ═══════════════════════════════════════════════════════════════════════
-// Math Helpers
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Compute cosine similarity between two normalized vectors.
- */
-export function cosineSimilarity(a, b) {
-  let dot = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-  }
-  return dot; // Vectors are already normalized
-}
-
-/**
- * Compute cosine similarity between a query vector and all document vectors.
- */
-export function rankBySimilarity(queryVec, vectors, threshold = 0.25) {
-  return vectors
-    .map(doc => {
-      const score = cosineSimilarity(queryVec, doc.embedding);
-      return { id: doc.id, score };
-    })
-    .filter(r => r.score > threshold && isFinite(r.score))
-    .sort((a, b) => b.score - a.score);
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Library Loaders
-// ═══════════════════════════════════════════════════════════════════════
-
-let _fuseModule = null;
-let _transformersModule = null;
-
-async function loadFuse() {
-  if (_fuseModule) return _fuseModule;
-  const urls = Array.isArray(CDN.fuse) ? CDN.fuse : [CDN.fuse];
-  let lastErr;
-  for (const url of urls) {
-    try {
-      _fuseModule = await import(/* @vite-ignore */ url);
-      return _fuseModule;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  console.warn('[Neptune] Failed to load Fuse.js from any CDN:', lastErr?.message);
-  throw lastErr;
-}
-
-async function loadTransformers() {
-  if (_transformersModule) return _transformersModule;
-  const urls = Array.isArray(CDN.transformers) ? CDN.transformers : [CDN.transformers];
-  let lastErr;
-  for (const url of urls) {
-    try {
-      _transformersModule = await import(/* @vite-ignore */ url);
-      return _transformersModule;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  console.warn('[Neptune] Failed to load Transformers.js from any CDN:', lastErr?.message);
-  throw lastErr;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// NeptuneSearch — Headless API
-// ═══════════════════════════════════════════════════════════════════════
-
-export class NeptuneSearch {
-  static VERSION = VDL_NEPTUNE_SEARCH_VERSION;
-
-  constructor(options = {}) {
-    this.indexUrl = options.indexUrl ?? './data/search-index.json';
-    this.vectorsUrl = options.vectorsUrl ?? './data/vectors.json';
-    this.fuseThreshold = options.fuseThreshold ?? 0.45;
-    this.semanticThreshold = options.semanticThreshold ?? 0.30;
-    this.maxResults = options.maxResults ?? 20;
-    this.queryMinLength = options.queryMinLength ?? 2;
-    this.queryMaxLength = options.queryMaxLength ?? 240;
-    this.maxDocuments = options.maxDocuments ?? 5000;
-    this.maxVectorDimensions = options.maxVectorDimensions ?? 4096;
-    this.semanticBoost = options.semanticBoost ?? 1.0;
-    this.modelName = options.modelName ?? 'Xenova/all-MiniLM-L6-v2';
-    /** Optional host-provided loaders (bundle Fuse/Transformers for strict CSP). */
-    this._loadFuse = typeof options.loadFuse === 'function' ? options.loadFuse : loadFuse;
-    this._loadTransformers =
-      typeof options.loadTransformers === 'function' ? options.loadTransformers : loadTransformers;
-
-    this._fuse = null;
-    this._fusePromise = null;
-    this._docs = null;
-    this._docMap = null;
-    this._vectors = null;
-    this._extractor = null;
-    this._semanticReady = false;
-    this._semanticFailed = false;
-    this._semanticPromise = null;
-    this._progressSubscribers = [];
-  }
-
-  onSemanticProgress(callback) {
-    this._progressSubscribers.push(callback);
-    return () => {
-      this._progressSubscribers = this._progressSubscribers.filter(cb => cb !== callback);
-    };
-  }
-
-  _emitSemanticProgress(data) {
-    for (const cb of this._progressSubscribers) cb(data);
-  }
-
-  // ── Fuzzy Layer ──────────────────────────────────────────────────────
-
-  async initFuzzy() {
-    if (!this._fusePromise) {
-      this._fusePromise = (async () => {
-        const response = await fetch(this.indexUrl);
-        if (!response.ok) throw new Error(`Failed to load search index: ${response.status}`);
-        const data = await response.json();
-        const payloadCheck = validateSearchIndexPayload(data, { maxDocuments: this.maxDocuments });
-        if (!payloadCheck.allowed) {
-          throw new Error(payloadCheck.message || 'Search index payload validation failed.');
-        }
-        this._docs = data.documents;
-        this._docMap = new Map(this._docs.map(d => [d.id, d]));
-
-        const Fuse = await this._loadFuse();
-        const FuseClass = Fuse.default ?? Fuse;
-        this._fuse = new FuseClass(this._docs, {
-          keys: [
-            { name: 'title', weight: 2.5 },
-            { name: 'headings', weight: 2.0 },
-            { name: 'keywords', weight: 2.5 },
-            { name: 'bodyText', weight: 1.0 },
-            { name: 'classes', weight: 1.5 },
-            { name: 'chunks.text', weight: 0.8 },
-          ],
-          threshold: this.fuseThreshold,
-          includeScore: true,
-          shouldSort: true,
-          minMatchCharLength: 2,
-        });
-      })();
-    }
-    return this._fusePromise;
-  }
-
-  fuzzySearch(query) {
-    if (!this._fuse) return [];
-    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
-    const check = validateSearchQuery(normalizedQuery, {
-      minLength: this.queryMinLength,
-      maxLength: this.queryMaxLength,
-    });
-    if (!check.allowed) return [];
-    return this._fuse.search(normalizedQuery, { limit: this.maxResults });
-  }
-
-  // ── Semantic Layer ───────────────────────────────────────────────────
-
-  async initSemantic() {
-    await this.initFuzzy();
-    if (this._semanticReady) return;
-    if (this._semanticFailed) {
-      throw new Error('Semantic search previously failed; recreate NeptuneSearch instance to retry');
-    }
-
-    if (!this._semanticPromise) {
-      this._semanticPromise = (async () => {
-        this._emitSemanticProgress({ stage: 'loading-model', message: 'Loading search model (one-time download)...' });
-
-        let vectorsData;
-        try {
-          const transformers = await this._loadTransformers();
-
-          this._extractor = transformers.pipeline('feature-extraction', this.modelName, {
-            quantized: true,
-            progress_callback: (progress) => {
-              if (progress?.status === 'progress') {
-                this._emitSemanticProgress({
-                  stage: 'downloading',
-                  message: `Downloading model\u2026 ${Math.round((progress.loaded / progress.total) * 100)}%`,
-                  progress,
-                });
-              }
-            },
-          });
-
-          vectorsData = await fetch(this.vectorsUrl).then(r => {
-            if (!r.ok) throw new Error(`Failed to load vectors: ${r.status}`);
-            return r.json();
-          });
-
-          const vectorsCheck = validateVectorPayload(vectorsData, {
-            maxDocuments: this.maxDocuments,
-            maxDimensions: this.maxVectorDimensions,
-          });
-          if (!vectorsCheck.allowed) {
-            throw new Error(vectorsCheck.message || 'Vector payload validation failed.');
-          }
-
-          const knownDocIds = new Set(this._docs.map((d) => d.id));
-          const unknownVectorId = vectorsData.documents.find((row) => !knownDocIds.has(row.id));
-          if (unknownVectorId) {
-            throw new Error(`Vector payload references unknown doc id: ${unknownVectorId.id}`);
-          }
-        } catch (err) {
-          this._semanticFailed = true;
-          this._semanticPromise = null;
-          this._emitSemanticProgress({ stage: 'error', message: err.message });
-          throw err;
-        }
-
-        this._extractor = await this._extractor;
-        this._vectors = vectorsData.documents;
-        this._semanticReady = true;
-
-        this._emitSemanticProgress({ stage: 'ready', message: 'Search model ready' });
-      })();
-    }
-    return this._semanticPromise;
-  }
-
-  async semanticSearch(query) {
-    await this.initSemantic();
-    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
-    const check = validateSearchQuery(normalizedQuery, {
-      minLength: this.queryMinLength,
-      maxLength: this.queryMaxLength,
-    });
-    if (!check.allowed) return [];
-
-    const output = await this._extractor(normalizedQuery, { pooling: 'mean', normalize: true });
-    const queryVec = Array.from(output.data);
-
-    return rankBySimilarity(queryVec, this._vectors, this.semanticThreshold).slice(0, 10);
-  }
-
-  // ── Hybrid Merge ─────────────────────────────────────────────────────
-
-mergeResults(fuzzyResults, semanticResults) {
-    if (!this._docMap) throw new Error('mergeResults requires initFuzzy() to be called first');
-
-    const boosted = semanticResults
-      .map(sr => {
-        const doc = this._docMap.get(sr.id);
-        if (!doc) {
-          console.warn(`[Neptune] Vector references missing doc id: '${sr.id}'`);
-          return null;
-        }
-        return { doc, score: sr.score * this.semanticBoost, source: 'semantic' };
-      })
-      .filter(Boolean);
-
-    const fuzzyMapped = fuzzyResults
-      .map(fr => ({ doc: fr.item, score: 1 - fr.score, source: 'fuzzy' }));
-
-    const seen = new Set();
-    const merged = [];
-
-    // Score-sorted interleave: best result wins regardless of source
-    const all = [...boosted, ...fuzzyMapped].sort((a, b) => b.score - a.score);
-    for (const r of all) {
-      if (!seen.has(r.doc.id)) {
-        seen.add(r.doc.id);
-        merged.push(r);
-      }
-    }
-
-    return merged.slice(0, this.maxResults);
-  }
-
-  // ── Unified Search ───────────────────────────────────────────────────
-
-  async search(query, { mode = 'hybrid' } = {}) {
-    await this.initFuzzy();
-
-    const normalizedQuery = normalizeSearchQuery(query, { maxLength: this.queryMaxLength });
-    const queryCheck = validateSearchQuery(normalizedQuery, {
-      minLength: this.queryMinLength,
-      maxLength: this.queryMaxLength,
-    });
-
-    if (!['fuzzy', 'semantic', 'hybrid'].includes(mode)) {
-      throw new Error(`Invalid search mode: "${mode}". Expected 'fuzzy', 'semantic', or 'hybrid'.`);
-    }
-
-    const result = {
-      query: normalizedQuery,
-      mode,
-      fuzzy: [],
-      semantic: [],
-      merged: [],
-    };
-
-    if (!queryCheck.allowed) return result;
-
-    if (mode === 'fuzzy' || mode === 'hybrid') {
-      result.fuzzy = this.fuzzySearch(normalizedQuery);
-    }
-
-    if (mode === 'semantic' || mode === 'hybrid') {
-      try {
-        result.semantic = await this.semanticSearch(normalizedQuery);
-      } catch (err) {
-        console.warn('[Neptune] Semantic search failed:', err.message);
-        // Degrade gracefully to fuzzy-only
-      }
-    }
-
-    if (mode === 'hybrid') {
-      result.merged = this.mergeResults(result.fuzzy, result.semantic);
-    } else if (mode === 'fuzzy') {
-      result.merged = result.fuzzy.map(fr => ({
-        doc: fr.item,
-        score: 1 - fr.score,
-        source: 'fuzzy',
-      }));
-    } else {
-      result.merged = result.semantic.map(sr => {
-        const doc = this._docMap.get(sr.id);
-        return { doc, score: sr.score, source: 'semantic' };
-      }).filter(r => r.doc);
-    }
-
-    return result;
-  }
-
-  // ── Utilities ────────────────────────────────────────────────────────
-
-  getDocById(id) {
-    return this._docMap?.get(id) ?? null;
-  }
-
-  /** @returns {Array<Record<string, unknown>>} */
-  getDocuments() {
-    return Array.isArray(this._docs) ? this._docs.slice() : [];
-  }
-
-  isSemanticReady() {
-    return this._semanticReady;
-  }
-
-  static resetCDNCache() {
-    _fuseModule = null;
-    _transformersModule = null;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
 // NeptuneSearchUI — DOM Component
 // ═══════════════════════════════════════════════════════════════════════
 
-export class NeptuneSearchUI {
-  static VERSION = VDL_NEPTUNE_SEARCH_VERSION;
+export class HybridSearchDomUI {
+  static VERSION = 'test-harness';
 
   constructor(options = {}) {
     this.container = options.container;
@@ -410,7 +24,7 @@ export class NeptuneSearchUI {
     this.debounceMs = options.debounceMs ?? 350;
     this.showSemanticHint = options.showSemanticHint ?? true;
     this.autofocus = options.autofocus ?? true;
-    this.baseUrl = options.baseUrl ?? DEFAULT_DOCS_BASE_URL;
+    this.baseUrl = options.baseUrl ?? 'https://vanduo-oss.github.io/vd3-docs';
     this.emptyMessage = options.emptyMessage ?? 'No docs found. Try another query or pick a category filter.';
 
     this._mounted = false;
@@ -431,7 +45,7 @@ export class NeptuneSearchUI {
 
   mount() {
     if (this._mounted) return;
-    if (!this.container) throw new Error('NeptuneSearchUI requires a container element');
+    if (!this.container) throw new Error('HybridSearchDomUI requires a container element');
 
     this._buildDOM();
     this._bindEvents();
@@ -457,7 +71,7 @@ export class NeptuneSearchUI {
 
   /**
    * Kick off semantic init without awaiting. Safe to call repeatedly —
-   * NeptuneSearch.initSemantic() is promise-cached per instance.
+   * HybridSearch.initSemantic() is promise-cached per instance.
    */
   _preloadSemantic() {
     if (!this.search) return;
@@ -1136,8 +750,12 @@ function injectStyles() {
 }
 
 // Auto-inject styles when UI is mounted
-const originalMount = NeptuneSearchUI.prototype.mount;
-NeptuneSearchUI.prototype.mount = function (...args) {
+const originalMount = HybridSearchDomUI.prototype.mount;
+HybridSearchDomUI.prototype.mount = function (...args) {
   injectStyles();
   return originalMount.call(this, ...args);
 };
+
+
+/** @deprecated alias for Playwright harness compatibility */
+export { HybridSearchDomUI as NeptuneSearchUI };

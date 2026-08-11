@@ -2,7 +2,7 @@
  * Browser harness for vdl-model-eval.
  * Query: ?models=id1,id2&autorun=1
  */
-import { AiChat, MODEL_OPTIONS, getModelOption } from '../../ai-chat.js';
+import { AiChat, MODEL_OPTIONS, getModelOption } from '@vanduo-oss/vdl-ai-chat';
 import {
   scoreCase,
   summarizeModelResults,
@@ -29,13 +29,13 @@ function log(line) {
 async function runModel(modelId, suite) {
   const option = getModelOption(modelId);
   if (!option) {
-    return summarizeModelResults(
-      { modelId, error: 'unknown model id' },
-      [],
-    );
+    return summarizeModelResults({ modelId, error: 'unknown model id' }, []);
   }
 
-  const chat = new AiChat({ modelId });
+  const chat = new AiChat({
+    modelId,
+    loadLiteRT: async () => import('@litert-lm/core'),
+  });
   const caseResults = [];
   try {
     log(`[load] ${modelId}`);
