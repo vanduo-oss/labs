@@ -1042,28 +1042,34 @@ watch(loaded, async (isLoaded, wasLoaded) => {
   border-radius: 999px;
   padding: 0.15rem 0.5rem;
   border: 1px solid var(--border-color);
-  color: var(--text-muted);
+  /* Filled chip so muted labels stay readable on dark glass cards. */
+  background: var(--bg-secondary, var(--vd-bg-secondary));
+  color: var(--text-primary, var(--vd-text-primary));
 }
 
 .vdl-ai-mini-badge[data-cached='1'],
 .vdl-ai-mini-badge[data-state='native'] {
-  border-color: rgba(var(--vd-color-success-rgb, 34, 197, 94), 0.45);
+  border-color: rgba(var(--vd-color-success-rgb, 34, 197, 94), 0.55);
+  background: rgba(var(--vd-color-success-rgb, 34, 197, 94), 0.14);
   color: var(--vd-color-success, #22c55e);
 }
 
 .vdl-ai-mini-badge[data-state='fallback'] {
-  border-color: rgba(var(--vd-color-warning-rgb, 245, 158, 11), 0.45);
+  border-color: rgba(var(--vd-color-warning-rgb, 245, 158, 11), 0.55);
+  background: rgba(var(--vd-color-warning-rgb, 245, 158, 11), 0.14);
   color: var(--vd-color-warning, #f59e0b);
 }
 
 .vdl-ai-mini-badge[data-state='unsupported'],
 .vdl-ai-mini-badge[data-state='unavailable'] {
-  border-color: rgba(var(--vd-color-danger-rgb, 239, 68, 68), 0.45);
+  border-color: rgba(var(--vd-color-danger-rgb, 239, 68, 68), 0.55);
+  background: rgba(var(--vd-color-danger-rgb, 239, 68, 68), 0.14);
   color: var(--vd-color-danger, #ef4444);
 }
 
 .vdl-ai-mini-badge[data-state='experimental'] {
-  border-color: rgba(var(--vd-color-info-rgb, 59, 130, 246), 0.45);
+  border-color: rgba(var(--vd-color-info-rgb, 59, 130, 246), 0.55);
+  background: rgba(var(--vd-color-info-rgb, 59, 130, 246), 0.14);
   color: var(--vd-color-info, #3b82f6);
 }
 
