@@ -74,7 +74,10 @@ onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas) return;
 
-  engine = createVdlHomeAtmosphere(canvas, { reducedMotion: prefersReducedMotion() });
+  engine = createVdlHomeAtmosphere(canvas, {
+    reducedMotion: prefersReducedMotion(),
+    styleRoot: canvas.parentElement,
+  });
   if (!engine) {
     unsupported.value = true;
     return;
@@ -92,7 +95,10 @@ function onMotionChange() {
   const canvas = canvasRef.value;
   if (!canvas) return;
   engine?.destroy();
-  engine = createVdlHomeAtmosphere(canvas, { reducedMotion: prefersReducedMotion() });
+  engine = createVdlHomeAtmosphere(canvas, {
+    reducedMotion: prefersReducedMotion(),
+    styleRoot: canvas.parentElement,
+  });
   if (!engine) {
     unsupported.value = true;
     return;

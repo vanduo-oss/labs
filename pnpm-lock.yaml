@@ -20,17 +20,17 @@ importers:
         specifier: ^0.15.0
         version: 0.15.0
       '@vanduo-oss/vd3':
-        specifier: ^1.2.1
-        version: 1.2.1(vue@3.5.41)
+        specifier: ^1.3.0
+        version: 1.3.0(vue@3.5.41)
       '@vanduo-oss/vd3-cbun':
         specifier: ^1.3.1
         version: 1.3.1(vue@3.5.41)
       '@vanduo-oss/vdl-ai-chat':
-        specifier: ^0.1.0
-        version: 0.1.0
-      '@vanduo-oss/vdl-hybrid-search':
         specifier: ^0.1.1
         version: 0.1.1
+      '@vanduo-oss/vdl-hybrid-search':
+        specifier: ^0.1.2
+        version: 0.1.2
       fuse.js:
         specifier: ^7.3.0
         version: 7.5.0
@@ -682,18 +682,18 @@ packages:
     peerDependencies:
       vue: '>=3.3.0'
 
-  '@vanduo-oss/vd3@1.2.1':
-    resolution: {integrity: sha512-FFlb7aKMSR7mU6nAtMMt5K3g7zQIcUQRUYdRExZsAIX+VuhFLGg/+jkbEpY2oKJu0IuQL7mllWYP4WicWK+ZZg==}
+  '@vanduo-oss/vd3@1.3.0':
+    resolution: {integrity: sha512-z3BWf5eWuHW0S39++xBJHB2phSWywgmgyRGvzsfVP577uNc9pYDJboBYclmZ6k7nvS7NPyDOQrmuZb2rqaM50A==}
     engines: {node: '>=20.19.0', pnpm: '>=10'}
     peerDependencies:
       vue: '>=3.3.0'
 
-  '@vanduo-oss/vdl-ai-chat@0.1.0':
-    resolution: {integrity: sha512-n17MmVI9SMiC5mlYA3QcLM5G0aPNSHqGxtW1WWZip1ZXt+JxTNMMEzvvO2vmvl3Kp90WOQEQkju3DxTrzEDI9g==}
+  '@vanduo-oss/vdl-ai-chat@0.1.1':
+    resolution: {integrity: sha512-crBup3LpN8LQFCKPLgmCpXMizktid5Ua63cwuRqcuLe9elAuGd24+x7368DjQUO0F2/3lNoMvxpfBm/E7UwNgQ==}
     engines: {node: '>=20.19.0', pnpm: '>=10'}
 
-  '@vanduo-oss/vdl-hybrid-search@0.1.1':
-    resolution: {integrity: sha512-7KcQcitPL3Mq6+ZgBdb4Jzo4jBG36268WDtapmppVVgKhxf/C4+ciABkT9MzNvipzGcIS32JTCc6JvbWxRz9Mw==}
+  '@vanduo-oss/vdl-hybrid-search@0.1.2':
+    resolution: {integrity: sha512-B/TmqIsP7W54eOGbNIW9US7ahH2oxMC/KyXAhYISqrt1GS+w26f61hfQAvMYclkN4RF/sJyGPxhxmi76gkK3mg==}
     engines: {node: '>=20.19.0', pnpm: '>=10'}
 
   '@vitejs/plugin-vue@5.2.4':
@@ -1791,13 +1791,13 @@ snapshots:
     dependencies:
       vue: 3.5.41
 
-  '@vanduo-oss/vd3@1.2.1(vue@3.5.41)':
+  '@vanduo-oss/vd3@1.3.0(vue@3.5.41)':
     dependencies:
       vue: 3.5.41
 
-  '@vanduo-oss/vdl-ai-chat@0.1.0': {}
+  '@vanduo-oss/vdl-ai-chat@0.1.1': {}
 
-  '@vanduo-oss/vdl-hybrid-search@0.1.1': {}
+  '@vanduo-oss/vdl-hybrid-search@0.1.2': {}
 
   '@vitejs/plugin-vue@5.2.4(vite@6.4.3(@types/node@26.1.2))(vue@3.5.41)':
     dependencies:

@@ -276,9 +276,28 @@ function mixRgb(a, b, t) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
+function readCssNumber(styles, name, fallback) {
+  const raw = styles.getPropertyValue(name).trim();
+  if (!raw) return fallback;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Labs home defaults — match vd3-docs liquid demo knobs. */
+const DEFAULT_KNOBS = Object.freeze({
+  speed: 0.35,
+  intensity: 1.7,
+  grain: 0.14,
+  distort: 0.22,
+  gradientSize: 0.48,
+  primaryWeight: 0.85,
+  neutralWeight: 1.15,
+  alpha: 1,
+});
+
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{ reducedMotion?: boolean }} [options]
+ * @param {{ reducedMotion?: boolean, styleRoot?: HTMLElement | null }} [options]
  */
 export function createVdlHomeAtmosphere(canvas, options = {}) {
   const gl = canvas.getContext('webgl', {
@@ -334,11 +353,13 @@ export function createVdlHomeAtmosphere(canvas, options = {}) {
 
   const colors = {
     primary: [0.36, 0.49, 0.98],
-    primarySoft: [0.45, 0.58, 0.98],
-    neutralA: [0.15, 0.15, 0.16],
-    neutralB: [0.25, 0.25, 0.27],
+    primarySoft: [0.12, 0.14, 0.2],
+    neutralA: [0.1, 0.1, 0.11],
+    neutralB: [0.12, 0.13, 0.15],
     base: [0.09, 0.09, 0.1],
   };
+
+  const knobs = { ...DEFAULT_KNOBS };
 
   let running = false;
   let raf = 0;
@@ -347,8 +368,37 @@ export function createVdlHomeAtmosphere(canvas, options = {}) {
   let width = 0;
   let height = 0;
 
+  function resolveStyleRoot(root) {
+    return root || options.styleRoot || canvas.parentElement || document.documentElement;
+  }
+
+  function syncKnobs(root) {
+    const styles = getComputedStyle(resolveStyleRoot(root));
+    knobs.speed = readCssNumber(styles, '--vd-liquid-speed', DEFAULT_KNOBS.speed);
+    knobs.intensity = readCssNumber(styles, '--vd-liquid-intensity', DEFAULT_KNOBS.intensity);
+    knobs.grain = readCssNumber(styles, '--vd-liquid-grain', DEFAULT_KNOBS.grain);
+    knobs.distort = readCssNumber(styles, '--vd-liquid-distort', DEFAULT_KNOBS.distort);
+    knobs.gradientSize = readCssNumber(
+      styles,
+      '--vd-liquid-gradient-size',
+      DEFAULT_KNOBS.gradientSize,
+    );
+    knobs.primaryWeight = readCssNumber(
+      styles,
+      '--vd-liquid-primary-weight',
+      DEFAULT_KNOBS.primaryWeight,
+    );
+    knobs.neutralWeight = readCssNumber(
+      styles,
+      '--vd-liquid-neutral-weight',
+      DEFAULT_KNOBS.neutralWeight,
+    );
+    knobs.alpha = readCssNumber(styles, '--vd-liquid-alpha', DEFAULT_KNOBS.alpha);
+  }
+
   function syncThemeColors(root = document.documentElement) {
-    const styles = getComputedStyle(root);
+    const themeEl = document.documentElement;
+    const styles = getComputedStyle(themeEl);
     const primary =
       parseRgbTriplet(styles.getPropertyValue('--vd-color-primary-rgb')) ||
       parseCssColor(styles.getPropertyValue('--vd-color-primary')) ||
@@ -360,13 +410,15 @@ export function createVdlHomeAtmosphere(canvas, options = {}) {
     const n8 = parseCssColor(styles.getPropertyValue('--vd-neutral-8')) || [0.15, 0.15, 0.15];
     const n6 = parseCssColor(styles.getPropertyValue('--vd-neutral-6')) || [0.32, 0.32, 0.32];
     const n2 = parseCssColor(styles.getPropertyValue('--vd-neutral-2')) || [0.9, 0.9, 0.9];
-    const isDark = (root.getAttribute('data-theme') || 'dark') === 'dark';
+    const isDark = (themeEl.getAttribute('data-theme') || 'dark') === 'dark';
 
+    // Two poles: primary accent vs dark base/neutral (avoids dual bright blobs on dark).
     colors.primary = primary;
-    colors.primarySoft = mixRgb(primary, base, isDark ? 0.25 : 0.35);
-    colors.neutralA = isDark ? mixRgb(n8, base, 0.35) : mixRgb(n2, base, 0.2);
-    colors.neutralB = isDark ? mixRgb(n6, primary, 0.12) : mixRgb(n6, primary, 0.08);
+    colors.primarySoft = isDark ? mixRgb(primary, base, 0.72) : mixRgb(primary, base, 0.4);
+    colors.neutralA = isDark ? mixRgb(n8, base, 0.55) : mixRgb(n2, base, 0.2);
+    colors.neutralB = isDark ? mixRgb(base, n8, 0.35) : mixRgb(n6, primary, 0.08);
     colors.base = base;
+    syncKnobs(root);
   }
 
   function resize() {
@@ -410,14 +462,14 @@ export function createVdlHomeAtmosphere(canvas, options = {}) {
     gl.uniform3f(locs.uColor3, colors.primarySoft[0], colors.primarySoft[1], colors.primarySoft[2]);
     gl.uniform3f(locs.uColor4, colors.neutralB[0], colors.neutralB[1], colors.neutralB[2]);
     gl.uniform3f(locs.uBase, colors.base[0], colors.base[1], colors.base[2]);
-    gl.uniform1f(locs.uSpeed, reducedMotion ? 0 : 1.15);
-    gl.uniform1f(locs.uIntensity, 1.35);
-    gl.uniform1f(locs.uGrainIntensity, 0.05);
-    gl.uniform1f(locs.uGradientSize, 0.48);
-    gl.uniform1f(locs.uPrimaryWeight, 0.85);
-    gl.uniform1f(locs.uNeutralWeight, 1.15);
-    gl.uniform1f(locs.uDistort, reducedMotion ? 0 : 0.48);
-    gl.uniform1f(locs.uAlpha, 1);
+    gl.uniform1f(locs.uSpeed, reducedMotion ? 0 : knobs.speed);
+    gl.uniform1f(locs.uIntensity, knobs.intensity);
+    gl.uniform1f(locs.uGrainIntensity, knobs.grain);
+    gl.uniform1f(locs.uGradientSize, knobs.gradientSize);
+    gl.uniform1f(locs.uPrimaryWeight, knobs.primaryWeight);
+    gl.uniform1f(locs.uNeutralWeight, knobs.neutralWeight);
+    gl.uniform1f(locs.uDistort, reducedMotion ? 0 : knobs.distort);
+    gl.uniform1f(locs.uAlpha, knobs.alpha);
     gl.uniform1i(locs.uTouchTexture, 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

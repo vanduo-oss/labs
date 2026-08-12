@@ -85,7 +85,7 @@ pnpm dev
 pnpm format:check && pnpm lint && pnpm test:unit && pnpm build
 ```
 
-Theme controls use a `vdl-` localStorage prefix so preferences do not collide with vd3-docs on shared Pages origins.
+Theme controls use `app.use(VanduoVue, { storagePrefix: 'vdl-' })` so preferences do not collide with vd3-docs on shared Pages origins. First visit shows a mandatory terms gate (AI Act transparency + experimental demos); decline opens a farewell screen.
 
 ## Support / Contributing
 

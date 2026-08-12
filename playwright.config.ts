@@ -35,10 +35,10 @@ export default defineConfig({
   ],
   webServer: {
     command: process.env.CI
-      ? `python3 -m http.server 8790 --directory "${projectRoot}" >/dev/null 2>&1`
-      : `python3 -m http.server 8790 --directory "${projectRoot}"`,
+      ? `pnpm exec vite --host 127.0.0.1 --port 8790 --strictPort >/dev/null 2>&1`
+      : `pnpm exec vite --host 127.0.0.1 --port 8790 --strictPort`,
     url: 'http://localhost:8790',
     reuseExistingServer: !process.env.CI,
-    timeout: 20 * 1000,
+    timeout: 60 * 1000,
   },
 });
