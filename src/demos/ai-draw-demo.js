@@ -1,8 +1,11 @@
 import { createApp, h } from 'vue';
-import { VanduoVue, VdThemeSwitcher } from '@vanduo-oss/vd3';
+import { VanduoVue } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
+import { installResolvedTheme } from '../vdl-resolved-theme.js';
 import AiDrawDemo from '../components/AiDrawDemo.vue';
+
+installResolvedTheme({ storagePrefix: 'vanduo-', defaultTheme: 'dark' });
 
 const DemoApp = {
   name: 'AiDrawDemoEntry',

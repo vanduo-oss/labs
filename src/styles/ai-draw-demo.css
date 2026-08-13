@@ -21,56 +21,71 @@
 .vdl-ai-draw-stage.is-fullscreen {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 4000;
   width: 100%;
-  height: 100%;
+  height: 100dvh;
   max-height: 100dvh;
-  background: var(--vd-draw-surface, var(--bg-primary, #ffffff));
+  display: flex;
+  flex-direction: column;
+  background: var(--vd-draw-surface, var(--bg-primary, #0f172a));
 }
 
 .vdl-ai-draw-stage.is-fullscreen .ai-draw-main {
   flex: 1 1 auto;
   min-height: 0;
-  height: 100%;
-  grid-template-columns: minmax(60%, 1fr) minmax(320px, 400px);
+  height: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
   gap: 0.75rem;
   padding: 0.75rem;
 }
 
 .vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-panel,
-.vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-wrap,
 .vdl-ai-draw-stage.is-fullscreen .ai-draw-chat-panel {
   min-height: 0;
   height: 100%;
 }
 
-.ai-draw-fs-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
-  background: var(--bg-primary, #ffffff);
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
 }
 
-.ai-draw-fs-bar-title {
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-wrap .vd-draw {
+  min-height: 0;
+  height: 100%;
+}
+
+body.ai-draw-app-fullscreen {
+  overflow: hidden;
+}
+
+.ai-draw-canvas-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  margin-bottom: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--vd-draw-border, var(--border-color, #334155));
+  border-radius: var(--vd-radius-md, 8px);
+  background: var(--vd-draw-panel, var(--bg-secondary, #1e293b));
+}
+
+.ai-draw-canvas-chrome-title {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
+  margin-right: auto;
   font-size: 0.875rem;
+  color: var(--vd-draw-text, var(--text-primary, #f8fafc));
 }
 
-.ai-draw-fs-enter {
-  position: absolute;
-  top: 0.65rem;
-  left: 0.65rem;
-  z-index: 12;
-  background-color: var(--bg-secondary, #ffffff) !important;
-  border: 1px solid var(--border-color, #e2e8f0);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+.ai-draw-fs-toggle {
+  flex: 0 0 auto;
 }
 
 .ai-draw-canvas-prompt-overlay {
@@ -141,9 +156,16 @@
   cursor: not-allowed;
 }
 
-/* Light / Dark Mode Canvas Tokens */
+/*
+ * Light / Dark canvas tokens.
+ * Theme preference may be "system", but Labs/vd3 stamp a resolved
+ * data-theme=light|dark for styling. Media-query fallbacks cover the brief
+ * window before JS (or legacy builds that cleared data-theme).
+ */
 html[data-theme='light'] .vdl-ai-draw-card,
-:root[data-theme='light'] .vdl-ai-draw-card {
+:root[data-theme='light'] .vdl-ai-draw-card,
+html[data-theme='light'] .vdl-ai-draw-stage,
+:root[data-theme='light'] .vdl-ai-draw-stage {
   --vd-draw-surface: #ffffff;
   --vd-draw-panel: #f8f9fa;
   --vd-draw-border: #e2e8f0;
@@ -154,7 +176,9 @@ html[data-theme='light'] .vdl-ai-draw-card,
 }
 
 html[data-theme='dark'] .vdl-ai-draw-card,
-:root[data-theme='dark'] .vdl-ai-draw-card {
+:root[data-theme='dark'] .vdl-ai-draw-card,
+html[data-theme='dark'] .vdl-ai-draw-stage,
+:root[data-theme='dark'] .vdl-ai-draw-stage {
   --vd-draw-surface: #0f172a;
   --vd-draw-panel: #1e293b;
   --vd-draw-border: #334155;
@@ -162,6 +186,36 @@ html[data-theme='dark'] .vdl-ai-draw-card,
   --vd-draw-muted: #94a3b8;
   --vd-draw-grid: rgba(255, 255, 255, 0.06);
   --vd-draw-accent: #38bdf8;
+}
+
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .vdl-ai-draw-card,
+  :root:not([data-theme]) .vdl-ai-draw-card,
+  html:not([data-theme]) .vdl-ai-draw-stage,
+  :root:not([data-theme]) .vdl-ai-draw-stage {
+    --vd-draw-surface: #ffffff;
+    --vd-draw-panel: #f8f9fa;
+    --vd-draw-border: #e2e8f0;
+    --vd-draw-text: #1e293b;
+    --vd-draw-muted: #64748b;
+    --vd-draw-grid: rgba(0, 0, 0, 0.05);
+    --vd-draw-accent: #0284c7;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .vdl-ai-draw-card,
+  :root:not([data-theme]) .vdl-ai-draw-card,
+  html:not([data-theme]) .vdl-ai-draw-stage,
+  :root:not([data-theme]) .vdl-ai-draw-stage {
+    --vd-draw-surface: #0f172a;
+    --vd-draw-panel: #1e293b;
+    --vd-draw-border: #334155;
+    --vd-draw-text: #f8fafc;
+    --vd-draw-muted: #94a3b8;
+    --vd-draw-grid: rgba(255, 255, 255, 0.06);
+    --vd-draw-accent: #38bdf8;
+  }
 }
 
 /* Main Split Layout: Big Canvas Left, Docked Sidebar Right */
@@ -369,7 +423,10 @@ html[data-theme='dark'] .vdl-ai-draw-card,
   line-height: 1.4;
 }
 
-/* Message bubbles */
+/*
+ * Message bubbles — theme-token only (resolved light|dark via data-theme).
+ * Mix against theme surfaces, not hardcoded #ffffff, so System→dark stays readable.
+ */
 .ts-ai-bubble {
   max-width: 88%;
   padding: 0.65rem 0.9rem;
@@ -377,34 +434,32 @@ html[data-theme='dark'] .vdl-ai-draw-card,
   font-size: 0.875rem;
   line-height: 1.45;
   word-break: break-word;
+  overflow: hidden;
+  background-clip: padding-box;
+  color: var(--text-primary, var(--vd-text-primary, #0f172a));
 }
 
 .ts-ai-bubble.is-user {
   align-self: flex-end;
-  background-color: color-mix(in srgb, var(--color-primary, #0284c7) 12%, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--color-primary, #0284c7) 30%, transparent);
-  color: var(--text-primary, #0f172a);
+  background-color: color-mix(
+    in srgb,
+    var(--color-primary, var(--vd-color-primary, #0284c7)) 16%,
+    var(--bg-secondary, var(--vd-bg-secondary, transparent))
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary, var(--vd-color-primary, #0284c7)) 32%, transparent);
   border-bottom-right-radius: 3px;
-}
-
-html[data-theme='dark'] .ts-ai-bubble.is-user {
-  background-color: color-mix(in srgb, var(--color-primary, #38bdf8) 18%, #0f172a);
-  border-color: color-mix(in srgb, var(--color-primary, #38bdf8) 35%, transparent);
-  color: #f8fafc;
 }
 
 .ts-ai-bubble.is-assistant {
   align-self: flex-start;
-  background-color: var(--bg-secondary, #f8f9fa);
-  border: 1px solid var(--border-color, #e2e8f0);
-  color: var(--text-primary, #0f172a);
+  background-color: var(--bg-secondary, var(--vd-bg-secondary, #f8f9fa));
+  border: 1px solid var(--border-color, var(--vd-border-color, #e2e8f0));
   border-bottom-left-radius: 3px;
 }
 
-html[data-theme='dark'] .ts-ai-bubble.is-assistant {
-  background-color: #1e293b;
-  border-color: #334155;
-  color: #f8fafc;
+.ts-ai-bubble-md {
+  background: transparent;
 }
 
 .ts-ai-bubble-md p {
@@ -416,19 +471,15 @@ html[data-theme='dark'] .ts-ai-bubble.is-assistant {
 }
 
 .ts-ai-bubble-md code {
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: color-mix(in srgb, var(--text-primary, #0f172a) 10%, transparent);
   padding: 0.15rem 0.35rem;
   border-radius: 4px;
   font-family: monospace;
   font-size: 0.82em;
 }
 
-html[data-theme='dark'] .ts-ai-bubble-md code {
-  background-color: rgba(255, 255, 255, 0.12);
-}
-
 .ts-ai-bubble-md pre {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: color-mix(in srgb, var(--text-primary, #0f172a) 8%, transparent);
   padding: 0.6rem;
   border-radius: 6px;
   overflow-x: auto;

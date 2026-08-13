@@ -15,6 +15,8 @@
         DRAW_TOOL_DEFS,
         DRAW_TOOL_MAX_ROUNDS,
         composeDrawSystemExtra,
+        composeDrawPlannerExtra,
+        composeDrawExecuteExtra,
         createDrawToolExecutor,
         runDrawTurn,
       } from '/src/demos/draw-tools.js';
@@ -33,6 +35,7 @@
         webgpu: Boolean(navigator.gpu),
         modelId: null,
         last: null,
+        lastPlan: null,
       };
 
       let editor = null;
@@ -47,9 +50,50 @@
         return editor;
       }
 
+      function applyPhase(phase) {
+        if (!chat) return;
+        if (phase === 'planning') {
+          chat.registerTools([]);
+          chat.setSystemPromptOptions({
+            product: 'AI Draw',
+            extra: composeDrawPlannerExtra({
+              canvasWidth: CANVAS.width,
+              canvasHeight: CANVAS.height,
+              lastPlan: window.__vdlAiDraw.lastPlan,
+            }),
+          });
+          return;
+        }
+        chat.registerTools([...DRAW_TOOL_DEFS]);
+        if (phase === 'drawing') {
+          chat.setSystemPromptOptions({
+            product: 'AI Draw',
+            extra: composeDrawExecuteExtra({
+              editor,
+              canvasWidth: CANVAS.width,
+              canvasHeight: CANVAS.height,
+              selectedTool: 'draw',
+              selectedColor: '#000000',
+            }),
+          });
+          return;
+        }
+        chat.setSystemPromptOptions({
+          product: 'AI Draw',
+          extra: composeDrawSystemExtra({
+            editor,
+            canvasWidth: CANVAS.width,
+            canvasHeight: CANVAS.height,
+            selectedTool: 'draw',
+            selectedColor: '#000000',
+          }),
+        });
+      }
+
       window.__vdlAiDrawLoad = async (modelId = 'gemma-4-E2B-it-web') => {
         window.__vdlAiDraw.status = 'loading';
         window.__vdlAiDraw.modelId = modelId;
+        window.__vdlAiDraw.lastPlan = null;
         if (!navigator.gpu) throw new Error('WebGPU not available in this browser');
 
         ensureEditor();
@@ -96,24 +140,22 @@
           userText,
           execute,
           canvas: CANVAS,
-          onBeforeGenerate: () => {
-            chat.setSystemPromptOptions({
-              product: 'AI Draw',
-              extra: composeDrawSystemExtra({
-                editor,
-                canvasWidth: CANVAS.width,
-                canvasHeight: CANVAS.height,
-                selectedTool: 'draw',
-                selectedColor: '#000000',
-              }),
-            });
+          lastPlan: window.__vdlAiDraw.lastPlan,
+          onPhase: (phase) => {
+            log(`[phase] ${phase}`);
+            applyPhase(phase);
           },
+          generatePlan: (prompt) => chat.generate(prompt),
           generateWithTools: (modelText) =>
             chat.generateWithTools(modelText, {
               execute,
               maxRounds: DRAW_TOOL_MAX_ROUNDS,
             }),
         });
+        if (result.lastPlan) window.__vdlAiDraw.lastPlan = result.lastPlan;
+        else if (result.intent?.wantsClear || result.intent?.clearOnly) {
+          window.__vdlAiDraw.lastPlan = null;
+        }
         const shapes = typeof editor.getShapes === 'function' ? editor.getShapes() : result.shapes;
         const last = {
           userText,
@@ -124,6 +166,9 @@
               result.intent.recipe?.simplified,
           ),
           kind: result.intent.kind,
+          planSource: result.planSource,
+          planSummary: result.planSummary,
+          plan: result.plan,
           reply: result.reply,
           modelReply: result.modelReply,
           toolError: result.toolError,
@@ -138,6 +183,7 @@
 
       window.__vdlAiDrawClear = async () => {
         if (!execute) return { ok: false };
+        window.__vdlAiDraw.lastPlan = null;
         return execute('clear_canvas', {});
       };
 

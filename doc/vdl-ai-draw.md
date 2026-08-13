@@ -16,11 +16,12 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 ### Key Capabilities
 
 1. **Local-First WebGPU Inference**: Runs Gemma 4 E4B / E2B entirely on device without sending canvas data to any external server.
-2. **Context-Aware AI**: Injects a sanitized representation of the current SVG DOM into the LLM system prompt on every turn so the AI "sees" what you draw.
-3. **Structured Tool Calling Protocol**: The AI emits structured XML/JSON function calls which execute directly on the `VdDrawCore` engine.
-4. **Parametric curve recipes**: `add_curve` samples sine / spiral / star / etc. in TypeScript so the model does not invent sparse polylines.
-5. **Code-mode geometry**: `eval_geometry` runs a short sandboxed JS sampler (`Math.sin` loops) and returns points.
-6. **Deterministic Guardrails**: FOSS jailbreak / prompt-injection guardrails plus SVG sanitization.
+2. **Two-step harness (plan → draw)**: Unknown/complex prompts first get a short **planner** turn (JSON `DrawPlan`, no tools). The host validates/compresses and retains `lastPlan`. A second **cleared-context draw** turn receives only numbered tool instructions. Known recipes (flags, math axes, star/heart/smiley, **hexagon grids**) still use a **regex host plan** — one draw call, no planner LLM.
+3. **Context-Aware AI**: Injects a sanitized representation of the current SVG DOM into the LLM system prompt on every turn so the AI "sees" what you draw (execute/fallback phases; planner uses canvas size + lastPlan only).
+4. **Structured Tool Calling Protocol**: The AI emits structured XML/JSON function calls which execute directly on the `VdDrawCore` engine.
+5. **Parametric curve recipes**: `add_curve` samples sine / spiral / star / etc. in TypeScript so the model does not invent sparse polylines.
+6. **Code-mode geometry**: `eval_geometry` runs a short sandboxed JS sampler (`Math.sin` loops) and returns points.
+7. **Deterministic Guardrails**: FOSS jailbreak / prompt-injection guardrails plus SVG sanitization.
 
 ---
 
@@ -58,10 +59,11 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 
 - AI-created multi-point lines set `arrowEnd: false` and `smooth: true` (Catmull-Rom cubics in `pointsToPath`).
 - Sparse polylines while the user asked for a sine/wave get a `too_few_samples` warning so the tool loop can retry with `add_curve`.
-- Unknown `add_shape` types are rejected (no silent rectangle).
-- **Intent normalize** (`normalizeDrawUserIntent`): simple flags / stacked stripes are rewritten into explicit rectangle coordinates _before_ Gemma sees the user text, so the model is not asked to “paint a national flag” and does not refuse ordinary geometry. No second LLM. After the tool loop, `fulfillStackedBandIntent` adds or repositions any missing band (small models often emit one rectangle and claim they drew three).
-- **Per-turn harness** (`runDrawTurn`): fulfill is scoped to the **current** user message only — a previous flag plan is never re-applied on a later turn. If the user asks to clear, `clear_canvas` runs first (and again after the model loop if leftover flag bands remain). A “plot on x/y axes” request (sin/cos/tan + hyperbola/parabola) is fulfilled with axis lines + `add_curve` recipes, same spirit as flag fulfill. Named recipes (five-point star, heart, spiral, smiley/wink/sad) are fulfilled the same way when the model emits nothing or the wrong tools.
-- **Assistant text matches the canvas**: the visible reply is authored from `list_shapes` / `getShapes()` after tools run. A success claim is never shown when the canvas is empty or unchanged — this is global, not only flag/math.
+- Unknown `add_shape` types are rejected (no silent rectangle). `add_shape type=polygon` / `hexagon` is **not** a primitive — `validateDrawPlan` coerces it to `add_curve kind=polygon sides=6` (bounds from points / place) and normalizes `stroke-width` → `strokeWidth`. Planner policy forbids `add_shape type=polygon`.
+- **Hexagon grid recipe**: prompts like `hexagon grid of 9 identical hex cells` (N parsed from the prompt, default 9, cap 12) become a host `DrawPlan` of `add_curve kind=polygon sides=6` cells in a compact **pointy-top** honeycomb (3×3 for nine; odd rows offset by half a cell). `generatePlan` is skipped. If the model emits nothing or the wrong tools, `fulfillHexGridIntent` still draws the grid with distinct bounds (not nine `place=center` stacks).
+- **Intent normalize** (`normalizeDrawUserIntent`): simple flags / stacked stripes become a host `DrawPlan` of explicit rectangles so Gemma is not asked to “paint a national flag”. No planner LLM for those chips. After the tool loop, `fulfillStackedBandIntent` adds or repositions any missing band (small models often emit one rectangle and claim they drew three).
+- **Two-step `runDrawTurn`**: regex-known intents → host plan → draw. Everything else → LLM planner (`generate`, tools cleared) → validate/merge `lastPlan` → cleared-context draw (`generateWithTools` + slim execute policy). Invalid planner JSON retries once, then falls back to a single tool loop on the raw user text. Follow-ups merge into `lastPlan` and replay the full plan. Fulfill stays scoped to the **current** user message only.
+- **Assistant text matches the canvas**: the visible reply is authored from `list_shapes` / `getShapes()` after tools run. A success claim is never shown when the canvas is empty or unchanged — this is global, not only flag/math. Raw DrawPlan JSON (`"steps"` / `"op":`) is never echoed; the harness uses “Nothing was drawn…” or a canvas summary instead. LLM plans may show a short `Plan: …` line above the harness reply.
 - **Stacking**: `place="center"` no longer overwrites an explicit `y`. Repeating the same bbox (the usual “three `place=center` rectangles” mistake) auto-offsets `y` so the last fill cannot cover the others. `place="stack"` appends the next full-width band. `fillColor` / `color` are accepted as fill for solid bands.
 - Recipe / embedding retrieval for large catalogs is deferred — keep CRUD tools always in context; index recipes later with static embeddings when the library exceeds ~30 entries. Do **not** load a second WebGPU LLM beside Gemma.
 
@@ -74,13 +76,15 @@ Open `http://localhost:3000/#demos/aidraw`, load Gemma, then try (or click the e
 1. `paint big fat nice Lithuanian flag (yellow-green-red)` — three stacked filled rectangles (yellow / green / red), **no refusal**.
 2. `draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — axes + sin/cos/tan/hyperbola; a previous flag is cleared.
 3. `draw a five pointed star` — five-point star via `add_curve kind=star`, even if the model emits no tools.
-4. `draw a yellow smiley face` — constructed 😊 (circle + eyes + mouth arc), not a Unicode glyph.
-5. `draw a green heart` — parametric heart recipe.
-6. `ok, three fat big rectangle lines stacked: yellow on top, then green then red` — all three bands visible (not only the last red).
-7. `clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — same math plot after an explicit clear.
-8. Full screen (canvas control or chat header) — big canvas + chat; example chips overlay the **empty** canvas, then sit in the chat **Try** row once shapes exist. **Exit full screen** in the top bar, or Escape.
+4. `pls draw a hexagon grid of 9 identical hex cells` — nine pointy-top hex cells via `add_curve kind=polygon sides=6` (host honeycomb; no planner JSON in chat).
+5. `draw a yellow smiley face` — constructed 😊 (circle + eyes + mouth arc), not a Unicode glyph.
+6. `draw a green heart` — parametric heart recipe.
+7. `ok, three fat big rectangle lines stacked: yellow on top, then green then red` — all three bands visible (not only the last red).
+8. `clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — same math plot after an explicit clear.
+9. Full screen (canvas control or chat header) — big canvas + chat; example chips overlay the **empty** canvas, then sit in the chat **Try** row once shapes exist. **Exit full screen** in the top bar, or Escape.
+10. `draw a small house with a yellow sun` — exercises the **plan → draw** path (not a regex chip). Expect Planning… then Drawing… and at least one shape on the canvas.
 
-Success = stacked flags show every band; a later math prompt does **not** leave the flag on screen; a star/smiley/heart request leaves those shapes on the canvas; assistant text matches the canvas (never “I have drawn…” on an empty board); no “I cannot draw a flag / sine” apology.
+Success = stacked flags show every band; a later math prompt does **not** leave the flag on screen; a star/smiley/heart/hex-grid request leaves those shapes on the canvas; assistant text matches the canvas (never “I have drawn…” or raw DrawPlan JSON on an empty board); no “I cannot draw a flag / sine” apology; unknown scenes go through the two-step harness.
 
 ### Automated tests
 

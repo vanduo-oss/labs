@@ -43,6 +43,7 @@ export default [
         caches: 'readonly',
         self: 'readonly',
         HTMLElement: 'readonly',
+        MutationObserver: 'readonly',
         customElements: 'readonly',
         CSS: 'readonly',
         process: 'readonly',

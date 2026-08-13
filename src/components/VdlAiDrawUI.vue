@@ -4,182 +4,223 @@
     :class="{ 'is-fullscreen-host': isFullscreen }"
     :aria-busy="loading ? 'true' : 'false'"
   >
-    <div
-      ref="stageRef"
-      class="vdl-ai-draw-stage"
-      :class="{ 'is-fullscreen': isFullscreen }"
-      data-testid="ai-draw-stage"
-      :data-shape-count="shapeCount"
-      :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    >
-      <div v-if="isFullscreen" class="ai-draw-fs-bar">
-        <div class="ai-draw-fs-bar-title">
-          <VdIcon name="pencil-simple" size="sm" aria-hidden="true" />
-          <strong>AI Draw</strong>
-          <span class="vd-text-muted vd-text-sm">{{ statusText }}</span>
-        </div>
-        <VdButton
-          variant="primary"
-          size="sm"
-          data-testid="ai-draw-fullscreen-exit"
-          aria-label="Exit full screen"
-          @click="exitFullscreen"
-        >
-          <VdIcon name="arrows-in" aria-hidden="true" />
-          Exit full screen
-        </VdButton>
-      </div>
-
-      <!-- Main Split View: Canvas Left (Big), ts-school Sidebar Right -->
-      <div class="ai-draw-main">
-        <!-- CANVAS PANEL (LEFT) -->
-        <div class="ai-draw-canvas-panel">
-          <div class="ai-draw-canvas-wrap">
-            <VdDraw
-              ref="drawRef"
-              :tool="selectedTool"
-              :show-grid="true"
-              @change="onCanvasChange"
-              @ready="onCanvasReady"
-            />
-            <div v-if="aiDrawing" class="ai-draw-ai-indicator">
-              <VdIcon name="sparkle" size="sm" />
-              <span>AI is drawing…</span>
-            </div>
-            <VdButton
-              v-if="!isFullscreen"
-              class="ai-draw-fs-enter"
-              variant="ghost"
-              size="sm"
-              data-testid="ai-draw-fullscreen-enter"
-              aria-label="Enter full screen"
-              @click="enterFullscreen"
-            >
-              <VdIcon name="arrows-out" aria-hidden="true" />
-              Full screen
-            </VdButton>
-            <div
-              v-if="chipLayout.canvasOverlay"
-              class="ai-draw-canvas-prompt-overlay"
-              data-testid="ai-draw-canvas-prompt-overlay"
-            >
-              <p class="ai-draw-canvas-prompt-kicker">Try a prompt the harness can draw</p>
-              <div class="ai-draw-prompt-chips" role="list">
-                <button
-                  v-for="prompt in examplePrompts"
-                  :key="'overlay-' + prompt.id"
-                  type="button"
-                  class="ai-draw-prompt-chip"
-                  role="listitem"
-                  :disabled="streaming || loading"
-                  :title="prompt.text"
-                  @click="applyExamplePrompt(prompt.text)"
-                >
-                  {{ prompt.label }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- CHAT SIDEBAR (RIGHT - ts-school style) -->
-        <div class="ai-draw-chat-panel" aria-label="AI Draw Assistant">
-          <!-- Titlebar Header -->
-          <header class="ts-ai-sidebar-header">
-            <div class="ts-ai-sidebar-titlebar">
-              <VdIcon name="chat-circle" size="sm" aria-hidden="true" />
-              <div class="ts-ai-sidebar-title">
-                <strong>Ask AI Draw</strong>
-                <span class="vd-text-muted vd-text-sm" aria-hidden="true">·</span>
+    <Teleport to="body" :disabled="!isFullscreen">
+      <div
+        ref="stageRef"
+        class="vdl-ai-draw-stage"
+        :class="{ 'is-fullscreen': isFullscreen }"
+        data-testid="ai-draw-stage"
+        :data-shape-count="shapeCount"
+        :data-fullscreen="isFullscreen ? 'true' : 'false'"
+      >
+        <!-- Main Split View: Canvas Left (Big), ts-school Sidebar Right -->
+        <div class="ai-draw-main">
+          <!-- CANVAS PANEL (LEFT) -->
+          <div class="ai-draw-canvas-panel">
+            <div class="ai-draw-canvas-chrome">
+              <div v-if="isFullscreen" class="ai-draw-canvas-chrome-title">
+                <VdIcon name="pencil-simple" size="sm" aria-hidden="true" />
+                <strong>AI Draw</strong>
                 <span class="vd-text-muted vd-text-sm">{{ statusText }}</span>
               </div>
+              <VdButton
+                v-if="!isFullscreen"
+                class="ai-draw-fs-toggle"
+                variant="ghost"
+                size="sm"
+                data-testid="ai-draw-fullscreen-enter"
+                aria-label="Enter full screen"
+                aria-pressed="false"
+                @click="enterFullscreen"
+              >
+                <VdIcon name="arrows-out" aria-hidden="true" />
+                Full screen
+              </VdButton>
+              <VdButton
+                v-else
+                class="ai-draw-fs-toggle"
+                variant="primary"
+                size="sm"
+                data-testid="ai-draw-fullscreen-exit"
+                aria-label="Exit full screen"
+                aria-pressed="true"
+                @click="exitFullscreen"
+              >
+                <VdIcon name="arrows-in" aria-hidden="true" />
+                Exit full screen
+              </VdButton>
             </div>
-            <VdButton
-              v-if="!isFullscreen"
-              variant="ghost"
-              size="sm"
-              data-testid="ai-draw-fullscreen-enter-header"
-              aria-label="Enter full screen"
-              @click="enterFullscreen"
-            >
-              <VdIcon name="arrows-out" aria-hidden="true" />
-            </VdButton>
-            <VdButton
-              variant="ghost"
-              size="sm"
-              aria-label="Clear chat history"
-              :disabled="streaming || messages.length === 0"
-              @click="clearChat"
-            >
-              <VdIcon name="trash" aria-hidden="true" />
-            </VdButton>
-          </header>
-
-          <!-- Model Selection Bar -->
-          <div class="ts-ai-sidebar-modelbar">
-            <label for="vdl-ai-draw-model">Model</label>
-            <select
-              id="vdl-ai-draw-model"
-              v-model="modelId"
-              class="ts-ai-model-select"
-              :disabled="loading || streaming"
-            >
-              <option v-for="model in gemmaModels" :key="model.id" :value="model.id">
-                {{ model.label }}
-              </option>
-            </select>
-            <VdButton
-              size="sm"
-              class="ts-ai-load-btn"
-              :class="{ 'is-awaiting-load': !loaded && !loading }"
-              :disabled="loading || streaming"
-              :loading="loading"
-              @click="loadModel"
-            >
-              {{ loaded ? 'Reload' : 'Load model' }}
-            </VdButton>
+            <div class="ai-draw-canvas-wrap">
+              <VdDraw
+                ref="drawRef"
+                :tool="selectedTool"
+                :show-grid="true"
+                @change="onCanvasChange"
+                @ready="onCanvasReady"
+              />
+              <div v-if="aiDrawing" class="ai-draw-ai-indicator">
+                <VdIcon name="sparkle" size="sm" />
+                <span>AI is drawing…</span>
+              </div>
+              <div
+                v-if="chipLayout.canvasOverlay"
+                class="ai-draw-canvas-prompt-overlay"
+                data-testid="ai-draw-canvas-prompt-overlay"
+              >
+                <p class="ai-draw-canvas-prompt-kicker">Try a prompt the harness can draw</p>
+                <div class="ai-draw-prompt-chips" role="list">
+                  <button
+                    v-for="prompt in examplePrompts"
+                    :key="'overlay-' + prompt.id"
+                    type="button"
+                    class="ai-draw-prompt-chip"
+                    role="listitem"
+                    :disabled="streaming || loading"
+                    :title="prompt.text"
+                    @click="applyExamplePrompt(prompt.text)"
+                  >
+                    {{ prompt.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Load Progress Bar -->
+          <!-- CHAT SIDEBAR (RIGHT - ts-school style) -->
           <div
-            v-if="loading || progressText"
-            class="ts-ai-load-progress"
-            role="status"
-            aria-live="polite"
+            class="ai-draw-chat-panel"
+            aria-label="AI Draw Assistant"
+            data-testid="ai-draw-chat-panel"
           >
-            <VdProgress :value="progressPct" />
-            <div class="vd-text-sm vd-text-muted">{{ progressText }}</div>
-            <p v-if="freezeHint" class="vd-text-sm vd-text-muted" style="font-style: italic">
-              {{ freezeHint }}
+            <!-- Titlebar Header -->
+            <header class="ts-ai-sidebar-header">
+              <div class="ts-ai-sidebar-titlebar">
+                <VdIcon name="chat-circle" size="sm" aria-hidden="true" />
+                <div class="ts-ai-sidebar-title">
+                  <strong>Ask AI Draw</strong>
+                  <span class="vd-text-muted vd-text-sm" aria-hidden="true">·</span>
+                  <span class="vd-text-muted vd-text-sm">{{ statusText }}</span>
+                </div>
+              </div>
+              <VdButton
+                variant="ghost"
+                size="sm"
+                aria-label="Clear chat history"
+                :disabled="streaming || messages.length === 0"
+                @click="clearChat"
+              >
+                <VdIcon name="trash" aria-hidden="true" />
+              </VdButton>
+            </header>
+
+            <!-- Model Selection Bar -->
+            <div class="ts-ai-sidebar-modelbar">
+              <label for="vdl-ai-draw-model">Model</label>
+              <select
+                id="vdl-ai-draw-model"
+                v-model="modelId"
+                class="ts-ai-model-select"
+                :disabled="loading || streaming"
+              >
+                <option v-for="model in gemmaModels" :key="model.id" :value="model.id">
+                  {{ model.label }}
+                </option>
+              </select>
+              <VdButton
+                size="sm"
+                class="ts-ai-load-btn"
+                :class="{ 'is-awaiting-load': !loaded && !loading }"
+                :disabled="loading || streaming"
+                :loading="loading"
+                @click="loadModel"
+              >
+                {{ loaded ? 'Reload' : 'Load model' }}
+              </VdButton>
+            </div>
+
+            <!-- Load Progress Bar -->
+            <div
+              v-if="loading || progressText"
+              class="ts-ai-load-progress"
+              role="status"
+              aria-live="polite"
+            >
+              <VdProgress :value="progressPct" />
+              <div class="vd-text-sm vd-text-muted">{{ progressText }}</div>
+              <p v-if="freezeHint" class="vd-text-sm vd-text-muted" style="font-style: italic">
+                {{ freezeHint }}
+              </p>
+            </div>
+
+            <!-- Error Banner -->
+            <p
+              v-if="errorText"
+              class="vd-text-sm"
+              style="padding: 0.5rem 1rem; color: var(--vd-color-danger, #b91c1c)"
+            >
+              {{ errorText }}
             </p>
-          </div>
 
-          <!-- Error Banner -->
-          <p
-            v-if="errorText"
-            class="vd-text-sm"
-            style="padding: 0.5rem 1rem; color: var(--vd-color-danger, #b91c1c)"
-          >
-            {{ errorText }}
-          </p>
+            <!-- Messages Feed -->
+            <div ref="messagesEl" class="ts-ai-messages">
+              <div v-if="messages.length === 0" class="ai-draw-empty-state">
+                <VdIcon name="pencil-simple" size="lg" />
+                <p>
+                  Load Gemma 4 locally, then ask your assistant to draw shapes or inspect your
+                  canvas.
+                </p>
+                <p v-if="chipLayout.chatEmptyChips" class="vd-text-sm vd-text-muted">
+                  Try an example the harness can actually draw:
+                </p>
+                <p v-else class="vd-text-sm vd-text-muted">
+                  Example prompts are on the canvas and above the input.
+                </p>
+                <div v-if="chipLayout.chatEmptyChips" class="ai-draw-prompt-chips" role="list">
+                  <button
+                    v-for="prompt in examplePrompts"
+                    :key="prompt.id"
+                    type="button"
+                    class="ai-draw-prompt-chip"
+                    role="listitem"
+                    :disabled="streaming || loading"
+                    :title="prompt.text"
+                    @click="applyExamplePrompt(prompt.text)"
+                  >
+                    {{ prompt.label }}
+                  </button>
+                </div>
+              </div>
+              <div
+                v-for="(msg, index) in messages"
+                :key="index"
+                class="ts-ai-bubble"
+                :class="[
+                  msg.role === 'user' ? 'is-user' : 'is-assistant',
+                  msg.kind === 'policy' ? 'is-policy' : '',
+                ]"
+              >
+                <template v-if="msg.role === 'user'">{{ msg.content }}</template>
+                <VdAlert v-else-if="msg.kind === 'policy'" variant="danger" role="alert">
+                  <VdIcon name="shield-warning" aria-hidden="true" />
+                  <span>{{ msg.content }}</span>
+                </VdAlert>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-else class="ts-ai-bubble-md" v-html="renderMarkdown(msg.content)" />
+              </div>
+            </div>
 
-          <!-- Messages Feed -->
-          <div ref="messagesEl" class="ts-ai-messages">
-            <div v-if="messages.length === 0" class="ai-draw-empty-state">
-              <VdIcon name="pencil-simple" size="lg" />
-              <p>
-                Load Gemma 4 locally, then ask your assistant to draw shapes or inspect your canvas.
-              </p>
-              <p v-if="chipLayout.chatEmptyChips" class="vd-text-sm vd-text-muted">
-                Try an example the harness can actually draw:
-              </p>
-              <p v-else class="vd-text-sm vd-text-muted">
-                Example prompts are on the canvas and above the input.
-              </p>
-              <div v-if="chipLayout.chatEmptyChips" class="ai-draw-prompt-chips" role="list">
+            <!-- Footer Composer -->
+            <footer class="ts-ai-sidebar-footer">
+              <div
+                v-if="chipLayout.chatTryRow"
+                class="ai-draw-prompt-chips ai-draw-prompt-chips--footer"
+                role="list"
+                aria-label="Try an example"
+              >
+                <span class="ai-draw-prompt-chips-label">Try</span>
                 <button
                   v-for="prompt in examplePrompts"
-                  :key="prompt.id"
+                  :key="'footer-' + prompt.id"
                   type="button"
                   class="ai-draw-prompt-chip"
                   role="listitem"
@@ -190,69 +231,28 @@
                   {{ prompt.label }}
                 </button>
               </div>
-            </div>
-            <div
-              v-for="(msg, index) in messages"
-              :key="index"
-              class="ts-ai-bubble"
-              :class="[
-                msg.role === 'user' ? 'is-user' : 'is-assistant',
-                msg.kind === 'policy' ? 'is-policy' : '',
-              ]"
-            >
-              <template v-if="msg.role === 'user'">{{ msg.content }}</template>
-              <VdAlert v-else-if="msg.kind === 'policy'" variant="danger" role="alert">
-                <VdIcon name="shield-warning" aria-hidden="true" />
-                <span>{{ msg.content }}</span>
-              </VdAlert>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-else class="ts-ai-bubble-md" v-html="renderMarkdown(msg.content)" />
-            </div>
+              <div class="ts-ai-composer-row">
+                <textarea
+                  ref="composerEl"
+                  v-model="inputText"
+                  rows="2"
+                  placeholder="Ask the AI to draw something… (Enter to send)"
+                  :disabled="!loaded || loading || streaming"
+                  @keydown="onComposerKey"
+                />
+                <VdButton
+                  variant="primary"
+                  :disabled="!loaded || loading || streaming || !inputText.trim()"
+                  @click="send"
+                >
+                  Send
+                </VdButton>
+              </div>
+            </footer>
           </div>
-
-          <!-- Footer Composer -->
-          <footer class="ts-ai-sidebar-footer">
-            <div
-              v-if="chipLayout.chatTryRow"
-              class="ai-draw-prompt-chips ai-draw-prompt-chips--footer"
-              role="list"
-              aria-label="Try an example"
-            >
-              <span class="ai-draw-prompt-chips-label">Try</span>
-              <button
-                v-for="prompt in examplePrompts"
-                :key="'footer-' + prompt.id"
-                type="button"
-                class="ai-draw-prompt-chip"
-                role="listitem"
-                :disabled="streaming || loading"
-                :title="prompt.text"
-                @click="applyExamplePrompt(prompt.text)"
-              >
-                {{ prompt.label }}
-              </button>
-            </div>
-            <div class="ts-ai-composer-row">
-              <textarea
-                ref="composerEl"
-                v-model="inputText"
-                rows="2"
-                placeholder="Ask the AI to draw something… (Enter to send)"
-                :disabled="!loaded || loading || streaming"
-                @keydown="onComposerKey"
-              />
-              <VdButton
-                variant="primary"
-                :disabled="!loaded || loading || streaming || !inputText.trim()"
-                @click="send"
-              >
-                Send
-              </VdButton>
-            </div>
-          </footer>
         </div>
       </div>
-    </div>
+    </Teleport>
   </VdCard>
 </template>
 
@@ -274,6 +274,8 @@ import {
   DRAW_EXAMPLE_PROMPTS,
   drawPromptChipLayout,
   composeDrawSystemExtra,
+  composeDrawPlannerExtra,
+  composeDrawExecuteExtra,
   createDrawToolExecutor,
   runDrawTurn,
 } from '../demos/draw-tools.js';
@@ -309,6 +311,8 @@ const messagesEl = ref(null);
 const composerEl = ref(null);
 const chatRef = shallowRef(null);
 const aiDrawing = ref(false);
+/** @type {import('vue').Ref<object | null>} */
+const lastDrawPlan = ref(null);
 
 const chipLayout = computed(() =>
   drawPromptChipLayout({
@@ -350,50 +354,28 @@ function onCanvasChange() {
   refreshShapeCount();
 }
 
-let nativeFullscreen = false;
+const APP_FULLSCREEN_CLASS = 'ai-draw-app-fullscreen';
+
+function syncAppFullscreenClass(on) {
+  document.body.classList.toggle(APP_FULLSCREEN_CLASS, on);
+}
 
 async function enterFullscreen() {
   isFullscreen.value = true;
+  syncAppFullscreenClass(true);
   await nextTick();
   pingCanvasResize();
-  const el = stageRef.value;
-  if (!el || typeof el.requestFullscreen !== 'function') return;
-  try {
-    await el.requestFullscreen();
-    nativeFullscreen = document.fullscreenElement === el;
-  } catch {
-    nativeFullscreen = false;
-  }
 }
 
 async function exitFullscreen() {
   isFullscreen.value = false;
-  nativeFullscreen = false;
-  if (document.fullscreenElement) {
-    try {
-      await document.exitFullscreen();
-    } catch {
-      /* ignore */
-    }
-  }
+  syncAppFullscreenClass(false);
   await nextTick();
   pingCanvasResize();
 }
 
-function onFullscreenChange() {
-  const el = stageRef.value;
-  if (document.fullscreenElement === el) {
-    nativeFullscreen = true;
-    isFullscreen.value = true;
-  } else if (nativeFullscreen && !document.fullscreenElement) {
-    nativeFullscreen = false;
-    isFullscreen.value = false;
-  }
-  pingCanvasResize();
-}
-
 function onStageKeydown(event) {
-  if (event.key === 'Escape' && isFullscreen.value && !document.fullscreenElement) {
+  if (event.key === 'Escape' && isFullscreen.value) {
     event.preventDefault();
     exitFullscreen();
   }
@@ -422,6 +404,40 @@ function currentSystemExtra() {
     canvasHeight: 800,
     selectedTool: selectedTool.value,
     selectedColor: '#000000',
+  });
+}
+
+function applyDrawPhasePrompt(instance, phase) {
+  if (!instance) return;
+  if (phase === 'planning') {
+    instance.registerTools([]);
+    instance.setSystemPromptOptions({
+      product: 'AI Draw',
+      extra: composeDrawPlannerExtra({
+        canvasWidth: 1000,
+        canvasHeight: 800,
+        lastPlan: lastDrawPlan.value,
+      }),
+    });
+    return;
+  }
+  instance.registerTools([...DRAW_TOOL_DEFS]);
+  if (phase === 'drawing') {
+    instance.setSystemPromptOptions({
+      product: 'AI Draw',
+      extra: composeDrawExecuteExtra({
+        editor: drawRef.value,
+        canvasWidth: 1000,
+        canvasHeight: 800,
+        selectedTool: selectedTool.value,
+        selectedColor: '#000000',
+      }),
+    });
+    return;
+  }
+  instance.setSystemPromptOptions({
+    product: 'AI Draw',
+    extra: currentSystemExtra(),
   });
 }
 
@@ -523,7 +539,7 @@ async function send() {
 
   inputText.value = '';
   streaming.value = true;
-  statusText.value = 'Generating...';
+  statusText.value = 'Working...';
 
   messages.value.push({ role: 'user', content: text });
   messages.value.push({ role: 'assistant', content: '' });
@@ -554,7 +570,7 @@ async function send() {
   }
 
   try {
-    refreshSystemPrompt(chat);
+    applyDrawPhasePrompt(chat, 'fallback');
 
     const execute = createDrawToolExecutor({
       getEditor: () => drawRef.value,
@@ -568,9 +584,14 @@ async function send() {
       userText: text,
       execute,
       canvas: { width: 1000, height: 800 },
-      onBeforeGenerate: () => {
-        refreshSystemPrompt(chat);
+      lastPlan: lastDrawPlan.value,
+      onPhase: (phase) => {
+        if (phase === 'planning') statusText.value = 'Planning...';
+        else if (phase === 'drawing') statusText.value = 'Drawing...';
+        else statusText.value = 'Generating...';
+        applyDrawPhasePrompt(chat, phase);
       },
+      generatePlan: (prompt) => chat.generate(prompt),
       generateWithTools: (modelText) =>
         chat.generateWithTools(modelText, {
           execute,
@@ -582,7 +603,12 @@ async function send() {
         }),
     });
 
+    if (result.lastPlan) lastDrawPlan.value = result.lastPlan;
+    else if (result.intent?.wantsClear || result.intent?.clearOnly) lastDrawPlan.value = null;
+
     const visible = result.reply || '';
+    const planLine =
+      result.planSummary && result.planSource === 'llm' ? `${result.planSummary}\n\n` : '';
     if (visible === LLM_BLOCK_MESSAGE || visible === LLM_OUTPUT_BLOCK_MESSAGE) {
       messages.value[aiMsgIdx] = {
         role: 'assistant',
@@ -601,7 +627,7 @@ async function send() {
           "I can only help with drawing and canvas-related tasks. Let me know what you'd like to create!",
       };
     } else {
-      messages.value[aiMsgIdx].content = visible;
+      messages.value[aiMsgIdx].content = `${planLine}${visible}`;
     }
   } catch (err) {
     console.error(err);
@@ -618,6 +644,7 @@ async function send() {
     ) {
       aiDrawing.value = false;
       try {
+        applyDrawPhasePrompt(chat, 'fallback');
         await chatRef.value.generate(text, (partial) => {
           messages.value[aiMsgIdx].content = partial;
           scrollToBottom();
@@ -632,6 +659,7 @@ async function send() {
     streaming.value = false;
     aiDrawing.value = false;
     statusText.value = 'Ready';
+    if (chatRef.value) applyDrawPhasePrompt(chatRef.value, 'fallback');
     refreshShapeCount();
     scrollToBottom();
     nextTick(() => {
@@ -642,6 +670,7 @@ async function send() {
 
 function clearChat() {
   messages.value = [];
+  lastDrawPlan.value = null;
   if (chatRef.value && typeof chatRef.value.reset === 'function') {
     chatRef.value.reset();
   }
@@ -659,13 +688,11 @@ function renderMarkdown(content) {
 }
 
 onMounted(() => {
-  document.addEventListener('fullscreenchange', onFullscreenChange);
   window.addEventListener('keydown', onStageKeydown);
   window.addEventListener('resize', onWindowResize);
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('fullscreenchange', onFullscreenChange);
   window.removeEventListener('keydown', onStageKeydown);
   window.removeEventListener('resize', onWindowResize);
   if (isFullscreen.value) {

@@ -29,6 +29,9 @@ declare global {
       modelText: string;
       simplified: boolean;
       kind: string | null;
+      planSource?: string | null;
+      planSummary?: string;
+      plan?: unknown;
       reply: string;
       modelReply?: string;
       toolError?: string | null;
@@ -193,6 +196,54 @@ test.describe('AI Draw local inference (simple requests)', () => {
     if (star.snapshot?.empty) {
       expect(String(star.reply || '')).not.toMatch(/i (have )?drew|have drawn/i);
     }
+  });
+
+  test('hexagon grid of 9 identical hex cells is host-fulfilled (no planner JSON in chat)', async () => {
+    const page = sharedPage;
+    if (!page) throw new Error('inference page not initialized');
+
+    const hex = await page.evaluate(async () => {
+      await window.__vdlAiDrawClear();
+      return window.__vdlAiDrawPrompt('pls draw a hexagon grid of 9 identical hex cells');
+    });
+
+    expect(hex.simplified).toBe(true);
+    expect(hex.kind).toBe('hex-grid');
+    expect(hex.planSource).toBe('host');
+    expect(hex.snapshot?.empty, `empty canvas; reply=${hex.reply}`).toBe(false);
+    const hexPolys = hex.shapes.filter((s) => {
+      const n = Number(s.pointCount || s.points?.length || 0);
+      return (s.type === 'line' || s.type === 'freehand') && n >= 6 && n <= 8;
+    });
+    expect(
+      hexPolys.length,
+      `expected ~9 hex polylines; reply=${hex.reply} shapes=${JSON.stringify(hex.shapes)}`,
+    ).toBeGreaterThanOrEqual(8);
+    expect(String(hex.reply || '')).toMatch(/hexagon grid/i);
+    expect(String(hex.reply || '')).not.toMatch(/"steps"|"op":/);
+  });
+
+  test('two-step harness: unknown scene uses planner then draws something', async () => {
+    const page = sharedPage;
+    if (!page) throw new Error('inference page not initialized');
+    test.setTimeout(10 * 60 * 1000);
+
+    const scene = await page.evaluate(async () => {
+      await window.__vdlAiDrawClear();
+      return window.__vdlAiDrawPrompt('draw a small house with a yellow sun');
+    });
+
+    expect(scene.simplified).toBe(false);
+    expect(
+      scene.planSource === 'llm' || scene.planSource === 'fallback',
+      `expected llm or fallback plan; got ${scene.planSource}; reply=${scene.reply}`,
+    ).toBe(true);
+    expect(
+      scene.snapshot?.empty,
+      `expected non-empty canvas; reply=${scene.reply} toolError=${scene.toolError} plan=${JSON.stringify(scene.plan)}`,
+    ).toBe(false);
+    expect(scene.shapes.length).toBeGreaterThanOrEqual(1);
+    expect(String(scene.reply || '')).not.toMatch(/cannot draw/i);
   });
 });
 

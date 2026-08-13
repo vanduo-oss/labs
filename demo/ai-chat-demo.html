@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Chat (WebGPU Models) — Demo</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script>
+    (function () {
+      try {
+        var pref = localStorage.getItem('vanduo-theme-preference') || 'dark';
+        var resolved =
+          pref === 'light' || pref === 'dark'
+            ? pref
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.style.colorScheme = resolved;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="demo-root"></div>

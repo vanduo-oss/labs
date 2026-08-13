@@ -179,7 +179,7 @@ class TouchTexture {
       x: point.x * this.width,
       y: (1 - point.y) * this.height,
     };
-    let intensity = 1;
+    let intensity;
     if (point.age < this.maxAge * 0.3) {
       intensity = Math.sin((point.age / (this.maxAge * 0.3)) * (Math.PI / 2));
     } else {

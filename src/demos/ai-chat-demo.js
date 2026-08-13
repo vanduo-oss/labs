@@ -2,6 +2,7 @@ import { createApp, h } from 'vue';
 import { VanduoVue, VdCard, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
+import { installResolvedTheme } from '../vdl-resolved-theme.js';
 import VdlAiChatUI from '../components/VdlAiChatUI.vue';
 
 const DemoApp = {
@@ -204,6 +205,8 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+installResolvedTheme({ storagePrefix: 'vanduo-', defaultTheme: 'dark' });
 
 createApp(DemoApp)
   .use(VanduoVue, {

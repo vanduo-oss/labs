@@ -6,6 +6,22 @@
   <meta name="description" content="Vanduo Labs - Experimental components and demos.">
   <title>Vanduo Labs</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script>
+    /* Resolve system→light|dark before CSS so first paint matches preference. */
+    (function () {
+      try {
+        var pref = localStorage.getItem('vdl-theme-preference') || 'system';
+        var resolved =
+          pref === 'light' || pref === 'dark'
+            ? pref
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.style.colorScheme = resolved;
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Dots&display=swap" rel="stylesheet">

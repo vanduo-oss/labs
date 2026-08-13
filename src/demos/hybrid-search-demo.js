@@ -2,6 +2,7 @@ import { createApp, h, ref } from 'vue';
 import { VanduoVue, VdThemeSwitcher } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
 import '../styles/legacy-bridge.css';
+import { installResolvedTheme } from '../vdl-resolved-theme.js';
 import { DEFAULT_DOCS_BASE_URL } from '@vanduo-oss/vdl-hybrid-search';
 import VdlHybridSearchUI from '../components/VdlHybridSearchUI.vue';
 
@@ -132,6 +133,8 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+installResolvedTheme({ storagePrefix: 'vanduo-', defaultTheme: 'dark' });
 
 createApp(DemoApp)
   .use(VanduoVue, {

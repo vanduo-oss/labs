@@ -10,6 +10,25 @@ import {
 } from '@vanduo-oss/vdl-hybrid-search/guardrails/search';
 import Fuse from 'fuse.js';
 
+/**
+ * Transformers.js v4 dropped `quantized`; HybridSearch still passes it.
+ * Map that flag onto `dtype` so semantic search keeps loading MiniLM.
+ */
+async function loadTransformersV4() {
+  const mod = await import('@huggingface/transformers');
+  const originalPipeline = mod.pipeline;
+  if (typeof originalPipeline !== 'function') return mod;
+  const pipeline = (task, model, options = {}) => {
+    const next = { ...options };
+    if (next.dtype == null && typeof next.quantized === 'boolean') {
+      next.dtype = next.quantized ? 'q8' : 'fp32';
+    }
+    delete next.quantized;
+    return originalPipeline(task, model, next);
+  };
+  return { ...mod, pipeline };
+}
+
 const props = defineProps({
   search: { type: Object, default: null },
   indexUrl: { type: String, default: '/data/search-index.json' },
@@ -102,7 +121,7 @@ async function ensureEngine() {
         indexUrl: props.indexUrl,
         vectorsUrl: props.vectorsUrl,
         loadFuse: async () => ({ default: Fuse }),
-        loadTransformers: async () => import('@huggingface/transformers'),
+        loadTransformers: loadTransformersV4,
       });
       sharedEngine = engine;
       sharedEngineKey = key;

@@ -54,3 +54,89 @@ test.describe('vdl theme defaults', () => {
     expect(defaults.THEME).toBe('system');
   });
 });
+
+test.describe('resolved theme (system → light|dark)', () => {
+  test('resolveThemeScheme maps system via prefers-color-scheme', async ({ page }) => {
+    await page.goto('/tests/fixtures/neptune-harness.html');
+
+    const light = await page.evaluate(async () => {
+      const mod = await import('/src/vdl-resolved-theme.js');
+      return mod.resolveThemeScheme('system');
+    });
+    // harness has no forced scheme — either light or dark is fine as long as resolved
+    expect(['light', 'dark']).toContain(light);
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    expect(
+      await page.evaluate(async () => {
+        const mod = await import('/src/vdl-resolved-theme.js');
+        return mod.resolveThemeScheme('system');
+      }),
+    ).toBe('dark');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    expect(
+      await page.evaluate(async () => {
+        const mod = await import('/src/vdl-resolved-theme.js');
+        return mod.resolveThemeScheme('system');
+      }),
+    ).toBe('light');
+
+    expect(
+      await page.evaluate(async () => {
+        const mod = await import('/src/vdl-resolved-theme.js');
+        return {
+          light: mod.resolveThemeScheme('light'),
+          dark: mod.resolveThemeScheme('dark'),
+        };
+      }),
+    ).toEqual({ light: 'light', dark: 'dark' });
+  });
+
+  test('installResolvedTheme keeps data-theme as light|dark when preference is system', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('vdl-theme-preference', 'system');
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const boot = await page.evaluate(() => ({
+      theme: document.documentElement.getAttribute('data-theme'),
+      colorScheme: document.documentElement.style.colorScheme ||
+        document.documentElement.style.getPropertyValue('color-scheme'),
+      pref: localStorage.getItem('vdl-theme-preference'),
+    }));
+    expect(boot.pref).toBe('system');
+    expect(boot.theme).toBe('dark');
+    expect(boot.theme).not.toBe('system');
+    expect(boot.colorScheme).toBe('dark');
+
+    // Simulate legacy vd3 clearing data-theme for system — Labs must restore.
+    await page.evaluate(() => {
+      document.documentElement.removeAttribute('data-theme');
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  });
+
+  test('explicit light/dark preferences stamp matching data-theme', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('vdl-theme-preference', 'light');
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    await page.evaluate(() => {
+      localStorage.setItem('vdl-theme-preference', 'dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.style.setProperty('color-scheme', 'dark');
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+});

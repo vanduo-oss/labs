@@ -78,7 +78,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         main: path.resolve(root, 'index.html'),
         'ai-chat-demo': path.resolve(root, 'demo/ai-chat-demo.html'),
@@ -92,7 +92,7 @@ export default defineConfig({
     port: 3000,
     // Large local `.litertlm` downloads need more than the default keep-alive window.
     headers: {
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   },
   preview: {

@@ -1169,4 +1169,329 @@ test.describe('AI Draw tool executor unit tests', () => {
     expect(res.intents.smiley).toBe('face:smiley');
     expect(res.intents.heart).toBe('heart');
   });
+
+  test('DrawPlan validate/compress/merge and regex host plan skip the LLM planner', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const {
+        validateDrawPlan,
+        compressDrawPlan,
+        mergeDrawPlans,
+        parseDrawPlanFromModelText,
+        intentToDrawPlan,
+        parseDrawTurnIntent,
+        summarizeDrawPlan,
+        formatDrawPlanInstructions,
+        runDrawTurn,
+        createDrawToolExecutor,
+      } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const bad = validateDrawPlan({ title: 'x', steps: [{ op: 'explode', args: {} }] });
+      const good = validateDrawPlan({
+        title: 'house',
+        clear: false,
+        steps: [
+          { op: 'add_shape', args: { type: 'rectangle', x: 10, y: 10, width: 100, height: 80 } },
+          { op: 'add_curve', args: { kind: 'star', place: 'center' } },
+          { op: 'add_shape', args: { type: 'ellipse' } },
+          { op: 'add_shape', args: {} },
+        ],
+      });
+      const fromText = parseDrawPlanFromModelText(
+        'Sure.\n```json\n{"title":"sun","clear":false,"steps":[{"op":"add_shape","args":{"type":"ellipse","x":50,"y":50,"width":80,"height":80,"fill":"#fbbf24"}}]}\n```',
+      );
+      const flagIntent = parseDrawTurnIntent('Lithuanian flag', canvas);
+      const hostPlan = intentToDrawPlan(flagIntent, canvas);
+      const merged = mergeDrawPlans(hostPlan, fromText.plan);
+
+      const phases = [];
+      let plannerCalls = 0;
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+      const flagTurn = await runDrawTurn({
+        userText: 'paint big fat nice Lithuanian flag (yellow-green-red)',
+        execute,
+        canvas,
+        onPhase: (phase) => phases.push(phase),
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return '{"title":"should-not-run","steps":[]}';
+        },
+        generateWithTools: async () => 'ok',
+      });
+      const flagPlannerCalls = plannerCalls;
+
+      const fallbackPhases = [];
+      let drawText = '';
+      const house = await runDrawTurn({
+        userText: 'draw a small house with a sun',
+        execute,
+        canvas,
+        lastPlan: null,
+        onPhase: (phase) => fallbackPhases.push(phase),
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return 'not json at all';
+        },
+        generateWithTools: async (text) => {
+          drawText = text;
+          return 'I tried.';
+        },
+      });
+
+      const planPhases = [];
+      let planDrawText = '';
+      const planned = await runDrawTurn({
+        userText: 'draw a small house with a sun',
+        execute,
+        canvas,
+        onPhase: (phase) => planPhases.push(phase),
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'house with sun',
+            clear: true,
+            steps: [
+              {
+                op: 'add_shape',
+                args: { type: 'rectangle', x: 200, y: 400, width: 300, height: 220, fill: '#c4a574' },
+              },
+              {
+                op: 'add_shape',
+                args: { type: 'ellipse', x: 700, y: 80, width: 100, height: 100, fill: '#fbbf24' },
+              },
+            ],
+          }),
+        generateWithTools: async (text) => {
+          planDrawText = text;
+          return 'done';
+        },
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        badOk: bad.ok,
+        goodOk: good.ok,
+        goodSteps: good.plan.steps.length,
+        fromTextOk: fromText.ok,
+        hostSteps: hostPlan.steps.length,
+        hostSummary: summarizeDrawPlan(hostPlan),
+        mergedSteps: merged.steps.length,
+        compressedTitle: compressDrawPlan(good.plan).title,
+        flagSource: flagTurn.planSource,
+        flagPhases: phases,
+        flagPlannerCalls,
+        houseSource: house.planSource,
+        housePhases: fallbackPhases,
+        houseDrawIsRaw: /small house with a sun/i.test(drawText),
+        plannedSource: planned.planSource,
+        plannedPhases: planPhases,
+        plannedHasInstructions:
+          /add_shape/.test(planDrawText) && /house with sun|ellipse/i.test(planDrawText),
+        plannedSummary: planned.planSummary,
+        formatSample: formatDrawPlanInstructions(hostPlan).includes('add_shape'),
+      };
+    });
+
+    expect(res.badOk).toBe(false);
+    expect(res.goodOk).toBe(true);
+    expect(res.goodSteps).toBe(3);
+    expect(res.fromTextOk).toBe(true);
+    expect(res.hostSteps).toBe(3);
+    expect(res.hostSummary).toMatch(/Plan:/);
+    expect(res.mergedSteps).toBeGreaterThanOrEqual(3);
+    expect(res.compressedTitle).toBe('house');
+    expect(res.flagSource).toBe('host');
+    expect(res.flagPhases).toEqual(['drawing']);
+    expect(res.flagPlannerCalls).toBe(0);
+    expect(res.houseSource).toBe('fallback');
+    expect(res.housePhases).toEqual(['planning', 'fallback']);
+    expect(res.houseDrawIsRaw).toBe(true);
+    expect(res.plannedSource).toBe('llm');
+    expect(res.plannedPhases).toEqual(['planning', 'drawing']);
+    expect(res.plannedHasInstructions).toBe(true);
+    expect(res.plannedSummary).toMatch(/house/i);
+    expect(res.formatSample).toBe(true);
+  });
+
+  test('validateDrawPlan rejects unknown add_shape types and coerces polygon to add_curve', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { validateDrawPlan, looksLikeDrawPlanDump, assistantTextFromCanvas } =
+        await import('/src/demos/draw-tools.js');
+
+      const leaked = {
+        title: 'Hexagon Grid',
+        clear: false,
+        steps: [
+          {
+            op: 'add_shape',
+            args: {
+              type: 'polygon',
+              points: [
+                { x: 50, y: 50 },
+                { x: 80, y: 30 },
+                { x: 110, y: 50 },
+                { x: 110, y: 90 },
+                { x: 80, y: 110 },
+                { x: 50, y: 90 },
+              ],
+              fill: '#333333',
+              stroke: '#000000',
+              'stroke-width': 1,
+            },
+          },
+          {
+            op: 'add_shape',
+            args: { type: 'hexagon', place: 'center', 'stroke-width': 2 },
+          },
+        ],
+      };
+      const coerced = validateDrawPlan(leaked);
+      const bezier = validateDrawPlan({
+        title: 'x',
+        steps: [{ op: 'add_shape', args: { type: 'bezier', x: 0, y: 0 } }],
+      });
+      const dump =
+        '{"title":"Hexagon Grid","clear":false,"steps":[{"op":"add_shape","args":{"type":"polygon","points":[{"x":50,"y":50},...';
+      const emptyReply = assistantTextFromCanvas([], {}, dump);
+      return {
+        coercedOk: coerced.ok,
+        coercedOps: coerced.plan.steps.map((s) => ({
+          op: s.op,
+          kind: s.args.kind,
+          sides: s.args.sides,
+          type: s.args.type,
+          strokeWidth: s.args.strokeWidth,
+          hasBounds: Boolean(s.args.bounds),
+        })),
+        bezierOk: bezier.ok,
+        bezierError: bezier.error,
+        dumpLooksLikePlan: looksLikeDrawPlanDump(dump),
+        emptyReply,
+      };
+    });
+
+    expect(res.coercedOk).toBe(true);
+    expect(res.coercedOps).toHaveLength(2);
+    expect(res.coercedOps.every((s) => s.op === 'add_curve' && s.kind === 'polygon')).toBe(true);
+    expect(res.coercedOps.every((s) => s.type == null)).toBe(true);
+    expect(res.coercedOps[0].sides).toBe(6);
+    expect(res.coercedOps[0].strokeWidth).toBe(1);
+    expect(res.coercedOps[0].hasBounds).toBe(true);
+    expect(res.coercedOps[1].sides).toBe(6);
+    expect(res.bezierOk).toBe(false);
+    expect(res.bezierError).toBe('empty-steps');
+    expect(res.dumpLooksLikePlan).toBe(true);
+    expect(res.emptyReply).not.toMatch(/"steps"|"op":/);
+    expect(res.emptyReply).toMatch(/nothing was drawn|empty/i);
+  });
+
+  test('hexagon grid of 9 identical hex cells is a host plan and fulfills without the LLM planner', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const {
+        parseDrawTurnIntent,
+        intentToDrawPlan,
+        createDrawToolExecutor,
+        runDrawTurn,
+        inspectDrawShapes,
+        layoutHexagonGrid,
+      } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const prompt = 'pls draw a hexagon grid of 9 identical hex cells';
+      const intent = parseDrawTurnIntent(prompt, canvas);
+      const hostPlan = intentToDrawPlan(intent, canvas);
+      const layout = layoutHexagonGrid(9, canvas);
+      const layoutKeys = new Set(layout.map((c) => `${c.x}:${c.y}`));
+
+      const leakedJson =
+        '{"title":"Hexagon Grid","clear":false,"steps":[{"op":"add_shape","args":{"type":"polygon","points":[{"x":50,"y":50},...';
+
+      let plannerCalls = 0;
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+      const turn = await runDrawTurn({
+        userText: prompt,
+        execute,
+        canvas,
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return leakedJson;
+        },
+        generateWithTools: async () => leakedJson,
+      });
+      const snap = inspectDrawShapes(turn.shapes);
+      const hexShapes = (turn.shapes || []).filter(
+        (s) => (s.type === 'line' || s.type === 'freehand') && (s.pointCount || s.points?.length) >= 6,
+      );
+      const centers = hexShapes.map((s) => {
+        const pts = s.points || [];
+        if (pts.length) {
+          const sx = pts.reduce((a, p) => a + Number(p[0]), 0) / pts.length;
+          const sy = pts.reduce((a, p) => a + Number(p[1]), 0) / pts.length;
+          return `${Math.round(sx / 16)}:${Math.round(sy / 16)}`;
+        }
+        return `${Math.round(Number(s.x) / 16)}:${Math.round(Number(s.y) / 16)}`;
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        simplified: intent.recipe.simplified,
+        kind: intent.kind,
+        family: intent.recipe.family,
+        count: intent.recipe.count,
+        planSource: turn.planSource,
+        plannerCalls,
+        hostSteps: hostPlan.steps.length,
+        hostOps: hostPlan.steps.map((s) => ({ op: s.op, kind: s.args.kind, sides: s.args.sides })),
+        layoutCount: layout.length,
+        layoutDistinct: layoutKeys.size,
+        hexCount: snap.hexCount,
+        looksLikeHexGrid: snap.looksLikeHexGrid,
+        distinctCenters: new Set(centers).size,
+        reply: turn.reply,
+        modelReply: turn.modelReply,
+      };
+    });
+
+    expect(res.simplified).toBe(true);
+    expect(res.kind).toBe('hex-grid');
+    expect(res.family).toBe('hex-grid');
+    expect(res.count).toBe(9);
+    expect(res.planSource).toBe('host');
+    expect(res.plannerCalls).toBe(0);
+    expect(res.hostSteps).toBe(9);
+    expect(res.hostOps.every((s) => s.op === 'add_curve' && s.kind === 'polygon' && s.sides === 6)).toBe(
+      true,
+    );
+    expect(res.layoutCount).toBe(9);
+    expect(res.layoutDistinct).toBe(9);
+    expect(res.hexCount).toBeGreaterThanOrEqual(8);
+    expect(res.looksLikeHexGrid).toBe(true);
+    expect(res.distinctCenters).toBeGreaterThanOrEqual(8);
+    expect(res.modelReply).toMatch(/"steps"/);
+    expect(res.reply).not.toMatch(/"steps"|"op":|add_shape/);
+    expect(res.reply).toMatch(/hexagon grid/i);
+  });
 });

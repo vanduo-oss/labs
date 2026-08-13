@@ -398,6 +398,35 @@ export function drawPromptChipLayout({
 /** `add_curve` kinds that assemble a face from ellipse + eyes + mouth arc. */
 export const FACE_CURVE_KINDS = Object.freeze(['smiley', 'wink', 'sad']);
 
+/** Primitive types `add_shape` accepts. Hexagons are `add_curve kind=polygon`. */
+export const ADD_SHAPE_TYPES = Object.freeze(['rectangle', 'ellipse', 'line', 'text', 'freehand']);
+
+const ADD_SHAPE_TYPE_SET = new Set(ADD_SHAPE_TYPES);
+const POLYGON_SHAPE_TYPES = new Set(['polygon', 'hexagon', 'hex']);
+
+/** Default / cap for host hex-grid recipes (must fit in DRAW_PLAN_MAX_STEPS). */
+export const HEX_GRID_DEFAULT_CELLS = 9;
+export const HEX_GRID_MAX_CELLS = 12;
+export const HEX_GRID_STROKE = '#38bdf8';
+
+const HEX_WORD_RE = /\bhex(agon(al)?)?s?\b/i;
+const HEX_GRID_HINT_RE = /\b(grid|honeycomb|cells?|tiles?|lattice)\b/i;
+const HEX_PLURAL_RE = /\bhex(agon(al)?)?s\b/i;
+const HEX_COUNT_DIGIT_RE = /\b(\d{1,2})\b/;
+const HEX_NUMBER_WORDS = Object.freeze({
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+});
+
 const STAR_RE =
   /\b((five|5)[\s-]*point(ed)?\s+stars?|(draw|paint|add|make|sketch)\b[\s\S]{0,48}\bstars?)\b|\b(a|the)\s+(five|5)[\s-]*point(ed)?\s+stars?\b/i;
 const HEART_RE =
@@ -521,6 +550,7 @@ const emptyRecipe = () => ({
   stroke: null,
   fill: null,
   sides: null,
+  count: null,
 });
 
 /**
@@ -679,6 +709,150 @@ export function faceGlyphPlan(variant, canvas = FALLBACK_CANVAS, fill = '#ffd000
 }
 
 /**
+ * Parse how many hex cells the user asked for. Defaults to 9; capped at 12.
+ *
+ * @param {string} text
+ * @returns {number}
+ */
+export function parseHexGridCount(text) {
+  const source = String(text || '');
+  const digit = source.match(HEX_COUNT_DIGIT_RE);
+  if (digit) {
+    const n = Number(digit[1]);
+    if (Number.isFinite(n) && n >= 2) {
+      return Math.max(2, Math.min(HEX_GRID_MAX_CELLS, Math.round(n)));
+    }
+  }
+  for (const [word, n] of Object.entries(HEX_NUMBER_WORDS)) {
+    if (new RegExp(`\\b${word}\\b`, 'i').test(source)) {
+      return Math.max(2, Math.min(HEX_GRID_MAX_CELLS, n));
+    }
+  }
+  return HEX_GRID_DEFAULT_CELLS;
+}
+
+/**
+ * Detect "hexagon grid of N identical hex cells" (and close phrasings).
+ *
+ * @param {string} text
+ * @returns {{ simplified: boolean, count: number, kind: string | null, id: string | null }}
+ */
+export function parseHexGridIntent(text) {
+  const source = String(text || '').trim();
+  const empty = { simplified: false, count: 0, kind: null, id: null };
+  if (!source || !HEX_WORD_RE.test(source)) return empty;
+  const hinted = HEX_GRID_HINT_RE.test(source);
+  const numberedPlural = HEX_PLURAL_RE.test(source) && HEX_COUNT_DIGIT_RE.test(source);
+  if (!hinted && !numberedPlural) return empty;
+  return {
+    simplified: true,
+    count: parseHexGridCount(source),
+    kind: 'hex-grid',
+    id: 'hex-grid',
+  };
+}
+
+/**
+ * Compact **pointy-top** honeycomb. Odd rows offset by half a cell so hexes
+ * nest (3×3 for the default 9). Each entry is a square circumdiameter bounds
+ * for `add_curve kind=polygon sides=6` — never `place=center` for every cell.
+ *
+ * @param {number} count
+ * @param {{ width?: number, height?: number }} [canvas]
+ * @returns {Array<{ x: number, y: number, w: number, h: number }>}
+ */
+export function layoutHexagonGrid(count, canvas = FALLBACK_CANVAS) {
+  const n = Math.max(
+    1,
+    Math.min(HEX_GRID_MAX_CELLS, Math.round(Number(count) || HEX_GRID_DEFAULT_CELLS)),
+  );
+  const width = canvas.width ?? FALLBACK_CANVAS.width;
+  const height = canvas.height ?? FALLBACK_CANVAS.height;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const margin = Math.round(Math.min(width, height) * 0.08);
+  const availW = Math.max(80, width - margin * 2);
+  const availH = Math.max(80, height - margin * 2);
+  const gap = 1.08;
+  const offsetRows = rows > 1;
+  const hexWidthOverS = Math.sqrt(3) / 2;
+  const horizOverS = hexWidthOverS * gap;
+  const vertOverS = 0.75 * gap;
+  const wFactor = (cols - 1) * horizOverS + (offsetRows ? horizOverS / 2 : 0) + 1;
+  const hFactor = (rows - 1) * vertOverS + 1;
+  const size = Math.max(24, Math.min(availW / wFactor, availH / hFactor));
+  const horizSpacing = size * horizOverS;
+  const vertSpacing = size * vertOverS;
+  const totalW = (cols - 1) * horizSpacing + (offsetRows ? horizSpacing / 2 : 0) + size;
+  const totalH = (rows - 1) * vertSpacing + size;
+  const originX = (width - totalW) / 2;
+  const originY = (height - totalH) / 2;
+  /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
+  const cells = [];
+  let placed = 0;
+  for (let row = 0; row < rows && placed < n; row += 1) {
+    const dx = (row % 2) * (horizSpacing / 2);
+    for (let col = 0; col < cols && placed < n; col += 1) {
+      cells.push({
+        x: Math.round(originX + col * horizSpacing + dx),
+        y: Math.round(originY + row * vertSpacing),
+        w: Math.round(size),
+        h: Math.round(size),
+      });
+      placed += 1;
+    }
+  }
+  return cells;
+}
+
+/**
+ * Closed 6-sided polyline from `add_curve kind=polygon sides=6` (6–8 points).
+ *
+ * @param {unknown} shape
+ * @returns {boolean}
+ */
+export function isHexPolygonShape(shape) {
+  if (!shape || (shape.type !== 'line' && shape.type !== 'freehand')) return false;
+  const pts = Array.isArray(shape.points) ? shape.points : [];
+  const n = Number(shape.pointCount ?? pts.length ?? 0);
+  if (n < 6 || n > 8) return false;
+  if (pts.length >= 6) {
+    const coord = (p, i) => Number(Array.isArray(p) ? p[i] : p?.[i === 0 ? 'x' : 'y']);
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    if (!a || !b) return n === 6;
+    const dx = coord(a, 0) - coord(b, 0);
+    const dy = coord(a, 1) - coord(b, 1);
+    return (Number.isFinite(dx) && Number.isFinite(dy) && Math.hypot(dx, dy) < 12) || n === 6;
+  }
+  return true;
+}
+
+function hexCellKey(shape) {
+  const pts = Array.isArray(shape?.points) ? shape.points : [];
+  if (pts.length >= 3) {
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (const p of pts) {
+      const x = Number(Array.isArray(p) ? p[0] : p?.x);
+      const y = Number(Array.isArray(p) ? p[1] : p?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      sx += x;
+      sy += y;
+      n += 1;
+    }
+    if (n) return `${Math.round(sx / n / 12)}:${Math.round(sy / n / 12)}`;
+  }
+  const x = Number(shape?.x);
+  const y = Number(shape?.y);
+  if (Number.isFinite(x) && Number.isFinite(y)) {
+    return `${Math.round(x / 12)}:${Math.round(y / 12)}`;
+  }
+  return 'unknown';
+}
+
+/**
  * Named recipes the harness can complete even if Gemma emits zero tools.
  *
  * @param {string} text
@@ -689,6 +863,21 @@ export function parseNamedDrawIntent(text, _canvas = FALLBACK_CANVAS) {
   if (!source) return emptyRecipe();
   const colors = extractStripeColors(source);
   const color = colors[0];
+
+  const hexGrid = parseHexGridIntent(source);
+  if (hexGrid.simplified) {
+    return {
+      simplified: true,
+      id: 'hex-grid',
+      kind: 'hex-grid',
+      family: 'hex-grid',
+      variant: 'pointy-top',
+      stroke: color || HEX_GRID_STROKE,
+      fill: null,
+      sides: 6,
+      count: hexGrid.count,
+    };
+  }
 
   if (WINK_RE.test(source)) {
     return {
@@ -770,6 +959,23 @@ export function parseNamedDrawIntent(text, _canvas = FALLBACK_CANVAS) {
  * @param {{ width?: number, height?: number }} [canvas]
  */
 export function formatNamedDrawInstructions(plan, canvas = FALLBACK_CANVAS) {
+  if (plan?.family === 'hex-grid') {
+    const cells = layoutHexagonGrid(plan.count || HEX_GRID_DEFAULT_CELLS, canvas);
+    const stroke = plan.stroke || HEX_GRID_STROKE;
+    const lines = [
+      'Use tools now. Do not only describe. Draw a pointy-top hexagon honeycomb.',
+      'Each cell is add_curve kind=polygon sides=6 with a DISTINCT bounds box. Never add_shape type=polygon. Never reuse place=center for every cell.',
+    ];
+    cells.forEach((c, i) => {
+      lines.push(
+        `${i + 1}) add_curve kind=polygon sides=6 bounds={x:${c.x},y:${c.y},w:${c.w},h:${c.h}} stroke=${stroke} strokeWidth=2`,
+      );
+    });
+    lines.push(
+      'After the tools run, reply with one short sentence naming only what is actually on the canvas.',
+    );
+    return lines.join('\n');
+  }
   const bounds = squareDrawBounds(canvas);
   const b = `bounds={x:${bounds.x},y:${bounds.y},w:${bounds.w},h:${bounds.h}}`;
   if (plan?.family === 'face') {
@@ -792,9 +998,41 @@ export function formatNamedDrawInstructions(plan, canvas = FALLBACK_CANVAS) {
  * @param {ReturnType<typeof parseNamedDrawIntent>} plan
  * @param {{ width?: number, height?: number }} [canvas]
  */
+export async function fulfillHexGridIntent(execute, plan, canvas = FALLBACK_CANVAS) {
+  if (typeof execute !== 'function') return { ok: false, added: 0 };
+  const count = plan?.count || HEX_GRID_DEFAULT_CELLS;
+  const cells = layoutHexagonGrid(count, canvas);
+  const list = await execute('list_shapes', {});
+  const snap = inspectDrawShapes(list);
+  if (snap.looksLikeHexGrid && snap.hexCount >= cells.length - 1) {
+    return { ok: true, added: 0 };
+  }
+  const stroke = plan?.stroke || HEX_GRID_STROKE;
+  let added = 0;
+  for (const cell of cells) {
+    const res = await execute('add_curve', {
+      kind: 'polygon',
+      sides: 6,
+      bounds: { x: cell.x, y: cell.y, w: cell.w, h: cell.h },
+      stroke,
+      strokeWidth: 2,
+    });
+    if (res && res.ok !== false && !res.error) added += 1;
+  }
+  return { ok: true, added };
+}
+
+/**
+ * @param {(name: string, args: Record<string, unknown>) => unknown | Promise<unknown>} execute
+ * @param {ReturnType<typeof parseNamedDrawIntent>} plan
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
 export async function fulfillNamedDrawIntent(execute, plan, canvas = FALLBACK_CANVAS) {
   if (typeof execute !== 'function' || !plan?.simplified) {
     return { ok: false, added: 0 };
+  }
+  if (plan.family === 'hex-grid') {
+    return fulfillHexGridIntent(execute, plan, canvas);
   }
   if (plan.family === 'face') {
     const ops = faceGlyphPlan(plan.variant, canvas, plan.fill);
@@ -828,6 +1066,22 @@ export function looksLikeDrawSuccessClaim(text) {
   if (!t.trim()) return false;
   if (SUCCESS_CLAIM_NEG_RE.test(t)) return false;
   return SUCCESS_CLAIM_RE.test(t) || /\bdrawn a\b/i.test(t);
+}
+
+/**
+ * True when assistant text is a raw DrawPlan JSON dump (never show in chat).
+ *
+ * @param {string} text
+ */
+export function looksLikeDrawPlanDump(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  const hasSteps = /"steps"\s*:/.test(t);
+  const hasOp = /"op"\s*:/.test(t);
+  if (hasSteps && hasOp) return true;
+  if (/```(?:json)?/i.test(t) && (hasSteps || hasOp)) return true;
+  if (/^\s*[{[]/.test(t) && hasOp && /add_shape|add_curve|clear_canvas/.test(t)) return true;
+  return false;
 }
 
 /**
@@ -897,10 +1151,17 @@ export function inspectDrawShapes(shapes) {
   let hasAxisX = false;
   let hasAxisY = false;
   let curveCount = 0;
+  let hexCount = 0;
+  const hexKeys = new Set();
   let looksLikeStar = false;
   let looksLikeHeart = false;
   for (const s of list) {
     if (s?.type !== 'line' && s?.type !== 'freehand') continue;
+    if (isHexPolygonShape(s)) {
+      hexCount += 1;
+      hexKeys.add(hexCellKey(s));
+      continue;
+    }
     const { n, x1, y1, x2, y2 } = lineEndpoints(s);
     const pts = Array.isArray(s?.points) ? s.points : [];
     const tips = starTipCount(pts);
@@ -929,6 +1190,8 @@ export function inspectDrawShapes(shapes) {
     looksLikeStar,
     looksLikeHeart,
     looksLikeFace,
+    hexCount,
+    looksLikeHexGrid: hexCount >= 2 && hexKeys.size >= Math.max(2, hexCount - 1),
     ellipseCount: ellipses.length,
     hasAxes: hasAxisX && hasAxisY,
     hasAxisX,
@@ -946,6 +1209,9 @@ function joinAnd(bits) {
 
 function describeShapesBrief(snap) {
   if (!snap || snap.empty) return 'The canvas is empty.';
+  if (snap.looksLikeHexGrid) {
+    return `Canvas has a hexagon grid of ${snap.hexCount} cells.`;
+  }
   const bits = [];
   if (snap.hasAxes) bits.push('x and y axes');
   if (snap.curveCount > 0) {
@@ -996,6 +1262,8 @@ export function assistantClaimConflictsWithCanvas(modelReply, snap) {
 export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', turn = {}) {
   const snap = inspectDrawShapes(shapes);
   const claimed = String(modelReply || '').trim();
+  const jsonDump = looksLikeDrawPlanDump(claimed);
+  const usableClaim = jsonDump ? '' : claimed;
   const askedToDraw = Boolean(
     intent.math?.simplified || intent.stacked?.simplified || intent.recipe?.simplified,
   );
@@ -1003,17 +1271,18 @@ export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', tu
   const unchanged = addedCount === 0;
 
   if (snap.empty) {
-    if (intent.wantsClear && !askedToDraw) {
+    if (intent.wantsClear && !askedToDraw && !jsonDump) {
       return 'The canvas is cleared.';
     }
     if (
       askedToDraw ||
+      jsonDump ||
       looksLikeDrawSuccessClaim(claimed) ||
       assistantClaimConflictsWithCanvas(claimed, snap)
     ) {
       return 'Nothing was drawn on the canvas.';
     }
-    return claimed || 'The canvas is empty.';
+    return usableClaim || 'The canvas is empty.';
   }
 
   if (unchanged && looksLikeDrawSuccessClaim(claimed)) {
@@ -1043,6 +1312,9 @@ export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', tu
   }
 
   if (intent.recipe?.simplified) {
+    if (intent.recipe.family === 'hex-grid' && (snap.looksLikeHexGrid || snap.count >= 8)) {
+      return `Drew a hexagon grid of ${snap.hexCount || snap.count} cells.`;
+    }
     if (intent.recipe.id === 'star' && snap.looksLikeStar) return 'Drew a five-pointed star.';
     if (intent.recipe.family === 'face' && snap.looksLikeFace) {
       if (intent.recipe.variant === 'wink') return 'Drew a winking face.';
@@ -1056,11 +1328,12 @@ export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', tu
     return describeShapesBrief(snap);
   }
 
-  if (assistantClaimConflictsWithCanvas(claimed, snap)) return describeShapesBrief(snap);
+  if (assistantClaimConflictsWithCanvas(claimed, snap) || jsonDump)
+    return describeShapesBrief(snap);
   if (intent.wantsClear && snap.looksLikeFlag && !intent.stacked?.simplified) {
     return 'The previous stacked bands are still on the canvas; the canvas was not cleared.';
   }
-  return claimed || describeShapesBrief(snap);
+  return usableClaim || describeShapesBrief(snap);
 }
 
 /**
@@ -1143,22 +1416,537 @@ export async function fulfillMathPlotIntent(execute, plan, canvas = FALLBACK_CAN
   return { ok: true, added };
 }
 
+/** Allowed DrawPlan ops — must match DRAW_TOOL_DEFS names the host can execute. */
+export const DRAW_PLAN_OPS = Object.freeze([
+  'add_shape',
+  'add_curve',
+  'eval_geometry',
+  'clear_canvas',
+  'update_shape',
+  'remove_shape',
+]);
+
+export const DRAW_PLAN_MAX_STEPS = 12;
+
+const DRAW_PLAN_OP_SET = new Set(DRAW_PLAN_OPS);
+
 /**
- * One user turn: current-message intent only. Clear wins. Fulfill is not sticky.
+ * @param {string} [title]
+ * @returns {{ title: string, clear: boolean, steps: Array<{ op: string, args: Record<string, unknown> }> }}
+ */
+export function emptyDrawPlan(title = '') {
+  return { title: String(title || '').trim(), clear: false, steps: [] };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Record<string, unknown>}
+ */
+function asPlainArgs(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return /** @type {Record<string, unknown>} */ ({ ...value });
+}
+
+/**
+ * @param {unknown} points
+ * @returns {{ x: number, y: number, w: number, h: number } | null}
+ */
+function boundsFromPlanPoints(points) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    let x;
+    let y;
+    if (Array.isArray(p)) {
+      x = Number(p[0]);
+      y = Number(p[1]);
+    } else if (p && typeof p === 'object') {
+      x = Number(/** @type {{ x?: unknown }} */ (p).x);
+      y = Number(/** @type {{ y?: unknown }} */ (p).y);
+    } else {
+      continue;
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  if (!Number.isFinite(minX) || maxX - minX < 1 || maxY - minY < 1) return null;
+  return {
+    x: minX,
+    y: minY,
+    w: Math.max(8, maxX - minX),
+    h: Math.max(8, maxY - minY),
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} args
+ * @returns {Record<string, unknown>}
+ */
+function normalizeDrawPlanArgs(args) {
+  const out = asPlainArgs(args);
+  if (out['stroke-width'] != null && out.strokeWidth == null) {
+    const n = Number(out['stroke-width']);
+    if (Number.isFinite(n)) out.strokeWidth = n;
+  }
+  delete out['stroke-width'];
+  if (out.fillColor == null && out['fill-color'] != null) {
+    out.fillColor = out['fill-color'];
+    delete out['fill-color'];
+  }
+  return out;
+}
+
+/**
+ * Coerce planner mistakes (`add_shape type=polygon`) into executable steps.
+ *
+ * @param {string} op
+ * @param {Record<string, unknown>} args
+ * @returns {{ op: string, args: Record<string, unknown> } | null}
+ */
+function coerceDrawPlanStep(op, args) {
+  const normalized = normalizeDrawPlanArgs(args);
+  if (op === 'clear_canvas') return { op, args: {} };
+  if (op === 'add_shape') {
+    const type = String(normalized.type || '')
+      .trim()
+      .toLowerCase();
+    if (!type) return null;
+    if (POLYGON_SHAPE_TYPES.has(type)) {
+      const sidesRaw = Number(normalized.sides);
+      const sides =
+        type === 'hexagon' || type === 'hex'
+          ? 6
+          : Number.isFinite(sidesRaw) && sidesRaw >= 3
+            ? Math.round(sidesRaw)
+            : 6;
+      /** @type {Record<string, unknown>} */
+      const curveArgs = { kind: 'polygon', sides };
+      if (normalized.stroke) curveArgs.stroke = normalized.stroke;
+      if (normalized.fill) curveArgs.fill = normalized.fill;
+      if (normalized.strokeWidth != null) curveArgs.strokeWidth = normalized.strokeWidth;
+      const fromPts = boundsFromPlanPoints(normalized.points);
+      if (normalized.bounds && typeof normalized.bounds === 'object') {
+        curveArgs.bounds = normalized.bounds;
+      } else if (
+        Number.isFinite(Number(normalized.x)) &&
+        Number.isFinite(Number(normalized.y)) &&
+        (normalized.width != null ||
+          normalized.w != null ||
+          normalized.height != null ||
+          normalized.h != null)
+      ) {
+        const w = Number(normalized.width ?? normalized.w ?? normalized.height ?? normalized.h);
+        const h = Number(normalized.height ?? normalized.h ?? normalized.width ?? normalized.w);
+        curveArgs.bounds = {
+          x: Number(normalized.x),
+          y: Number(normalized.y),
+          w: Number.isFinite(w) && w > 0 ? w : 80,
+          h: Number.isFinite(h) && h > 0 ? h : 80,
+        };
+      } else if (fromPts) {
+        curveArgs.bounds = fromPts;
+      } else {
+        curveArgs.place = normalized.place || 'center';
+      }
+      return { op: 'add_curve', args: curveArgs };
+    }
+    if (!ADD_SHAPE_TYPE_SET.has(type)) return null;
+    return { op, args: { ...normalized, type } };
+  }
+  if (op === 'add_curve') {
+    if (!(normalized.kind || normalized.recipe)) return null;
+    return { op, args: normalized };
+  }
+  if (op === 'eval_geometry') {
+    if (typeof normalized.code !== 'string') return null;
+    return { op, args: normalized };
+  }
+  if (op === 'update_shape' || op === 'remove_shape') {
+    if (!normalized.shapeId) return null;
+    return { op, args: normalized };
+  }
+  return { op, args: normalized };
+}
+
+/**
+ * Validate and normalize a model/host DrawPlan. Drops invalid steps.
+ * Coerces `add_shape type=polygon|hexagon` → `add_curve kind=polygon`.
+ *
+ * @param {unknown} raw
+ * @returns {{ ok: boolean, plan: ReturnType<typeof emptyDrawPlan>, error?: string }}
+ */
+export function validateDrawPlan(raw) {
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return { ok: false, plan: emptyDrawPlan(), error: 'not-json' };
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return { ok: false, plan: emptyDrawPlan(), error: 'not-object' };
+  }
+  const source = /** @type {Record<string, unknown>} */ (obj);
+  const title = String(source.title || '')
+    .trim()
+    .slice(0, 120);
+  const clear = Boolean(source.clear);
+  const rawSteps = Array.isArray(source.steps) ? source.steps : [];
+  /** @type {Array<{ op: string, args: Record<string, unknown> }>} */
+  const steps = [];
+  for (const step of rawSteps) {
+    if (!step || typeof step !== 'object') continue;
+    const op = String(/** @type {Record<string, unknown>} */ (step).op || '').trim();
+    if (!DRAW_PLAN_OP_SET.has(op)) continue;
+    const args = asPlainArgs(/** @type {Record<string, unknown>} */ (step).args);
+    const coerced = coerceDrawPlanStep(op, args);
+    if (!coerced) continue;
+    steps.push(coerced);
+    if (steps.length >= DRAW_PLAN_MAX_STEPS) break;
+  }
+  if (!clear && steps.length === 0) {
+    return { ok: false, plan: emptyDrawPlan(title), error: 'empty-steps' };
+  }
+  return { ok: true, plan: { title, clear, steps } };
+}
+
+/**
+ * Drop nullish fields and clamp step count for host retention / planner context.
+ *
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} plan
+ */
+export function compressDrawPlan(plan) {
+  if (!plan || typeof plan !== 'object') return emptyDrawPlan();
+  const validated = validateDrawPlan(plan);
+  if (!validated.ok) return emptyDrawPlan(plan.title);
+  return {
+    title: validated.plan.title,
+    clear: validated.plan.clear,
+    steps: validated.plan.steps.map((step) => ({
+      op: step.op,
+      args: JSON.parse(JSON.stringify(step.args)),
+    })),
+  };
+}
+
+/**
+ * Short human summary for the chat UI (not raw JSON).
+ *
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} plan
+ */
+export function summarizeDrawPlan(plan) {
+  const p = compressDrawPlan(plan);
+  if (!p.steps.length && !p.clear) return '';
+  const bits = [];
+  if (p.clear) bits.push('clear canvas');
+  let shapes = 0;
+  let curves = 0;
+  let other = 0;
+  for (const step of p.steps) {
+    if (step.op === 'add_shape') shapes += 1;
+    else if (step.op === 'add_curve') curves += 1;
+    else if (step.op !== 'clear_canvas') other += 1;
+  }
+  if (shapes) bits.push(`${shapes} shape${shapes === 1 ? '' : 's'}`);
+  if (curves) bits.push(`${curves} curve${curves === 1 ? '' : 's'}`);
+  if (other) bits.push(`${other} other step${other === 1 ? '' : 's'}`);
+  const body = bits.join(', ') || 'draw steps';
+  return p.title ? `Plan: ${p.title} (${body})` : `Plan: ${body}`;
+}
+
+/**
+ * Numbered execute instructions for the cleared-context draw pass.
+ *
+ * @param {ReturnType<typeof emptyDrawPlan>} plan
+ */
+export function formatDrawPlanInstructions(plan) {
+  const p = compressDrawPlan(plan);
+  const lines = [];
+  lines.push(
+    'Execute this drawing plan now with tools. Emit every tool call needed in as few turns as possible.',
+  );
+  lines.push(
+    'Do not refuse. Do not invent a new plan. Prefer exact args below. After tools run, reply with one short sentence.',
+  );
+  if (p.clear) lines.push('0) clear_canvas');
+  p.steps.forEach((step, i) => {
+    const n = i + 1;
+    if (step.op === 'clear_canvas') {
+      lines.push(`${n}) clear_canvas`);
+      return;
+    }
+    lines.push(`${n}) ${step.op} ${JSON.stringify(step.args)}`);
+  });
+  return lines.join('\n');
+}
+
+/**
+ * Extract a DrawPlan JSON object from free-form model text.
+ *
+ * @param {string} text
+ * @returns {{ ok: boolean, plan: ReturnType<typeof emptyDrawPlan>, error?: string }}
+ */
+export function parseDrawPlanFromModelText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { ok: false, plan: emptyDrawPlan(), error: 'empty' };
+
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fence ? fence[1].trim() : raw;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start < 0 || end <= start) {
+    return { ok: false, plan: emptyDrawPlan(), error: 'no-json-object' };
+  }
+  try {
+    return validateDrawPlan(JSON.parse(candidate.slice(start, end + 1)));
+  } catch {
+    return { ok: false, plan: emptyDrawPlan(), error: 'parse-failed' };
+  }
+}
+
+/**
+ * Convert a regex-simplified intent into a host DrawPlan (zero LLM planner).
+ *
+ * @param {ReturnType<typeof parseDrawTurnIntent>} intent
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export function intentToDrawPlan(intent, canvas = FALLBACK_CANVAS) {
+  const width = canvas.width ?? FALLBACK_CANVAS.width;
+  const height = canvas.height ?? FALLBACK_CANVAS.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const margin = 48;
+  const bounds = { x: margin, y: margin, w: width - margin * 2, h: height - margin * 2 };
+
+  if (intent?.stacked?.simplified && intent.stacked.bands?.length) {
+    return compressDrawPlan({
+      title: intent.kind || 'stacked bands',
+      clear: Boolean(intent.wantsClear),
+      steps: intent.stacked.bands.map((b) => ({
+        op: 'add_shape',
+        args: {
+          type: 'rectangle',
+          x: b.x,
+          y: b.y,
+          width: b.width,
+          height: b.height,
+          fill: b.fill,
+        },
+      })),
+    });
+  }
+
+  if (intent?.math?.simplified) {
+    /** @type {Array<{ op: string, args: Record<string, unknown> }>} */
+    const steps = [];
+    if (intent.math.wantsAxes !== false) {
+      steps.push({
+        op: 'add_shape',
+        args: {
+          type: 'line',
+          x: margin,
+          y: cy,
+          x2: width - margin,
+          y2: cy,
+          stroke: MATH_PLOT_STROKES.axis,
+          strokeWidth: 2,
+          arrowEnd: true,
+        },
+      });
+      steps.push({
+        op: 'add_shape',
+        args: {
+          type: 'line',
+          x: cx,
+          y: height - margin,
+          x2: cx,
+          y2: margin,
+          stroke: MATH_PLOT_STROKES.axis,
+          strokeWidth: 2,
+          arrowEnd: true,
+        },
+      });
+    }
+    for (const kind of intent.math.plots || []) {
+      const stroke = MATH_PLOT_STROKES[kind] || MATH_PLOT_STROKES.sine;
+      steps.push({
+        op: 'add_curve',
+        args: {
+          kind,
+          bounds,
+          samples: 64,
+          stroke,
+          cycles: kind === 'tangent' ? 1 : 2,
+        },
+      });
+      if (kind === 'hyperbola') {
+        steps.push({
+          op: 'add_curve',
+          args: {
+            kind,
+            bounds,
+            samples: 64,
+            stroke,
+            phase: Math.PI,
+            cycles: 2,
+          },
+        });
+      }
+    }
+    return compressDrawPlan({
+      title: 'math plot',
+      clear: Boolean(intent.wantsClear || intent.math.replacesCanvas),
+      steps,
+    });
+  }
+
+  if (intent?.recipe?.simplified) {
+    if (intent.recipe.family === 'hex-grid') {
+      const cells = layoutHexagonGrid(intent.recipe.count || HEX_GRID_DEFAULT_CELLS, canvas);
+      const stroke = intent.recipe.stroke || HEX_GRID_STROKE;
+      return compressDrawPlan({
+        title: `hexagon grid (${cells.length})`,
+        clear: Boolean(intent.wantsClear),
+        steps: cells.map((c) => ({
+          op: 'add_curve',
+          args: {
+            kind: 'polygon',
+            sides: 6,
+            bounds: { x: c.x, y: c.y, w: c.w, h: c.h },
+            stroke,
+            strokeWidth: 2,
+          },
+        })),
+      });
+    }
+    if (intent.recipe.family === 'face') {
+      const glyph = faceGlyphPlan(intent.recipe.variant, canvas, intent.recipe.fill);
+      return compressDrawPlan({
+        title: intent.recipe.variant || 'face',
+        clear: Boolean(intent.wantsClear),
+        steps: glyph.map((s) => ({ op: s.name, args: { ...s.args } })),
+      });
+    }
+    const box = squareDrawBounds(canvas);
+    return compressDrawPlan({
+      title: intent.recipe.id || 'recipe',
+      clear: Boolean(intent.wantsClear),
+      steps: [
+        {
+          op: 'add_curve',
+          args: {
+            kind: intent.recipe.id,
+            bounds: box,
+            samples: 64,
+            stroke: intent.recipe.stroke || '#e11d48',
+            ...(intent.recipe.id === 'star' ? { sides: 5 } : {}),
+          },
+        },
+      ],
+    });
+  }
+
+  if (intent?.clearOnly || intent?.wantsClear) {
+    return compressDrawPlan({ title: 'clear', clear: true, steps: [] });
+  }
+
+  return emptyDrawPlan();
+}
+
+/**
+ * Merge a follow-up plan into the retained host plan. `next.clear` replaces.
+ *
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} prev
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} next
+ */
+export function mergeDrawPlans(prev, next) {
+  const a = compressDrawPlan(prev);
+  const b = compressDrawPlan(next);
+  if (b.clear || !a.steps.length) {
+    return compressDrawPlan({
+      title: b.title || a.title,
+      clear: Boolean(b.clear || !a.steps.length),
+      steps: b.steps,
+    });
+  }
+  const steps = [...a.steps, ...b.steps].slice(0, DRAW_PLAN_MAX_STEPS);
+  return compressDrawPlan({
+    title: b.title || a.title,
+    clear: false,
+    steps,
+  });
+}
+
+/**
+ * User message for the LLM planner (no tools). Includes lastPlan when present.
+ *
+ * @param {string} userText
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} [lastPlan]
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export function formatPlannerUserPrompt(userText, lastPlan = null, canvas = FALLBACK_CANVAS) {
+  const width = canvas.width ?? FALLBACK_CANVAS.width;
+  const height = canvas.height ?? FALLBACK_CANVAS.height;
+  const lines = [
+    `Canvas size: ${width}x${height}.`,
+    'Return ONLY a JSON object (no markdown) with shape:',
+    '{"title":"short name","clear":false,"steps":[{"op":"add_shape|add_curve|eval_geometry|clear_canvas|update_shape|remove_shape","args":{...}}]}',
+    `Max ${DRAW_PLAN_MAX_STEPS} steps. Prefer add_curve recipes (sine, star, heart, smiley, polygon, …) over freehand points.`,
+    'add_shape types: rectangle, ellipse, line, text, freehand only. Never add_shape type=polygon.',
+    'Hexagons / hex grids: add_curve kind=polygon sides=6 with a distinct bounds box per cell (not place=center for every cell).',
+    'Use concrete coordinates and CSS/#hex colors. Do not call tools — plan only.',
+    '',
+    `User request: ${String(userText || '').trim()}`,
+  ];
+  const prev = compressDrawPlan(lastPlan);
+  if (prev.steps.length || prev.clear) {
+    lines.push('', `Previous plan JSON: ${JSON.stringify(prev)}`);
+    lines.push(
+      'Merge the user request into a full plan to replay (include earlier steps unless clear is true).',
+    );
+  }
+  return lines.join('\n');
+}
+
+function intentNeedsLlmPlanner(intent) {
+  if (!intent) return false;
+  if (intent.clearOnly) return false;
+  if (intent.stacked?.simplified || intent.math?.simplified || intent.recipe?.simplified) {
+    return false;
+  }
+  return Boolean(String(intent.raw || '').trim());
+}
+
+/**
+ * One user turn: regex fast-path or LLM plan → cleared-context draw. Clear wins.
+ * Fulfill is not sticky across messages.
  *
  * @param {object} opts
  * @param {string} opts.userText
  * @param {(name: string, args: Record<string, unknown>) => unknown | Promise<unknown>} opts.execute
  * @param {{ width?: number, height?: number }} [opts.canvas]
- * @param {(modelText: string, extras: { execute: Function, intent: object }) => Promise<string>} [opts.generateWithTools]
- * @param {(intent: object) => unknown | Promise<unknown>} [opts.onBeforeGenerate]
+ * @param {(modelText: string, extras: { execute: Function, intent: object, plan?: object, phase?: string }) => Promise<string>} [opts.generateWithTools]
+ * @param {(prompt: string, extras: { intent: object, lastPlan?: object | null }) => Promise<string>} [opts.generatePlan]
+ * @param {(intent: object, meta?: { phase?: string, plan?: object | null }) => unknown | Promise<unknown>} [opts.onBeforeGenerate]
+ * @param {(phase: 'planning' | 'drawing' | 'fallback', meta: object) => unknown | Promise<unknown>} [opts.onPhase]
+ * @param {ReturnType<typeof emptyDrawPlan> | null} [opts.lastPlan]
  */
 export async function runDrawTurn({
   userText,
   execute,
   canvas = FALLBACK_CANVAS,
   generateWithTools,
+  generatePlan,
   onBeforeGenerate,
+  onPhase,
+  lastPlan = null,
 } = {}) {
   if (typeof execute !== 'function') {
     throw new Error('runDrawTurn requires execute');
@@ -1167,8 +1955,59 @@ export async function runDrawTurn({
   if (intent.wantsClear || intent.math.replacesCanvas) {
     await execute('clear_canvas', {});
   }
-  if (typeof onBeforeGenerate === 'function') {
-    await onBeforeGenerate(intent);
+
+  /** @type {ReturnType<typeof emptyDrawPlan> | null} */
+  let plan = null;
+  /** @type {'host' | 'llm' | 'fallback' | null} */
+  let planSource = null;
+  let usedFallback = false;
+
+  if (intent.clearOnly) {
+    plan = intentToDrawPlan(intent, canvas);
+    planSource = 'host';
+  } else if (!intentNeedsLlmPlanner(intent)) {
+    plan = intentToDrawPlan(intent, canvas);
+    planSource = 'host';
+  } else if (typeof generatePlan === 'function') {
+    await onPhase?.('planning', { intent, lastPlan });
+    if (typeof onBeforeGenerate === 'function') {
+      await onBeforeGenerate(intent, { phase: 'planning', plan: null });
+    }
+    let planned = emptyDrawPlan();
+    let parsed = { ok: false, plan: emptyDrawPlan(), error: 'empty' };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const prompt =
+        attempt === 0
+          ? formatPlannerUserPrompt(intent.raw, lastPlan, canvas)
+          : `${formatPlannerUserPrompt(intent.raw, lastPlan, canvas)}\n\nPrevious output was invalid (${parsed.error || 'error'}). Return ONLY valid JSON for the DrawPlan.`;
+      try {
+        const out = await generatePlan(prompt, { intent, lastPlan });
+        parsed = parseDrawPlanFromModelText(out == null ? '' : String(out));
+        if (parsed.ok) {
+          planned = parsed.plan;
+          break;
+        }
+      } catch (err) {
+        const msg = err?.message || String(err);
+        if (/guardrail|policy/i.test(msg)) throw err;
+        parsed = { ok: false, plan: emptyDrawPlan(), error: msg };
+      }
+    }
+    if (parsed.ok) {
+      plan = mergeDrawPlans(intent.wantsClear ? null : lastPlan, planned);
+      planSource = 'llm';
+    }
+  }
+
+  if (!plan && typeof generateWithTools === 'function') {
+    usedFallback = true;
+    planSource = 'fallback';
+    await onPhase?.('fallback', { intent, lastPlan });
+    if (typeof onBeforeGenerate === 'function') {
+      await onBeforeGenerate(intent, { phase: 'fallback', plan: null });
+    }
+  } else if (plan && !intent.clearOnly) {
+    intent.modelText = formatDrawPlanInstructions(plan);
   }
 
   const beforeList = await execute('list_shapes', {});
@@ -1178,9 +2017,21 @@ export async function runDrawTurn({
 
   let modelReply = '';
   let toolError = null;
-  if (typeof generateWithTools === 'function') {
+  if (typeof generateWithTools === 'function' && !intent.clearOnly) {
+    const phase = usedFallback ? 'fallback' : 'drawing';
+    if (!usedFallback) {
+      await onPhase?.('drawing', { intent, plan });
+      if (typeof onBeforeGenerate === 'function') {
+        await onBeforeGenerate(intent, { phase: 'drawing', plan });
+      }
+    }
     try {
-      const out = await generateWithTools(intent.modelText, { execute, intent });
+      const out = await generateWithTools(intent.modelText, {
+        execute,
+        intent,
+        plan,
+        phase,
+      });
       modelReply = out == null ? '' : String(out);
     } catch (err) {
       const msg = err?.message || String(err);
@@ -1190,6 +2041,8 @@ export async function runDrawTurn({
       toolError = msg;
       modelReply = '';
     }
+  } else if (intent.clearOnly) {
+    await execute('clear_canvas', {});
   }
 
   if (intent.math.simplified) {
@@ -1211,7 +2064,10 @@ export async function runDrawTurn({
       (intent.recipe.id === 'star' && !snap.looksLikeStar) ||
       (intent.recipe.id === 'heart' && !snap.looksLikeHeart && snap.curveCount < 1) ||
       (intent.recipe.id === 'spiral' && snap.curveCount < 1) ||
-      (intent.recipe.family === 'face' && !snap.looksLikeFace);
+      (intent.recipe.family === 'face' && !snap.looksLikeFace) ||
+      (intent.recipe.family === 'hex-grid' &&
+        (!snap.looksLikeHexGrid ||
+          snap.hexCount < (intent.recipe.count || HEX_GRID_DEFAULT_CELLS) - 1));
     if (need) await fulfillNamedDrawIntent(execute, intent.recipe, canvas);
   } else if (intent.clearOnly) {
     await execute('clear_canvas', {});
@@ -1222,5 +2078,20 @@ export async function runDrawTurn({
   const snapshot = inspectDrawShapes(shapes);
   const addedCount = shapes.filter((s) => s?.id && !beforeIds.has(s.id)).length;
   const reply = assistantTextFromCanvas(shapes, intent, modelReply, { addedCount });
-  return { intent, modelReply, reply, shapes, snapshot, toolError, addedCount };
+  const retainedPlan =
+    planSource === 'fallback' || !plan ? null : compressDrawPlan({ ...plan, clear: false });
+  const planSummary = plan ? summarizeDrawPlan(plan) : '';
+  return {
+    intent,
+    plan,
+    planSource,
+    planSummary,
+    lastPlan: retainedPlan,
+    modelReply,
+    reply,
+    shapes,
+    snapshot,
+    toolError,
+    addedCount,
+  };
 }
