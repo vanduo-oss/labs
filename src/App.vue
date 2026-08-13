@@ -18,6 +18,7 @@ import LabsDisclaimerGate from './components/LabsDisclaimerGate.vue';
 import LabsFarewell from './components/LabsFarewell.vue';
 import VdlHybridSearchUI from './components/VdlHybridSearchUI.vue';
 import VdlAiChatUI from './components/VdlAiChatUI.vue';
+import VdlAiDrawUI from './components/VdlAiDrawUI.vue';
 import VdlModelEvalUI from './components/VdlModelEvalUI.vue';
 import VdlHomeAtmosphere from './components/VdlHomeAtmosphere.vue';
 import {
@@ -26,7 +27,7 @@ import {
   pickNextHomeQuote,
 } from './vdl-home-quotes.js';
 
-const DEMO_SLUGS = new Set(['neptune', 'aichat']);
+const DEMO_SLUGS = new Set(['neptune', 'aichat', 'aidraw']);
 const TOOL_SLUGS = new Set(['model-eval']);
 const ROUTES = ['home', 'about', 'demos', 'tools'];
 const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
@@ -37,6 +38,7 @@ const HOME_QUOTE_FADE_MS = 180;
 const COMPONENT_VERSION_MAP = {
   neptune: VDL_HYBRID_SEARCH_VERSION,
   aichat: VDL_AI_CHAT_VERSION,
+  aidraw: '0.1.0',
   'model-eval': VDL_MODEL_EVAL_VERSION,
 };
 
@@ -115,6 +117,7 @@ function stopHomeQuoteRotation() {
 
 const neptuneVersion = computed(() => `v${COMPONENT_VERSION_MAP.neptune}`);
 const aichatVersion = computed(() => `v${COMPONENT_VERSION_MAP.aichat}`);
+const aidrawVersion = computed(() => `v${COMPONENT_VERSION_MAP.aidraw}`);
 const modelEvalVersion = computed(() => `v${COMPONENT_VERSION_MAP['model-eval']}`);
 
 function getComponentVersion(slug) {
@@ -190,7 +193,9 @@ async function fetchDocumentationHtml(slug) {
       ? '/doc/vdl-hybrid-search.md'
       : slug === 'model-eval'
         ? '/doc/vdl-model-eval.md'
-        : '/doc/vdl-ai-chat.md';
+        : slug === 'aidraw'
+          ? '/doc/vdl-ai-draw.md'
+          : '/doc/vdl-ai-chat.md';
   const res = await fetch(path, { credentials: 'same-origin' });
   if (!res.ok) throw new Error(`Could not load documentation (${res.status})`);
   const md = hydrateComponentVersionTokens(await res.text(), slug);
@@ -250,9 +255,13 @@ function applyLabsRoute(nextRoute, nextDemoSlug, nextToolSlug) {
 
   if (nextRoute === 'demos') {
     if (nextDemoSlug) {
+      const nameMap = {
+        neptune: 'vdl-hybrid-search',
+        aichat: 'vdl-ai-chat',
+        aidraw: 'vdl-ai-draw',
+      };
       liveRegionText.value =
-        (nextDemoSlug === 'neptune' ? 'vdl-hybrid-search' : 'vdl-ai-chat') +
-        ' demo and documentation opened.';
+        (nameMap[nextDemoSlug] || nextDemoSlug) + ' demo and documentation opened.';
       loadDocumentationForSlug(nextDemoSlug);
       nextTick(() => {
         document.getElementById('labs-demos-detail')?.scrollIntoView({
@@ -520,6 +529,34 @@ watch(toolSlug, (slug) => {
                   }}</span>
                 </span>
               </button>
+
+              <button
+                type="button"
+                class="labs-demo-card"
+                id="labs-card-aidraw"
+                data-demo-slug="aidraw"
+                :class="{ 'is-selected': demoSlug === 'aidraw' }"
+                :aria-pressed="demoSlug === 'aidraw' ? 'true' : 'false'"
+                aria-controls="labs-demos-detail"
+                aria-describedby="labs-card-aidraw-desc"
+                @click="selectDemo('aidraw')"
+              >
+                <span class="labs-demo-card-icon" aria-hidden="true">
+                  <i class="ph ph-paint-brush" style="font-size: 3rem"></i>
+                </span>
+                <span class="labs-demo-card-title">vdl-ai-draw</span>
+                <span class="labs-demo-card-desc" id="labs-card-aidraw-desc"
+                  >In-browser SVG drawing canvas with Gemma 4 WebGPU tool calling &amp; vd3-cbun
+                  draw</span
+                >
+                <span class="labs-demo-card-source">Source: vanduo-oss/labs</span>
+                <span class="labs-demo-card-badge-row">
+                  <span class="labs-demo-card-badge">Experimental</span>
+                  <span class="labs-demo-card-badge labs-demo-card-badge-version">{{
+                    aidrawVersion
+                  }}</span>
+                </span>
+              </button>
             </div>
 
             <p id="labs-demos-live-region" class="sr-only" role="status" aria-live="polite">
@@ -533,6 +570,7 @@ watch(toolSlug, (slug) => {
             <VdCard
               id="labs-demos-detail"
               class="labs-demos-detail vdl-card-glow vd-glass"
+              :class="{ 'labs-aidraw-breakout': demoSlug === 'aidraw' }"
               role="region"
               aria-labelledby="labs-demos-detail-title"
               :hidden="!demoSlug"
@@ -549,6 +587,11 @@ watch(toolSlug, (slug) => {
                     class="ph ph-robot"
                     style="font-size: 2.25rem"
                   ></i>
+                  <i
+                    v-else-if="demoSlug === 'aidraw'"
+                    class="ph ph-paint-brush"
+                    style="font-size: 2.25rem"
+                  ></i>
                 </span>
                 <h2 id="labs-demos-detail-title">
                   {{
@@ -556,7 +599,9 @@ watch(toolSlug, (slug) => {
                       ? 'vdl-hybrid-search'
                       : demoSlug === 'aichat'
                         ? 'vdl-ai-chat'
-                        : 'Component'
+                        : demoSlug === 'aidraw'
+                          ? 'vdl-ai-draw'
+                          : 'Component'
                   }}
                 </h2>
               </div>
@@ -581,6 +626,13 @@ watch(toolSlug, (slug) => {
                     :hidden="demoSlug !== 'aichat'"
                   >
                     <VdlAiChatUI v-if="demoSlug === 'aichat'" />
+                  </div>
+                  <div
+                    class="labs-demo-panel-inner"
+                    id="labs-demo-aidraw"
+                    :hidden="demoSlug !== 'aidraw'"
+                  >
+                    <VdlAiDrawUI v-if="demoSlug === 'aidraw'" />
                   </div>
                 </div>
               </div>
