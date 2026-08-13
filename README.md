@@ -83,6 +83,7 @@ pnpm dev
 
 ```bash
 pnpm format:check && pnpm lint && pnpm test:unit && pnpm build
+pnpm test:local    # optional: Gemma drawing requests on macOS arm64 / RUN_AI_DRAW_INFERENCE=1
 ```
 
 Theme controls use `app.use(VanduoVue, { storagePrefix: 'vdl-' })` so preferences do not collide with vd3-docs on shared Pages origins. First visit shows a mandatory terms gate (AI Act transparency + experimental demos); decline opens a farewell screen.

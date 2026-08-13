@@ -43,22 +43,26 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 
 ### Canvas Tools Executed by AI
 
-| Tool | Action | Parameters |
-|:---|:---|:---|
-| `add_shape` | Injects a primitive | `type` (rectangle, ellipse, line, text, freehand), coords, `points` (≥32 for smooth curves), `place`, `smooth` |
-| `add_curve` | Parametric recipe (TypeScript sampler) | `kind` (sine, cosine, wave, spiral, polygon, star, arc, heart), `bounds` / `place`, `samples`, `cycles`, `stroke` |
-| `eval_geometry` | Sandboxed JS → shape payload | `code` arrow fn receiving `{ Math, width, height }` |
-| `update_shape` | Patch shape by ID (incl. `points`) | `shapeId`, position, dimension, color, opacity, `points`, `smooth` |
-| `remove_shape` | Deletes a shape | `shapeId` |
-| `clear_canvas` | Wipes all vector elements | None |
-| `get_canvas` | Returns sanitized SVG markup | None |
-| `list_shapes` | Lists active shapes & bounding boxes | None |
+| Tool            | Action                                 | Parameters                                                                                                                                      |
+| :-------------- | :------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `add_shape`     | Injects a primitive                    | `type` (rectangle, ellipse, line, text, freehand), coords, `points` (≥32 for smooth curves), `place`, `smooth`                                  |
+| `add_curve`     | Parametric recipe (TypeScript sampler) | `kind` (sine, cosine, tangent, hyperbola, parabola, wave, spiral, polygon, star, arc, heart), `bounds` / `place`, `samples`, `cycles`, `stroke` |
+| `eval_geometry` | Sandboxed JS → shape payload           | `code` arrow fn receiving `{ Math, width, height }`                                                                                             |
+| `update_shape`  | Patch shape by ID (incl. `points`)     | `shapeId`, position, dimension, color, opacity, `points`, `smooth`                                                                              |
+| `remove_shape`  | Deletes a shape                        | `shapeId`                                                                                                                                       |
+| `clear_canvas`  | Wipes all vector elements              | None                                                                                                                                            |
+| `get_canvas`    | Returns sanitized SVG markup           | None                                                                                                                                            |
+| `list_shapes`   | Lists active shapes & bounding boxes   | None                                                                                                                                            |
 
 **Harness notes**
 
 - AI-created multi-point lines set `arrowEnd: false` and `smooth: true` (Catmull-Rom cubics in `pointsToPath`).
 - Sparse polylines while the user asked for a sine/wave get a `too_few_samples` warning so the tool loop can retry with `add_curve`.
 - Unknown `add_shape` types are rejected (no silent rectangle).
+- **Intent normalize** (`normalizeDrawUserIntent`): simple flags / stacked stripes are rewritten into explicit rectangle coordinates _before_ Gemma sees the user text, so the model is not asked to “paint a national flag” and does not refuse ordinary geometry. No second LLM. After the tool loop, `fulfillStackedBandIntent` adds or repositions any missing band (small models often emit one rectangle and claim they drew three).
+- **Per-turn harness** (`runDrawTurn`): fulfill is scoped to the **current** user message only — a previous flag plan is never re-applied on a later turn. If the user asks to clear, `clear_canvas` runs first (and again after the model loop if leftover flag bands remain). A “plot on x/y axes” request (sin/cos/tan + hyperbola/parabola) is fulfilled with axis lines + `add_curve` recipes, same spirit as flag fulfill.
+- **Assistant text matches the canvas**: the visible reply is authored from `list_shapes` / `getShapes()` after tools run. If the model says it drew axes while the canvas is still a flag, that sentence is not shown.
+- **Stacking**: `place="center"` no longer overwrites an explicit `y`. Repeating the same bbox (the usual “three `place=center` rectangles” mistake) auto-offsets `y` so the last fill cannot cover the others. `place="stack"` appends the next full-width band. `fillColor` / `color` are accepted as fill for solid bands.
 - Recipe / embedding retrieval for large catalogs is deferred — keep CRUD tools always in context; index recipes later with static embeddings when the library exceeds ~30 entries. Do **not** load a second WebGPU LLM beside Gemma.
 
 ---
@@ -67,13 +71,25 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 
 Open `http://localhost:3000/#demos/aidraw`, load Gemma, then try:
 
-1. `red sine in center of canvas` — expect a dense smooth wave via `add_curve`, not a 3-point zigzag.
-2. `clear it — draw a 5-point star`
-3. `smooth spiral in the middle`
-4. `draw a green heart`
-5. `use eval_geometry to plot y = sin(x) across the canvas in blue`
+1. `paint big fat nice Lithuanian flag (yellow-green-red)` — three stacked filled rectangles (yellow / green / red), **no refusal**.
+2. `ok, three fat big rectangle lines stacked: yellow on top, then green then red` — all three bands visible (not only the last red).
+3. `red sine in center of canvas` — expect a dense smooth wave via `add_curve`, not a 3-point zigzag.
+4. `clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — canvas is **not** the previous flag; axes + sin/cos (and tan/hyperbola) are present.
+5. `clear it — draw a 5-point star`
+6. `smooth spiral in the middle`
+7. `draw a green heart`
+8. `use eval_geometry to plot y = sin(x) across the canvas in blue`
 
-Success = smooth curves on the first or second tool round, no “I cannot draw a sine” apology.
+Success = stacked flags show every band; a later clear+math prompt does **not** leave the flag on screen; curves are smooth on the first or second tool round; assistant text matches the canvas; no “I cannot draw a flag / sine” apology.
+
+### Automated tests
+
+```bash
+pnpm test:unit -- tests/unit/draw-tools.spec.ts   # CI-safe executor + intent tests
+pnpm test:local                                   # real Gemma requests on this Mac
+```
+
+`pnpm test:local` runs `tests/local/ai-draw-inference.spec.ts` when `RUN_AI_DRAW_INFERENCE=1` **or** the host is `darwin/arm64` (Apple Silicon). It is ignored by `pnpm test` / Linux CI. Default model is Gemma 4 E2B (`AI_DRAW_MODEL=gemma-4-E4B-it-web` to match the UI). Prefetch weights with `pnpm models:fetch`. Use `AI_DRAW_HEADED=1` if headless Chromium fails WebGPU.
 
 ---
 
@@ -81,7 +97,7 @@ Success = smooth curves on the first or second tool round, no “I cannot draw a
 
 ```html
 <script setup>
-import VdlAiDrawUI from './components/VdlAiDrawUI.vue';
+  import VdlAiDrawUI from './components/VdlAiDrawUI.vue';
 </script>
 
 <template>

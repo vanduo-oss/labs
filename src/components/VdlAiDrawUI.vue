@@ -7,7 +7,6 @@
         <div class="ai-draw-canvas-wrap">
           <VdDraw
             ref="drawRef"
-            :data="drawDocument"
             :tool="selectedTool"
             :show-grid="true"
             @change="onCanvasChange"
@@ -99,7 +98,8 @@
               Load Gemma 4 locally, then ask your assistant to draw shapes or inspect your canvas.
             </p>
             <p class="vd-text-sm vd-text-muted">
-              Example: "Draw a green rectangle at (100, 100)" or "red sine in the center"
+              Example: "Lithuanian flag", "three stacked yellow/green/red rectangles", or "red sine
+              in the center"
             </p>
           </div>
           <div
@@ -147,7 +147,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, reactive, onBeforeUnmount, onMounted, nextTick } from 'vue';
+import { ref, shallowRef, onBeforeUnmount, nextTick } from 'vue';
 import { VdButton, VdCard, VdIcon, VdProgress, VdAlert } from '@vanduo-oss/vd3';
 import { VdDraw } from '@vanduo-oss/vd3-cbun/draw';
 import '@vanduo-oss/vd3-cbun/draw/css';
@@ -160,8 +160,10 @@ import { labsMarkdownToHtml } from '@vanduo-oss/vdl-ai-chat/markdown';
 
 import {
   DRAW_TOOL_DEFS,
+  DRAW_TOOL_MAX_ROUNDS,
   composeDrawSystemExtra,
   createDrawToolExecutor,
+  runDrawTurn,
 } from '../demos/draw-tools.js';
 import '../styles/ai-draw-demo.css';
 
@@ -171,7 +173,6 @@ const gemmaModels = ref([
 ]);
 
 const drawRef = ref(null);
-const drawDocument = reactive({ shapes: [], viewport: { x: 0, y: 0, scale: 1 } });
 const selectedTool = ref('draw');
 const modelId = ref('gemma-4-E4B-it-web');
 
@@ -352,22 +353,44 @@ async function send() {
 
     aiDrawing.value = true;
 
-    await chat.generateWithTools(text, {
+    const result = await runDrawTurn({
+      userText: text,
       execute,
-      maxRounds: 6,
-      onUpdate: (partial) => {
-        messages.value[aiMsgIdx].content = partial;
-        scrollToBottom();
+      canvas: { width: 1000, height: 800 },
+      onBeforeGenerate: () => {
+        refreshSystemPrompt(chat);
       },
+      generateWithTools: (modelText) =>
+        chat.generateWithTools(modelText, {
+          execute,
+          maxRounds: DRAW_TOOL_MAX_ROUNDS,
+          onUpdate: (partial) => {
+            messages.value[aiMsgIdx].content = partial;
+            scrollToBottom();
+          },
+        }),
     });
 
-    if (
-      messages.value[aiMsgIdx].content === LLM_BLOCK_MESSAGE ||
-      messages.value[aiMsgIdx].content === LLM_OUTPUT_BLOCK_MESSAGE
+    const visible = result.reply || '';
+    if (visible === LLM_BLOCK_MESSAGE || visible === LLM_OUTPUT_BLOCK_MESSAGE) {
+      messages.value[aiMsgIdx] = {
+        role: 'assistant',
+        kind: 'policy',
+        content:
+          "I can only help with drawing and canvas-related tasks. Let me know what you'd like to create!",
+      };
+    } else if (
+      result.modelReply === LLM_BLOCK_MESSAGE ||
+      result.modelReply === LLM_OUTPUT_BLOCK_MESSAGE
     ) {
-      messages.value[aiMsgIdx].kind = 'policy';
-      messages.value[aiMsgIdx].content =
-        "I can only help with drawing and canvas-related tasks. Let me know what you'd like to create!";
+      messages.value[aiMsgIdx] = {
+        role: 'assistant',
+        kind: 'policy',
+        content:
+          "I can only help with drawing and canvas-related tasks. Let me know what you'd like to create!",
+      };
+    } else {
+      messages.value[aiMsgIdx].content = visible;
     }
   } catch (err) {
     console.error(err);
@@ -375,6 +398,12 @@ async function send() {
       messages.value[aiMsgIdx].kind = 'policy';
       messages.value[aiMsgIdx].content =
         "I can only help with drawing and canvas-related tasks. Let me know what you'd like to create!";
+    } else if (/maxRounds/i.test(err.message || '')) {
+      const current = messages.value[aiMsgIdx].content || '';
+      if (!current.trim() || /<tool_call|tool_result/i.test(current)) {
+        messages.value[aiMsgIdx].content =
+          'I applied the drawing tools. Check the canvas for the new shapes.';
+      }
     } else if (
       err.message?.includes('tools unsupported') ||
       err.message?.includes('not support tools')

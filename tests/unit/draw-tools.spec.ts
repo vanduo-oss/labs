@@ -11,9 +11,8 @@ test.describe('AI Draw tool executor unit tests', () => {
     page,
   }) => {
     const res = await page.evaluate(async () => {
-      const { createDrawToolExecutor, buildDrawChatContext } = await import(
-        '/src/demos/draw-tools.js'
-      );
+      const { createDrawToolExecutor, buildDrawChatContext } =
+        await import('/src/demos/draw-tools.js');
       const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
@@ -105,9 +104,8 @@ test.describe('AI Draw tool executor unit tests', () => {
     page,
   }) => {
     const res = await page.evaluate(async () => {
-      const { createDrawToolExecutor, buildDrawChatContext } = await import(
-        '/src/demos/draw-tools.js'
-      );
+      const { createDrawToolExecutor, buildDrawChatContext } =
+        await import('/src/demos/draw-tools.js');
       const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
@@ -250,9 +248,7 @@ test.describe('AI Draw tool executor unit tests', () => {
 
       const bad = await execute('add_shape', { type: 'bezier', x: 0, y: 0 });
       const shapes =
-        typeof editor.getShapes === 'function'
-          ? editor.getShapes()
-          : editor.toJSON()?.shapes || [];
+        typeof editor.getShapes === 'function' ? editor.getShapes() : editor.toJSON()?.shapes || [];
       const count = shapes.length;
 
       editor.destroy();
@@ -329,7 +325,9 @@ test.describe('AI Draw tool executor unit tests', () => {
 
       let fetchBlocked = null;
       try {
-        evalGeometryCode(`({ Math }) => { fetch('/x'); return { type:'line', points:[[0,0],[1,1]] }; }`);
+        evalGeometryCode(
+          `({ Math }) => { fetch('/x'); return { type:'line', points:[[0,0],[1,1]] }; }`,
+        );
       } catch (e) {
         fetchBlocked = e.message;
       }
@@ -374,5 +372,579 @@ test.describe('AI Draw tool executor unit tests', () => {
     expect(res.fetchBlocked).toMatch(/forbidden/i);
     expect(res.docBlocked).toMatch(/forbidden/i);
     expect(res.ctorBlocked).toMatch(/forbidden/i);
+  });
+
+  test('normalizeDrawUserIntent rewrites Lithuanian flag to three distinct-y rectangles', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { normalizeDrawUserIntent } = await import('/src/demos/draw-tools.js');
+      return normalizeDrawUserIntent('paint big fat nice Lithuanian flag (yellow-green-red)', {
+        width: 1000,
+        height: 800,
+      });
+    });
+
+    expect(res.simplified).toBe(true);
+    expect(res.kind).toBe('flag:lithuania');
+    expect(res.bands).toHaveLength(3);
+    expect(res.bands[0].y).toBeLessThan(res.bands[1].y);
+    expect(res.bands[1].y).toBeLessThan(res.bands[2].y);
+    expect(res.bands[0].fill.toLowerCase()).toBe('#fdb913');
+    expect(res.bands[1].fill.toLowerCase()).toBe('#006a44');
+    expect(res.bands[2].fill.toLowerCase()).toBe('#c1272d');
+    expect(res.text).toMatch(/add_shape/i);
+    expect(res.text).toMatch(/do not refuse/i);
+    expect(res.text).toMatch(/single turn/i);
+    expect(res.text).not.toMatch(/lithuan/i);
+  });
+
+  test('normalizeDrawUserIntent rewrites stacked yellow/green/red rectangles', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { normalizeDrawUserIntent } = await import('/src/demos/draw-tools.js');
+      return normalizeDrawUserIntent(
+        'ok, three fat big rectangle lines stacked: yellow on top, then green then red',
+        { width: 1000, height: 800 },
+      );
+    });
+
+    expect(res.simplified).toBe(true);
+    expect(res.bands).toHaveLength(3);
+    expect(res.bands.map((b) => b.y)).toEqual([...res.bands.map((b) => b.y)].sort((a, b) => a - b));
+    expect(new Set(res.bands.map((b) => b.y)).size).toBe(3);
+  });
+
+  test('normalizeDrawUserIntent leaves sine / single-shape requests alone', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { normalizeDrawUserIntent } = await import('/src/demos/draw-tools.js');
+      return {
+        sine: normalizeDrawUserIntent('red sine in the center of canvas'),
+        rect: normalizeDrawUserIntent('Draw a green rectangle at (100, 100)'),
+      };
+    });
+
+    expect(res.sine.simplified).toBe(false);
+    expect(res.sine.text).toBe('red sine in the center of canvas');
+    expect(res.rect.simplified).toBe(false);
+  });
+
+  test('three place=center rectangles stack with distinct y and fills (only-red bug)', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const yellow = await execute('add_shape', {
+        type: 'rectangle',
+        place: 'center',
+        fill: 'yellow',
+      });
+      const green = await execute('add_shape', {
+        type: 'rectangle',
+        place: 'center',
+        fill: 'green',
+      });
+      const red = await execute('add_shape', {
+        type: 'rectangle',
+        place: 'center',
+        fill: 'red',
+      });
+
+      const list = await execute('list_shapes', {});
+      const svg = typeof editor.toSVG === 'function' ? editor.toSVG() : '';
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { yellow, green, red, list, svg };
+    });
+
+    expect(res.list).toHaveLength(3);
+    const ys = res.list.map((s: { y: number }) => s.y);
+    expect(new Set(ys).size).toBe(3);
+    expect(res.yellow.y).toBeLessThan(res.green.y);
+    expect(res.green.y).toBeLessThan(res.red.y);
+    expect(String(res.yellow.fill)).toMatch(/yellow|#ff|#fd/i);
+    expect(String(res.green.fill)).toMatch(/green|#0|#00/i);
+    expect(String(res.red.fill)).toMatch(/red|#c1|#f0|#ff0000/i);
+    expect(res.green.adjusted).toBe('stacked_to_avoid_overlap');
+    expect(res.red.adjusted).toBe('stacked_to_avoid_overlap');
+    expect(res.svg.toLowerCase()).toMatch(/yellow|#ff|#fd/);
+    expect(res.svg.toLowerCase()).toMatch(/green|#006|#00/);
+    expect(res.svg.toLowerCase()).toMatch(/red|#c1|#f0|#ff0000/);
+  });
+
+  test('three identical explicit bboxes are unstacked instead of covering each other', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({ getEditor: () => editor });
+
+      const same = { type: 'rectangle', x: 100, y: 200, width: 800, height: 160 };
+      await execute('add_shape', { ...same, fill: '#fdb913' });
+      await execute('add_shape', { ...same, fill: '#006a44' });
+      await execute('add_shape', { ...same, fill: '#c1272d' });
+
+      const list = await execute('list_shapes', {});
+      editor.destroy();
+      document.body.removeChild(container);
+      return list;
+    });
+
+    expect(res).toHaveLength(3);
+    expect(new Set(res.map((s: { y: number }) => s.y)).size).toBe(3);
+    expect(res.map((s: { fill: string }) => String(s.fill).toLowerCase())).toEqual([
+      '#fdb913',
+      '#006a44',
+      '#c1272d',
+    ]);
+  });
+
+  test('place=center preserves explicit y (does not recenter a stack offset)', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const a = await execute('add_shape', {
+        type: 'rectangle',
+        place: 'center',
+        y: 120,
+        height: 80,
+        fill: 'yellow',
+      });
+      const b = await execute('add_shape', {
+        type: 'rectangle',
+        place: 'center',
+        y: 200,
+        height: 80,
+        fill: 'green',
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { a, b };
+    });
+
+    expect(res.a.y).toBe(120);
+    expect(res.b.y).toBe(200);
+    expect(res.a.adjusted).toBeUndefined();
+  });
+
+  test('fillColor alias and color-without-fill still paint solid rectangles', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, resolveShapeFill } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({ getEditor: () => editor });
+
+      const a = await execute('add_shape', {
+        type: 'rectangle',
+        x: 10,
+        y: 10,
+        width: 40,
+        height: 20,
+        fillColor: 'gold',
+      });
+      const b = await execute('add_shape', {
+        type: 'rectangle',
+        x: 10,
+        y: 40,
+        width: 40,
+        height: 20,
+        color: 'red',
+      });
+
+      const list = await execute('list_shapes', {});
+      editor.destroy();
+      document.body.removeChild(container);
+      return {
+        a,
+        b,
+        list,
+        fillColor: resolveShapeFill({ type: 'rectangle', fillColor: '#abc' }),
+        colorAsFill: resolveShapeFill({ type: 'rectangle', color: 'yellow' }),
+      };
+    });
+
+    expect(res.a.fill).toBe('gold');
+    expect(res.b.fill).toBe('red');
+    expect(res.list[0].fill).toBe('gold');
+    expect(res.list[1].fill).toBe('red');
+    expect(res.fillColor).toBe('#abc');
+    expect(res.colorAsFill).toBe('yellow');
+  });
+
+  test('fulfillStackedBandIntent adds missing yellow/green when only red was drawn', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, normalizeDrawUserIntent, fulfillStackedBandIntent } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      await execute('add_shape', { type: 'rectangle', place: 'center', fill: 'red' });
+      const intent = normalizeDrawUserIntent('Lithuanian flag', { width: 1000, height: 800 });
+      const fulfilled = await fulfillStackedBandIntent(execute, intent.bands);
+      const list = await execute('list_shapes', {});
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { fulfilled, list, bandCount: intent.bands.length };
+    });
+
+    expect(res.bandCount).toBe(3);
+    expect(res.fulfilled.added).toBe(2);
+    expect(res.list).toHaveLength(3);
+    expect(new Set(res.list.map((s: { y: number }) => s.y)).size).toBe(3);
+  });
+
+  test('composeDrawSystemExtra says simple flags and stacking are in scope', async ({ page }) => {
+    const extra = await page.evaluate(async () => {
+      const { composeDrawSystemExtra } = await import('/src/demos/draw-tools.js');
+      return composeDrawSystemExtra({
+        editor: null,
+        canvasWidth: 1000,
+        canvasHeight: 800,
+        selectedTool: 'draw',
+        selectedColor: '#000',
+      });
+    });
+
+    expect(extra).toMatch(/simple geometric flags/i);
+    expect(extra).toMatch(/distinct y/i);
+    expect(extra).toMatch(/never refuse/i);
+    expect(extra).toMatch(/clear_canvas/i);
+    expect(extra).toMatch(/hyperbola/i);
+  });
+
+  test('parseDrawTurnIntent: math follow-up is not a sticky flag and clear wins', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { parseDrawTurnIntent, wantsClearCanvas } = await import('/src/demos/draw-tools.js');
+      const canvas = { width: 1000, height: 800 };
+      const flag = parseDrawTurnIntent(
+        'paint big fat nice Lithuanian flag (yellow-green-red)',
+        canvas,
+      );
+      const clearOnly = parseDrawTurnIntent('clear canvas', canvas);
+      const math = parseDrawTurnIntent(
+        'clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+        canvas,
+      );
+      const sineOnly = parseDrawTurnIntent('red sine in the center of canvas', canvas);
+      return {
+        flag,
+        clearOnly,
+        math,
+        sineOnly,
+        clearMath: wantsClearCanvas(
+          'clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+        ),
+      };
+    });
+
+    expect(res.flag.stacked.simplified).toBe(true);
+    expect(res.flag.stacked.bands).toHaveLength(3);
+    expect(res.flag.math.simplified).toBe(false);
+
+    expect(res.clearOnly.wantsClear).toBe(true);
+    expect(res.clearOnly.clearOnly).toBe(true);
+    expect(res.clearOnly.stacked.simplified).toBe(false);
+    expect(res.clearOnly.stacked.bands).toHaveLength(0);
+    expect(res.clearOnly.math.simplified).toBe(false);
+
+    expect(res.clearMath).toBe(true);
+    expect(res.math.wantsClear).toBe(true);
+    expect(res.math.clearOnly).toBe(false);
+    expect(res.math.stacked.simplified).toBe(false);
+    expect(res.math.stacked.bands).toHaveLength(0);
+    expect(res.math.math.simplified).toBe(true);
+    expect(res.math.kind).toBe('math-plot');
+    expect(res.math.math.plots).toEqual(
+      expect.arrayContaining(['sine', 'cosine', 'tangent', 'hyperbola']),
+    );
+
+    expect(res.sineOnly.math.simplified).toBe(false);
+    expect(res.sineOnly.stacked.simplified).toBe(false);
+  });
+
+  test('assistantTextFromCanvas does not echo a math success claim when canvas is still a flag', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { assistantTextFromCanvas, assistantClaimConflictsWithCanvas, inspectDrawShapes } =
+        await import('/src/demos/draw-tools.js');
+      const flagShapes = [
+        { type: 'rectangle', y: 100, fill: '#fdb913' },
+        { type: 'rectangle', y: 220, fill: '#006a44' },
+        { type: 'rectangle', y: 340, fill: '#c1272d' },
+      ];
+      const lie = 'I drew x and y axes and sine, cosine, wave, tangent and a parabola.';
+      const snap = inspectDrawShapes(flagShapes);
+      return {
+        snap,
+        conflict: assistantClaimConflictsWithCanvas(lie, snap),
+        text: assistantTextFromCanvas(
+          flagShapes,
+          {
+            wantsClear: true,
+            math: { simplified: true, plots: ['sine', 'cosine', 'tangent', 'hyperbola'] },
+          },
+          lie,
+        ),
+      };
+    });
+
+    expect(res.snap.looksLikeFlag).toBe(true);
+    expect(res.snap.hasAxes).toBe(false);
+    expect(res.snap.curveCount).toBe(0);
+    expect(res.conflict).toBe(true);
+    expect(res.text).not.toMatch(/drew/i);
+    expect(res.text).toMatch(/still on the canvas/i);
+    expect(res.text).not.toMatch(/parabola/i);
+  });
+
+  test('after a flag, clear canvas leaves zero bands (fulfill is not sticky)', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const flag = await runDrawTurn({
+        userText: 'Lithuanian flag',
+        execute,
+        canvas: { width: 1000, height: 800 },
+      });
+      const cleared = await runDrawTurn({
+        userText: 'clear canvas',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async () => 'I cleared the canvas.',
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { flag, cleared };
+    });
+
+    expect(res.flag.snapshot.looksLikeFlag).toBe(true);
+    expect(res.flag.shapes).toHaveLength(3);
+    expect(res.cleared.snapshot.empty).toBe(true);
+    expect(res.cleared.snapshot.looksLikeFlag).toBe(false);
+    expect(res.cleared.shapes).toHaveLength(0);
+    expect(res.cleared.intent.stacked.bands).toHaveLength(0);
+    expect(res.cleared.reply).toMatch(/cleared|empty/i);
+  });
+
+  test('screenshot class: flag then model claims axes with zero tools — canvas is not the flag', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, inspectDrawShapes } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      await runDrawTurn({
+        userText: 'paint big fat nice Lithuanian flag (yellow-green-red)',
+        execute,
+        canvas: { width: 1000, height: 800 },
+      });
+
+      const lie = 'I drew x and y axes and sine, cosine, wave, tangent and a parabola.';
+      const math = await runDrawTurn({
+        userText:
+          'clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async () => lie,
+      });
+
+      const live =
+        typeof editor.getShapes === 'function' ? editor.getShapes() : editor.toJSON()?.shapes || [];
+      editor.destroy();
+      document.body.removeChild(container);
+      return { math, liveSnap: inspectDrawShapes(live) };
+    });
+
+    expect(res.math.modelReply).toMatch(/drew/i);
+    expect(res.math.snapshot.looksLikeFlag).toBe(false);
+    expect(res.liveSnap.looksLikeFlag).toBe(false);
+    expect(res.math.shapes.filter((s: { type?: string }) => s.type === 'rectangle')).toHaveLength(
+      0,
+    );
+    expect(res.math.snapshot.hasAxes).toBe(true);
+    expect(res.math.snapshot.curveCount).toBeGreaterThanOrEqual(2);
+    expect(res.math.reply).toMatch(/axes/i);
+    expect(res.math.reply).not.toMatch(/still on the canvas/i);
+    expect(
+      res.math.snapshot.fills.some((k: string) => k === 'yellow' || k === 'green' || k === 'red'),
+    ).toBe(false);
+  });
+
+  test('add_curve tangent and hyperbola produce dense samples', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({ getEditor: () => editor });
+
+      const tan = await execute('add_curve', { kind: 'tangent', samples: 64, stroke: '#15803d' });
+      const hyp = await execute('add_curve', { kind: 'hyperbola', samples: 48, stroke: '#7c3aed' });
+      const par = await execute('add_curve', { kind: 'parabola', samples: 48, stroke: '#d97706' });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { tan, hyp, par };
+    });
+
+    expect(res.tan.ok).toBe(true);
+    expect(res.tan.sampleCount).toBeGreaterThanOrEqual(32);
+    expect(res.hyp.ok).toBe(true);
+    expect(res.hyp.sampleCount).toBeGreaterThanOrEqual(32);
+    expect(res.par.ok).toBe(true);
+    expect(res.par.sampleCount).toBeGreaterThanOrEqual(32);
+  });
+
+  test('math turn drops flag bands the model re-applies from chat history', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, normalizeDrawUserIntent } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+      const bands = normalizeDrawUserIntent('Lithuanian flag', { width: 1000, height: 800 }).bands;
+
+      const math = await runDrawTurn({
+        userText:
+          'clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async (_modelText, extras) => {
+          for (const band of bands) {
+            await extras.execute('add_shape', {
+              type: 'rectangle',
+              x: band.x,
+              y: band.y,
+              width: band.width,
+              height: band.height,
+              fill: band.fill,
+            });
+          }
+          return 'I drew axes and sine, cosine, tangent and a hyperbola.';
+        },
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return math;
+    });
+
+    expect(res.snapshot.looksLikeFlag).toBe(false);
+    expect(res.shapes.filter((s: { type?: string }) => s.type === 'rectangle')).toHaveLength(0);
+    expect(res.snapshot.hasAxes).toBe(true);
+    expect(res.snapshot.curveCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test('clear then draw a star does not wipe the new drawing', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      await runDrawTurn({
+        userText: 'Lithuanian flag',
+        execute,
+        canvas: { width: 1000, height: 800 },
+      });
+
+      const star = await runDrawTurn({
+        userText: 'clear it — draw a 5-point star',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async (_modelText, extras) => {
+          await extras.execute('add_curve', {
+            kind: 'star',
+            place: 'center',
+            sides: 5,
+            stroke: '#e11d48',
+          });
+          return 'I drew a star.';
+        },
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return star;
+    });
+
+    expect(res.intent.clearOnly).toBe(false);
+    expect(res.snapshot.looksLikeFlag).toBe(false);
+    expect(res.shapes.length).toBeGreaterThanOrEqual(1);
+    expect(res.snapshot.curveCount).toBeGreaterThanOrEqual(1);
   });
 });

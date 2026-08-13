@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Draw inference harness</title>
+  </head>
+  <body>
+    <div id="canvas" style="width: 1000px; height: 800px"></div>
+    <pre id="log"></pre>
+    <script type="module">
+      import { AiChat } from '/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js';
+      import { VdDrawCore } from '/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js';
+      import {
+        DRAW_TOOL_DEFS,
+        DRAW_TOOL_MAX_ROUNDS,
+        composeDrawSystemExtra,
+        createDrawToolExecutor,
+        runDrawTurn,
+      } from '/src/demos/draw-tools.js';
+
+      const CANVAS = { width: 1000, height: 800 };
+      const logEl = document.getElementById('log');
+
+      function log(msg) {
+        logEl.textContent += `${msg}\n`;
+        console.log(msg);
+      }
+
+      window.__vdlAiDraw = {
+        status: 'idle',
+        error: null,
+        webgpu: Boolean(navigator.gpu),
+        modelId: null,
+        last: null,
+      };
+
+      let editor = null;
+      let chat = null;
+      let execute = null;
+
+      function ensureEditor() {
+        if (editor) return editor;
+        const host = document.getElementById('canvas');
+        host.innerHTML = '';
+        editor = new VdDrawCore({ element: host });
+        return editor;
+      }
+
+      window.__vdlAiDrawLoad = async (modelId = 'gemma-4-E2B-it-web') => {
+        window.__vdlAiDraw.status = 'loading';
+        window.__vdlAiDraw.modelId = modelId;
+        if (!navigator.gpu) throw new Error('WebGPU not available in this browser');
+
+        ensureEditor();
+        if (chat) {
+          try {
+            chat.dispose();
+          } catch {
+            /* ignore */
+          }
+          chat = null;
+        }
+
+        chat = new AiChat({
+          modelId,
+          toolProtocol: 'auto',
+          loadLiteRT: async () => import('@litert-lm/core'),
+          systemPromptOptions: {
+            product: 'AI Draw',
+            extra: composeDrawSystemExtra({
+              editor,
+              canvasWidth: CANVAS.width,
+              canvasHeight: CANVAS.height,
+              selectedTool: 'draw',
+              selectedColor: '#000000',
+            }),
+          },
+        });
+        chat.registerTools([...DRAW_TOOL_DEFS]);
+        chat.onProgress((p) => log(`[progress] ${p.stage || ''} ${p.message || ''}`));
+        await chat.load();
+        execute = createDrawToolExecutor({
+          getEditor: () => editor,
+          getUserHint: () => window.__vdlAiDraw.last?.userText || '',
+          canvasSize: CANVAS,
+        });
+        window.__vdlAiDraw.status = 'ready';
+        log('Model loaded');
+        return { ok: true, modelId };
+      };
+
+      window.__vdlAiDrawPrompt = async (userText) => {
+        if (!chat || !execute) throw new Error('Call __vdlAiDrawLoad first');
+        const result = await runDrawTurn({
+          userText,
+          execute,
+          canvas: CANVAS,
+          onBeforeGenerate: () => {
+            chat.setSystemPromptOptions({
+              product: 'AI Draw',
+              extra: composeDrawSystemExtra({
+                editor,
+                canvasWidth: CANVAS.width,
+                canvasHeight: CANVAS.height,
+                selectedTool: 'draw',
+                selectedColor: '#000000',
+              }),
+            });
+          },
+          generateWithTools: (modelText) =>
+            chat.generateWithTools(modelText, {
+              execute,
+              maxRounds: DRAW_TOOL_MAX_ROUNDS,
+            }),
+        });
+        const shapes = typeof editor.getShapes === 'function' ? editor.getShapes() : result.shapes;
+        const last = {
+          userText,
+          modelText: result.intent.modelText,
+          simplified: Boolean(result.intent.stacked.simplified || result.intent.math.simplified),
+          kind: result.intent.kind,
+          reply: result.reply,
+          modelReply: result.modelReply,
+          toolError: result.toolError,
+          shapes,
+          snapshot: result.snapshot,
+          svg: typeof editor.toSVG === 'function' ? editor.toSVG() : '',
+        };
+        window.__vdlAiDraw.last = last;
+        log(`REPLY:${result.reply}`);
+        return last;
+      };
+
+      window.__vdlAiDrawClear = async () => {
+        if (!execute) return { ok: false };
+        return execute('clear_canvas', {});
+      };
+
+      window.__vdlAiDrawReady = true;
+    </script>
+  </body>
+</html>
