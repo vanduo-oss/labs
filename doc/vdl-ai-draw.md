@@ -95,4 +95,4 @@ import VdlAiDrawUI from './components/VdlAiDrawUI.vue';
 
 - **SVG Sanitization**: All incoming AI-generated SVG shapes and canvas exports pass through `sanitizeSvgString()` to strip `<script>`, `<foreignObject>`, and event handlers (`on*`).
 - **Input Guardrails**: Prompt inputs are validated using `validateLlmInput()` from `vdl-ai-chat/guardrails` before execution.
-- **eval_geometry sandbox**: Frozen `Function` with only `{ Math, width, height }`; rejects `fetch`, `document`, `window`, `import`, etc. Max 256 points.
+- **eval_geometry sandbox**: Constrained `Function` with a frozen number-only Math surface; rejects `fetch`, `document`, `window`, `.constructor`, etc. Max 256 points.

@@ -486,7 +486,9 @@ export function hasSlopeSignChanges(points) {
 }
 
 /**
- * Run model-authored geometry code in a frozen Function sandbox.
+ * Run model-authored geometry code in a constrained Function sandbox.
+ * Only a frozen number-math surface is injected; code may not reference
+ * browser globals or climb out via `.constructor` / `__proto__`.
  *
  * @param {string} code
  * @param {{ width?: number, height?: number }} [env]
@@ -497,7 +499,7 @@ export function evalGeometryCode(code, env = {}) {
     throw new Error('eval_geometry requires a non-empty code string');
   }
   const banned =
-    /\b(window|document|globalThis|Function|eval|fetch|XMLHttpRequest|import\s*\(|require\s*\(|process|Deno|localStorage|indexedDB|Worker|WebSocket)\b/;
+    /\b(window|document|globalThis|Function|eval|fetch|XMLHttpRequest|import\s*\(|require\s*\(|process|Deno|localStorage|indexedDB|Worker|WebSocket|constructor|__proto__|prototype|Reflect|Proxy|Object|Array|Promise|setTimeout|setInterval|queueMicrotask|atob|btoa)\b|\.\s*constructor|\[\s*['"]constructor['"]\s*\]/;
   if (banned.test(code)) {
     throw new Error('eval_geometry code contains forbidden identifiers');
   }
@@ -505,8 +507,30 @@ export function evalGeometryCode(code, env = {}) {
   const width = env.width ?? DEFAULT_CANVAS.width;
   const height = env.height ?? DEFAULT_CANVAS.height;
 
-  // Isolate: only Math + canvas size. Pass the real Math object (methods are
-  // non-enumerable, so `{ ...Math }` would be empty).
+  // Plain number ops only — no Function/Object prototype escape hatches.
+  const safeMath = Object.freeze(
+    Object.assign(Object.create(null), {
+      PI: Math.PI,
+      E: Math.E,
+      sin: (x) => Math.sin(Number(x)),
+      cos: (x) => Math.cos(Number(x)),
+      tan: (x) => Math.tan(Number(x)),
+      asin: (x) => Math.asin(Number(x)),
+      acos: (x) => Math.acos(Number(x)),
+      atan: (x) => Math.atan(Number(x)),
+      atan2: (y, x) => Math.atan2(Number(y), Number(x)),
+      sqrt: (x) => Math.sqrt(Number(x)),
+      abs: (x) => Math.abs(Number(x)),
+      min: (...args) => Math.min(...args.map(Number)),
+      max: (...args) => Math.max(...args.map(Number)),
+      floor: (x) => Math.floor(Number(x)),
+      ceil: (x) => Math.ceil(Number(x)),
+      round: (x) => Math.round(Number(x)),
+      pow: (x, y) => Math.pow(Number(x), Number(y)),
+      hypot: (...args) => Math.hypot(...args.map(Number)),
+    }),
+  );
+
   const fn = new Function(
     'Math',
     'width',
@@ -516,7 +540,7 @@ export function evalGeometryCode(code, env = {}) {
 
   let result;
   try {
-    result = fn(Math, width, height);
+    result = fn(safeMath, width, height);
   } catch (err) {
     throw new Error(`eval_geometry runtime error: ${err.message || String(err)}`);
   }
@@ -862,7 +886,10 @@ export function createDrawToolExecutor({ getEditor, getUserHint, canvasSize } = 
             return { error: 'editor.unsupported', message: 'Editor does not support updateShape' };
           }
 
-          editor.updateShape(shapeId, patch);
+          const updated = editor.updateShape(shapeId, patch);
+          if (!updated) {
+            return { error: 'shape.not_found', message: `No shape with id ${shapeId}`, shapeId };
+          }
           const meta = shapeCritique(patch, userHint);
           const out = { ok: true, shapeId, sampleCount: meta.sampleCount, bbox: meta.bbox };
           if (meta.critique) {
@@ -877,7 +904,14 @@ export function createDrawToolExecutor({ getEditor, getUserHint, canvasSize } = 
           if (typeof editor.removeShape !== 'function') {
             return { error: 'editor.unsupported', message: 'Editor does not support removeShape' };
           }
-          editor.removeShape(args.shapeId);
+          const removed = editor.removeShape(args.shapeId);
+          if (removed === false) {
+            return {
+              error: 'shape.not_found',
+              message: `No shape with id ${args.shapeId}`,
+              shapeId: args.shapeId,
+            };
+          }
           return { ok: true, shapeId: args.shapeId };
         }
 

@@ -279,6 +279,7 @@ async function loadModel() {
     if (typeof chat.isLoaded === 'function' && !chat.isLoaded()) {
       throw new Error('Model load did not complete.');
     }
+    messages.value = [];
     loaded.value = true;
     statusText.value = 'Ready';
   } catch (err) {
@@ -299,6 +300,14 @@ async function loadModel() {
 async function send() {
   const text = inputText.value.trim();
   if (!text || streaming.value || !loaded.value) return;
+
+  const chat = chatRef.value;
+  if (!chat) return;
+  // Model <select> can change without Reload — refuse rather than run wrong weights.
+  if (chat.modelId && chat.modelId !== modelId.value) {
+    errorText.value = 'Model selection changed. Click Reload before sending.';
+    return;
+  }
 
   inputText.value = '';
   streaming.value = true;
@@ -333,7 +342,6 @@ async function send() {
   }
 
   try {
-    const chat = chatRef.value;
     refreshSystemPrompt(chat);
 
     const execute = createDrawToolExecutor({
@@ -396,6 +404,9 @@ async function send() {
 
 function clearChat() {
   messages.value = [];
+  if (chatRef.value && typeof chatRef.value.reset === 'function') {
+    chatRef.value.reset();
+  }
 }
 
 function onComposerKey(event) {
