@@ -60,8 +60,8 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 - Sparse polylines while the user asked for a sine/wave get a `too_few_samples` warning so the tool loop can retry with `add_curve`.
 - Unknown `add_shape` types are rejected (no silent rectangle).
 - **Intent normalize** (`normalizeDrawUserIntent`): simple flags / stacked stripes are rewritten into explicit rectangle coordinates _before_ Gemma sees the user text, so the model is not asked to “paint a national flag” and does not refuse ordinary geometry. No second LLM. After the tool loop, `fulfillStackedBandIntent` adds or repositions any missing band (small models often emit one rectangle and claim they drew three).
-- **Per-turn harness** (`runDrawTurn`): fulfill is scoped to the **current** user message only — a previous flag plan is never re-applied on a later turn. If the user asks to clear, `clear_canvas` runs first (and again after the model loop if leftover flag bands remain). A “plot on x/y axes” request (sin/cos/tan + hyperbola/parabola) is fulfilled with axis lines + `add_curve` recipes, same spirit as flag fulfill.
-- **Assistant text matches the canvas**: the visible reply is authored from `list_shapes` / `getShapes()` after tools run. If the model says it drew axes while the canvas is still a flag, that sentence is not shown.
+- **Per-turn harness** (`runDrawTurn`): fulfill is scoped to the **current** user message only — a previous flag plan is never re-applied on a later turn. If the user asks to clear, `clear_canvas` runs first (and again after the model loop if leftover flag bands remain). A “plot on x/y axes” request (sin/cos/tan + hyperbola/parabola) is fulfilled with axis lines + `add_curve` recipes, same spirit as flag fulfill. Named recipes (five-point star, heart, spiral, smiley/wink/sad) are fulfilled the same way when the model emits nothing or the wrong tools.
+- **Assistant text matches the canvas**: the visible reply is authored from `list_shapes` / `getShapes()` after tools run. A success claim is never shown when the canvas is empty or unchanged — this is global, not only flag/math.
 - **Stacking**: `place="center"` no longer overwrites an explicit `y`. Repeating the same bbox (the usual “three `place=center` rectangles” mistake) auto-offsets `y` so the last fill cannot cover the others. `place="stack"` appends the next full-width band. `fillColor` / `color` are accepted as fill for solid bands.
 - Recipe / embedding retrieval for large catalogs is deferred — keep CRUD tools always in context; index recipes later with static embeddings when the library exceeds ~30 entries. Do **not** load a second WebGPU LLM beside Gemma.
 
@@ -69,18 +69,18 @@ In-browser AI-assisted SVG canvas powered by **Gemma 4** WebGPU tool calling and
 
 ## Manual dogfood script
 
-Open `http://localhost:3000/#demos/aidraw`, load Gemma, then try:
+Open `http://localhost:3000/#demos/aidraw`, load Gemma, then try (or click the example chips):
 
 1. `paint big fat nice Lithuanian flag (yellow-green-red)` — three stacked filled rectangles (yellow / green / red), **no refusal**.
-2. `ok, three fat big rectangle lines stacked: yellow on top, then green then red` — all three bands visible (not only the last red).
-3. `red sine in center of canvas` — expect a dense smooth wave via `add_curve`, not a 3-point zigzag.
-4. `clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — canvas is **not** the previous flag; axes + sin/cos (and tan/hyperbola) are present.
-5. `clear it — draw a 5-point star`
-6. `smooth spiral in the middle`
-7. `draw a green heart`
-8. `use eval_geometry to plot y = sin(x) across the canvas in blue`
+2. `draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — axes + sin/cos/tan/hyperbola; a previous flag is cleared.
+3. `draw a five pointed star` — five-point star via `add_curve kind=star`, even if the model emits no tools.
+4. `draw a yellow smiley face` — constructed 😊 (circle + eyes + mouth arc), not a Unicode glyph.
+5. `draw a green heart` — parametric heart recipe.
+6. `ok, three fat big rectangle lines stacked: yellow on top, then green then red` — all three bands visible (not only the last red).
+7. `clear canvas - draw x y axis and sin, cosin, tan and hyperbola on them - as in maths` — same math plot after an explicit clear.
+8. Full screen (canvas control or chat header) — big canvas + chat; example chips overlay the **empty** canvas, then sit in the chat **Try** row once shapes exist. **Exit full screen** in the top bar, or Escape.
 
-Success = stacked flags show every band; a later clear+math prompt does **not** leave the flag on screen; curves are smooth on the first or second tool round; assistant text matches the canvas; no “I cannot draw a flag / sine” apology.
+Success = stacked flags show every band; a later math prompt does **not** leave the flag on screen; a star/smiley/heart request leaves those shapes on the canvas; assistant text matches the canvas (never “I have drawn…” on an empty board); no “I cannot draw a flag / sine” apology.
 
 ### Automated tests
 

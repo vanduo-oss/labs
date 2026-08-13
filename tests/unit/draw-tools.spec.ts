@@ -947,4 +947,226 @@ test.describe('AI Draw tool executor unit tests', () => {
     expect(res.shapes.length).toBeGreaterThanOrEqual(1);
     expect(res.snapshot.curveCount).toBeGreaterThanOrEqual(1);
   });
+
+  test('add_curve recipe=star draws a visible five-point star', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, starTipCount, inspectDrawShapes } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const added = await execute('add_curve', { recipe: 'star' });
+      const list = await execute('list_shapes', {});
+      const snap = inspectDrawShapes(list);
+      const shape =
+        typeof editor.getShape === 'function'
+          ? editor.getShape(added.shapeId)
+          : (editor.toJSON()?.shapes || []).find((s) => s.id === added.shapeId);
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return {
+        added,
+        snap,
+        tips: starTipCount(shape?.points || list[0]?.points),
+        pointCount: shape?.points?.length || list[0]?.pointCount,
+        bbox: added.bbox,
+      };
+    });
+
+    expect(res.added.ok).toBe(true);
+    expect(res.added.kind).toBe('star');
+    expect(res.pointCount).toBeGreaterThanOrEqual(10);
+    expect(res.tips).toBeGreaterThanOrEqual(5);
+    expect(res.tips).toBeLessThanOrEqual(6);
+    expect(res.snap.looksLikeStar).toBe(true);
+    expect(res.bbox.maxX - res.bbox.minX).toBeGreaterThan(80);
+    expect(res.bbox.maxY - res.bbox.minY).toBeGreaterThan(80);
+  });
+
+  test('empty canvas + star success sentence + zero tools still draws a star', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, starTipCount } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const lie = 'I have drawn a five-pointed star on the canvas.';
+      const turn = await runDrawTurn({
+        userText: 'draw a five pointed star',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async () => lie,
+      });
+
+      const live =
+        typeof editor.getShapes === 'function' ? editor.getShapes() : editor.toJSON()?.shapes || [];
+      editor.destroy();
+      document.body.removeChild(container);
+      return {
+        turn,
+        liveCount: live.length,
+        tips: starTipCount(live[0]?.points || turn.shapes[0]?.points),
+      };
+    });
+
+    expect(res.turn.intent.recipe.simplified).toBe(true);
+    expect(res.turn.intent.kind).toBe('star');
+    expect(res.turn.modelReply).toMatch(/have drawn a five-pointed star/i);
+    expect(res.liveCount).toBeGreaterThanOrEqual(1);
+    expect(res.turn.snapshot.empty).toBe(false);
+    expect(res.turn.snapshot.looksLikeStar).toBe(true);
+    expect(res.turn.snapshot.curveCount).toBeGreaterThanOrEqual(1);
+    expect(res.tips).toBeGreaterThanOrEqual(4);
+    expect(res.turn.reply).not.toMatch(/have drawn a five-pointed star/i);
+    expect(res.turn.reply).toMatch(/star/i);
+    expect(res.turn.reply).not.toMatch(/nothing was drawn/i);
+  });
+
+  test('never echoes a success claim when the canvas stays empty', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, assistantTextFromCanvas } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const lie = 'I have drawn a five-pointed star on the canvas.';
+      const dragon = await runDrawTurn({
+        userText: 'draw a dragon breathing fire',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async () => lie,
+      });
+
+      const emptyClaim = assistantTextFromCanvas([], {}, lie);
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return { dragon, emptyClaim };
+    });
+
+    expect(res.dragon.snapshot.empty).toBe(true);
+    expect(res.dragon.shapes).toHaveLength(0);
+    expect(res.dragon.reply).not.toMatch(/have drawn|i drew|i've drawn/i);
+    expect(res.dragon.reply).toMatch(/nothing was drawn|empty/i);
+    expect(res.emptyClaim).not.toMatch(/have drawn/i);
+    expect(res.emptyClaim).toMatch(/nothing was drawn/i);
+  });
+
+  test('yellow smiley recipe adds a face even with zero tool calls', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: { width: 1000, height: 800 },
+      });
+
+      const turn = await runDrawTurn({
+        userText: 'draw a yellow smiley face',
+        execute,
+        canvas: { width: 1000, height: 800 },
+        generateWithTools: async () => 'I have drawn a smiley face.',
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return turn;
+    });
+
+    expect(res.intent.recipe.simplified).toBe(true);
+    expect(res.intent.recipe.variant).toBe('smiley');
+    expect(res.snapshot.looksLikeFace).toBe(true);
+    expect(res.snapshot.ellipseCount).toBeGreaterThanOrEqual(3);
+    expect(res.reply).toMatch(/smiley/i);
+    expect(res.reply).not.toMatch(/have drawn a smiley/i);
+  });
+
+  test('example prompts and fullscreen chip layout stay honest', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { DRAW_EXAMPLE_PROMPTS, drawPromptChipLayout, parseDrawTurnIntent } =
+        await import('/src/demos/draw-tools.js');
+      const canvas = { width: 1000, height: 800 };
+      return {
+        texts: DRAW_EXAMPLE_PROMPTS.map((p) => p.text),
+        ids: DRAW_EXAMPLE_PROMPTS.map((p) => p.id),
+        windowedEmpty: drawPromptChipLayout({
+          isFullscreen: false,
+          shapeCount: 0,
+          messageCount: 0,
+        }),
+        fullscreenEmpty: drawPromptChipLayout({
+          isFullscreen: true,
+          shapeCount: 0,
+          messageCount: 0,
+        }),
+        fullscreenDrawn: drawPromptChipLayout({
+          isFullscreen: true,
+          shapeCount: 3,
+          messageCount: 2,
+        }),
+        intents: {
+          flag: parseDrawTurnIntent(DRAW_EXAMPLE_PROMPTS[0].text, canvas).kind,
+          math: parseDrawTurnIntent(DRAW_EXAMPLE_PROMPTS[1].text, canvas).kind,
+          star: parseDrawTurnIntent(DRAW_EXAMPLE_PROMPTS[2].text, canvas).kind,
+          smiley: parseDrawTurnIntent(DRAW_EXAMPLE_PROMPTS[3].text, canvas).kind,
+          heart: parseDrawTurnIntent(DRAW_EXAMPLE_PROMPTS[4].text, canvas).kind,
+        },
+      };
+    });
+
+    expect(res.ids).toEqual(['lithuania', 'math', 'star', 'smiley', 'heart']);
+    expect(res.texts).toEqual([
+      'paint big fat nice Lithuanian flag (yellow-green-red)',
+      'draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+      'draw a five pointed star',
+      'draw a yellow smiley face',
+      'draw a green heart',
+    ]);
+    expect(res.windowedEmpty).toEqual({
+      canvasOverlay: false,
+      chatEmptyChips: true,
+      chatTryRow: false,
+    });
+    expect(res.fullscreenEmpty).toEqual({
+      canvasOverlay: true,
+      chatEmptyChips: false,
+      chatTryRow: true,
+    });
+    expect(res.fullscreenDrawn).toEqual({
+      canvasOverlay: false,
+      chatEmptyChips: false,
+      chatTryRow: true,
+    });
+    expect(res.intents.flag).toBe('flag:lithuania');
+    expect(res.intents.math).toBe('math-plot');
+    expect(res.intents.star).toBe('star');
+    expect(res.intents.smiley).toBe('face:smiley');
+    expect(res.intents.heart).toBe('heart');
+  });
 });

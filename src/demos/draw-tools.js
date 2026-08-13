@@ -1,4 +1,5 @@
 import { validateToolCall } from '@vanduo-oss/vdl-ai-chat/guardrails/tools';
+import { FACE_CURVE_KINDS, faceGlyphPlan, squareDrawBounds } from './draw-intent.js';
 
 export {
   normalizeDrawUserIntent,
@@ -18,6 +19,16 @@ export {
   fulfillMathPlotIntent,
   runDrawTurn,
   MATH_PLOT_STROKES,
+  DRAW_EXAMPLE_PROMPTS,
+  drawPromptChipLayout,
+  FACE_CURVE_KINDS,
+  squareDrawBounds,
+  starTipCount,
+  faceGlyphPlan,
+  parseNamedDrawIntent,
+  formatNamedDrawInstructions,
+  fulfillNamedDrawIntent,
+  looksLikeDrawSuccessClaim,
 } from './draw-intent.js';
 
 /** Default canvas size injected into the AI context when the host does not measure the DOM. */
@@ -47,6 +58,20 @@ const CURVE_KINDS = Object.freeze([
   'star',
   'arc',
   'heart',
+  'smiley',
+  'wink',
+  'sad',
+]);
+
+const RADIAL_CURVE_KINDS = new Set([
+  'star',
+  'polygon',
+  'heart',
+  'spiral',
+  'arc',
+  'smiley',
+  'wink',
+  'sad',
 ]);
 
 const CURVE_HINT_RE =
@@ -87,7 +112,7 @@ STACKING RULES (critical):
 - Solid bands need fill (CSS color or #hex). color/stroke alone is only an outline.
 
 CURVE RULES (critical):
-- Prefer add_curve for named formulas: sine / sinusoid / sin wave, cosine, spiral, star, polygon, arc, heart.
+- Prefer add_curve for named formulas: sine / sinusoid / sin wave, cosine, spiral, star, polygon, arc, heart, smiley / wink / sad faces.
 - For any custom smooth curve via add_shape, use type "line" or "freehand" with at least 32 [x,y] samples in points. Two-point lines are for straight segments only.
 - Never invent a sine from 3–4 peak points — that looks pointy. Use add_curve kind="sine" instead.
 - Use place="center" or place="full-width" when the user asks to center or span a single shape.
@@ -104,7 +129,8 @@ Use tools for canvas operations, do not just describe them.
 If asked to clear, call clear_canvas. Do not claim work the canvas does not show.
 Simple geometric flags (stacked colored rectangles) are in scope — draw them.
 Stacked shapes need distinct y values; do not reuse one bbox.
-Prefer add_curve for sine/cosine/tangent/hyperbola/parabola/wave/star/spiral/heart; do not approximate them with 3–4 line segments.
+Prefer add_curve for sine/cosine/tangent/hyperbola/parabola/wave/star/spiral/heart/smiley; do not approximate them with 3–4 line segments.
+For a five-pointed star use add_curve kind=star (recipe=star is accepted). For a yellow smiley use add_curve kind=smiley.
 Never inject scripts or HTML.
 Ensure coordinates are reasonable for the canvas size provided in the context.`;
 
@@ -171,11 +197,17 @@ export const DRAW_TOOL_DEFS = [
   {
     name: 'add_curve',
     description:
-      'Add a smooth parametric curve generated in TypeScript (not by inventing sparse points). Use for sine/sinusoid/sin wave, cosine, tangent, hyperbola, parabola, wave, spiral, polygon, star, arc, heart. Prefer this over add_shape for named formulas.',
+      'Add a smooth parametric curve generated in TypeScript (not by inventing sparse points). Use for sine/sinusoid/sin wave, cosine, tangent, hyperbola, parabola, wave, spiral, polygon, star, arc, heart, smiley, wink, sad. Prefer this over add_shape for named formulas. kind and recipe are aliases.',
     parameters: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: [...CURVE_KINDS] },
+        recipe: {
+          type: 'string',
+          enum: [...CURVE_KINDS],
+          description: 'Alias for kind (e.g. recipe="star").',
+        },
+        fill: { type: 'string', description: 'Face fill for smiley/wink/sad.' },
         bounds: {
           type: 'object',
           properties: {
@@ -198,7 +230,7 @@ export const DRAW_TOOL_DEFS = [
           description: 'If true, draw as freehand brush stroke instead of line.',
         },
       },
-      required: ['kind'],
+      required: [],
     },
   },
   {
@@ -475,6 +507,31 @@ function resolveBounds(args, canvasWidth, canvasHeight) {
   }
 
   return { x: Number(x), y: Number(y), w: Number(w), h: Number(h) };
+}
+
+function resolveCurveBounds(kind, args, canvasWidth, canvasHeight) {
+  const hasBox =
+    args.bounds != null ||
+    args.x != null ||
+    args.width != null ||
+    args.w != null ||
+    args.height != null ||
+    args.h != null;
+  if (!hasBox && RADIAL_CURVE_KINDS.has(kind)) {
+    return squareDrawBounds({ width: canvasWidth, height: canvasHeight });
+  }
+  const bounds = resolveBounds(args, canvasWidth, canvasHeight);
+  const explicitH = args.bounds?.h ?? args.bounds?.height ?? args.height ?? args.h;
+  if (RADIAL_CURVE_KINDS.has(kind) && explicitH == null) {
+    const size = Math.min(bounds.w, canvasHeight * 0.56);
+    return {
+      x: (canvasWidth - size) / 2,
+      y: (canvasHeight - size) / 2,
+      w: size,
+      h: size,
+    };
+  }
+  return bounds;
 }
 
 function applyPlaceToBox(args, canvasWidth, canvasHeight) {
@@ -834,6 +891,9 @@ export function buildDrawChatContext({
         'heart',
         'polygon',
         'arc',
+        'smiley',
+        'wink',
+        'sad',
       ],
       simpleFlagsAreGeometry: true,
       stackedBandsNeedDistinctY: true,
@@ -1027,14 +1087,32 @@ export function createDrawToolExecutor({ getEditor, getUserHint, canvasSize } = 
         }
 
         case 'add_curve': {
-          const kind = String(args.kind || '').toLowerCase();
+          const kind = String(args.kind || args.recipe || '').toLowerCase();
           if (!CURVE_KINDS.includes(kind)) {
             return {
               error: 'curve.unknown_kind',
-              message: `Unknown kind "${args.kind}". Allowed: ${CURVE_KINDS.join(', ')}`,
+              message: `Unknown kind "${args.kind || args.recipe}". Allowed: ${CURVE_KINDS.join(', ')}`,
             };
           }
-          const bounds = resolveBounds(args, width, height);
+          if (FACE_CURVE_KINDS.includes(kind)) {
+            const bounds = resolveCurveBounds(kind, args, width, height);
+            const fill = args.fill || args.fillColor || args.color || '#ffd000';
+            const ops = faceGlyphPlan(kind, { width, height, bounds }, fill);
+            const parts = [];
+            for (const op of ops) {
+              // Recurse: faces are ellipse + arc, never another face kind.
+              const res = await execute(op.name, op.args);
+              parts.push(res);
+            }
+            const ok = parts.every((p) => p && p.ok !== false && !p.error);
+            return {
+              ok,
+              kind,
+              parts: parts.length,
+              shapeIds: parts.map((p) => p.shapeId).filter(Boolean),
+            };
+          }
+          const bounds = resolveCurveBounds(kind, args, width, height);
           const points = sampleCurve(kind, bounds, {
             cycles: args.cycles,
             samples: args.samples,
@@ -1042,11 +1120,12 @@ export function createDrawToolExecutor({ getEditor, getUserHint, canvasSize } = 
             sides: args.sides,
           });
           const color = args.color || args.stroke || '#e11d48';
+          const thick = kind === 'star' || kind === 'heart' || kind === 'spiral';
           const shapeData = stripUndefined({
             type: args.asFreehand ? 'freehand' : 'line',
             points,
             color,
-            strokeWidth: args.strokeWidth,
+            strokeWidth: args.strokeWidth ?? (thick ? 3 : undefined),
             size: args.asFreehand ? args.strokeWidth || args.size : undefined,
             opacity: args.opacity,
             arrowEnd: false,
@@ -1188,6 +1267,7 @@ export function createDrawToolExecutor({ getEditor, getUserHint, canvasSize } = 
               height: s.h ?? s.height,
               color: s.color,
               fill: s.fill,
+              points: pts.length ? pts : undefined,
               pointCount: pts.length || undefined,
               x1: pts[0]?.[0],
               y1: pts[0]?.[1],

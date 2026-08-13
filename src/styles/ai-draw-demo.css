@@ -6,6 +6,141 @@
   overflow: hidden;
 }
 
+.vdl-ai-draw-card.is-fullscreen-host {
+  padding: 0 !important;
+  overflow: visible;
+}
+
+.vdl-ai-draw-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vdl-ai-draw-stage.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  background: var(--vd-draw-surface, var(--bg-primary, #ffffff));
+}
+
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  grid-template-columns: minmax(60%, 1fr) minmax(320px, 400px);
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-panel,
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-wrap,
+.vdl-ai-draw-stage.is-fullscreen .ai-draw-chat-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.ai-draw-fs-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-primary, #ffffff);
+}
+
+.ai-draw-fs-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+
+.ai-draw-fs-enter {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 12;
+  background-color: var(--bg-secondary, #ffffff) !important;
+  border: 1px solid var(--border-color, #e2e8f0);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.ai-draw-canvas-prompt-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  z-index: 11;
+  transform: translateX(-50%);
+  width: min(36rem, calc(100% - 2rem));
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-primary, #ffffff) 92%, transparent);
+  border: 1px solid var(--border-color, #e2e8f0);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(8px);
+}
+
+.ai-draw-canvas-prompt-kicker {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted, #64748b);
+  text-align: center;
+}
+
+.ai-draw-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.ai-draw-prompt-chips--footer {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.ai-draw-prompt-chips-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+  margin-right: 0.15rem;
+}
+
+.ai-draw-prompt-chip {
+  appearance: none;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #0f172a);
+  border-radius: 9999px;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.ai-draw-prompt-chip:hover:not(:disabled) {
+  border-color: var(--color-primary, #0284c7);
+  color: var(--color-primary, #0284c7);
+}
+
+.ai-draw-prompt-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Light / Dark Mode Canvas Tokens */
 html[data-theme='light'] .vdl-ai-draw-card,
 :root[data-theme='light'] .vdl-ai-draw-card {
@@ -353,5 +488,34 @@ html[data-theme='dark'] .ts-ai-bubble-md code {
   .ai-draw-chat-panel {
     min-height: 450px;
     height: 450px;
+  }
+
+  .vdl-ai-draw-stage.is-fullscreen .ai-draw-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 36vw);
+    flex-direction: unset;
+  }
+
+  .vdl-ai-draw-stage.is-fullscreen .ai-draw-chat-panel {
+    min-height: 0;
+    height: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .vdl-ai-draw-stage.is-fullscreen .ai-draw-main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .vdl-ai-draw-stage.is-fullscreen .ai-draw-canvas-panel {
+    flex: 1 1 58%;
+    min-height: 0;
+  }
+
+  .vdl-ai-draw-stage.is-fullscreen .ai-draw-chat-panel {
+    flex: 0 0 42%;
+    min-height: 220px;
+    height: auto;
   }
 }

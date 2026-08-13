@@ -32,9 +32,17 @@ declare global {
       reply: string;
       modelReply?: string;
       toolError?: string | null;
-      shapes: Array<{ type?: string; y?: number; fill?: string; pointCount?: number }>;
+      shapes: Array<{
+        type?: string;
+        y?: number;
+        fill?: string;
+        pointCount?: number;
+        points?: Array<[number, number]>;
+      }>;
       snapshot?: {
         looksLikeFlag?: boolean;
+        looksLikeStar?: boolean;
+        looksLikeFace?: boolean;
         hasAxes?: boolean;
         curveCount?: number;
         empty?: boolean;
@@ -159,6 +167,32 @@ test.describe('AI Draw local inference (simple requests)', () => {
     expect(out.math.snapshot?.hasAxes, `missing axes; reply=${out.math.reply}`).toBe(true);
     expect(out.math.snapshot?.curveCount ?? 0).toBeGreaterThanOrEqual(2);
     expect(String(out.math.reply || '')).not.toMatch(/still on the canvas/i);
+  });
+
+  test('Gemma or harness draws a five-pointed star and chat matches the canvas', async () => {
+    const page = sharedPage;
+    if (!page) throw new Error('inference page not initialized');
+
+    const star = await page.evaluate(async () => {
+      await window.__vdlAiDrawClear();
+      return window.__vdlAiDrawPrompt('draw a five pointed star');
+    });
+
+    expect(star.kind).toBe('star');
+    expect(star.snapshot?.empty, `empty canvas; reply=${star.reply}`).toBe(false);
+    expect(star.snapshot?.looksLikeStar || (star.snapshot?.curveCount ?? 0) >= 1).toBe(true);
+    expect(
+      star.shapes.some((s) => {
+        const n = Number(s.pointCount || s.points?.length || 0);
+        return (s.type === 'line' || s.type === 'freehand') && n >= 10;
+      }),
+      `expected a star polyline; reply=${star.reply} shapes=${JSON.stringify(star.shapes)}`,
+    ).toBe(true);
+    expect(String(star.reply || '')).toMatch(/star/i);
+    expect(String(star.reply || '')).not.toMatch(/have drawn a five-pointed star/i);
+    if (star.snapshot?.empty) {
+      expect(String(star.reply || '')).not.toMatch(/i (have )?drew|have drawn/i);
+    }
   });
 });
 

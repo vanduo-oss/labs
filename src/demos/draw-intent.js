@@ -343,6 +343,74 @@ export const MATH_PLOT_STROKES = Object.freeze({
   axis: '#111111',
 });
 
+/**
+ * Clickable demo prompts. Only strings the harness can fulfill with zero model
+ * tool calls (flags, math plot, star, smiley, heart).
+ */
+export const DRAW_EXAMPLE_PROMPTS = Object.freeze([
+  {
+    id: 'lithuania',
+    label: 'Lithuanian flag',
+    text: 'paint big fat nice Lithuanian flag (yellow-green-red)',
+  },
+  {
+    id: 'math',
+    label: 'Math axes',
+    text: 'draw x y axis and sin, cosin, tan and hyperbola on them - as in maths',
+  },
+  {
+    id: 'star',
+    label: 'Five-pointed star',
+    text: 'draw a five pointed star',
+  },
+  {
+    id: 'smiley',
+    label: '😊 Smiley',
+    text: 'draw a yellow smiley face',
+  },
+  {
+    id: 'heart',
+    label: 'Green heart',
+    text: 'draw a green heart',
+  },
+]);
+
+/**
+ * Where example chips belong for the current chrome (windowed vs fullscreen).
+ *
+ * @param {{ isFullscreen?: boolean, shapeCount?: number, messageCount?: number }} [opts]
+ */
+export function drawPromptChipLayout({
+  isFullscreen = false,
+  shapeCount = 0,
+  messageCount = 0,
+} = {}) {
+  const fs = Boolean(isFullscreen);
+  const emptyCanvas = Number(shapeCount) <= 0;
+  const emptyChat = Number(messageCount) <= 0;
+  return {
+    canvasOverlay: fs && emptyCanvas,
+    chatEmptyChips: !fs && emptyChat,
+    chatTryRow: fs || !emptyChat,
+  };
+}
+
+/** `add_curve` kinds that assemble a face from ellipse + eyes + mouth arc. */
+export const FACE_CURVE_KINDS = Object.freeze(['smiley', 'wink', 'sad']);
+
+const STAR_RE =
+  /\b((five|5)[\s-]*point(ed)?\s+stars?|(draw|paint|add|make|sketch)\b[\s\S]{0,48}\bstars?)\b|\b(a|the)\s+(five|5)[\s-]*point(ed)?\s+stars?\b/i;
+const HEART_RE =
+  /\b(draw|paint|add|make|sketch)\b[\s\S]{0,40}\bhearts?\b|\b(green|red|pink)\s+hearts?\b/i;
+const SPIRAL_RE = /\b(draw|paint|add|make|sketch)\b[\s\S]{0,40}\bspirals?\b|\bsmooth\s+spirals?\b/i;
+const WINK_RE = /\bwink(ing)?(\s+(face|smiley|emoji))?\b|😉/i;
+const SAD_FACE_RE = /\b(sad|frown(ing)?)(\s+(face|smiley|emoji))?\b|☹️|😞/i;
+const SMILEY_RE = /\b(smiley|smile\s*face|smiley\s*face)\b|😊|🙂|:-\)|:\)/i;
+const SUCCESS_CLAIM_RE =
+  /\b(i (have |just |’ve |'ve )?(drew|drawn|painted|added|created|sketched)|have drawn|just drew|i've drawn|successfully (drew|drawn|added))\b/i;
+const SUCCESS_CLAIM_NEG_RE =
+  /\b(did not|didn't|nothing was|could not|couldn't|failed to|not drawn|was not drawn|canvas is empty|nothing new)\b/i;
+
 const emptyStacked = () => ({
   text: '',
   simplified: false,
@@ -444,6 +512,324 @@ export function formatMathPlotInstructions(plan, canvas = FALLBACK_CANVAS) {
   return lines.join('\n');
 }
 
+const emptyRecipe = () => ({
+  simplified: false,
+  id: null,
+  kind: null,
+  family: null,
+  variant: null,
+  stroke: null,
+  fill: null,
+  sides: null,
+});
+
+/**
+ * Centered square bounds so stars / faces / hearts are not flattened by the
+ * default band height used for sine waves.
+ *
+ * @param {{ width?: number, height?: number }} [canvas]
+ * @param {number} [ratio]
+ */
+export function squareDrawBounds(canvas = FALLBACK_CANVAS, ratio = 0.56) {
+  const width = canvas.width ?? FALLBACK_CANVAS.width;
+  const height = canvas.height ?? FALLBACK_CANVAS.height;
+  const size = Math.round(Math.min(width, height) * ratio);
+  return {
+    x: Math.round((width - size) / 2),
+    y: Math.round((height - size) / 2),
+    w: size,
+    h: size,
+  };
+}
+
+/**
+ * Count outer radial peaks — a classic 5-point star has 5.
+ *
+ * @param {Array<[number, number]> | undefined} points
+ * @returns {number}
+ */
+export function starTipCount(points) {
+  if (!Array.isArray(points) || points.length < 10) return 0;
+  let pts = points
+    .map((p) => [Number(p[0]), Number(p[1])])
+    .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  if (pts.length < 10) return 0;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 3) pts = pts.slice(0, -1);
+  const n = pts.length;
+  if (n < 8) return 0;
+  const cx = pts.reduce((s, p) => s + p[0], 0) / n;
+  const cy = pts.reduce((s, p) => s + p[1], 0) / n;
+  const rs = pts.map((p) => Math.hypot(p[0] - cx, p[1] - cy));
+  let tips = 0;
+  for (let i = 0; i < n; i += 1) {
+    const prev = rs[(i + n - 1) % n];
+    const cur = rs[i];
+    const next = rs[(i + 1) % n];
+    if (cur > prev && cur >= next) tips += 1;
+  }
+  return tips;
+}
+
+function isClosedPolyline(shape) {
+  const pts = Array.isArray(shape?.points) ? shape.points : [];
+  if (pts.length < 8) return false;
+  const a = pts[0];
+  const b = pts[pts.length - 1];
+  if (!a || !b) return false;
+  return Math.hypot(Number(a[0]) - Number(b[0]), Number(a[1]) - Number(b[1])) < 8;
+}
+
+/**
+ * Ellipse + eyes + mouth-arc ops for constructed smileys (not Unicode glyphs).
+ *
+ * @param {string} variant smiley | wink | sad
+ * @param {{ width?: number, height?: number, bounds?: { x: number, y: number, w?: number, width?: number, h?: number, height?: number } }} [canvas]
+ * @param {string} [fill]
+ * @returns {Array<{ name: string, args: Record<string, unknown> }>}
+ */
+export function faceGlyphPlan(variant, canvas = FALLBACK_CANVAS, fill = '#ffd000') {
+  const width = canvas.width ?? FALLBACK_CANVAS.width;
+  const height = canvas.height ?? FALLBACK_CANVAS.height;
+  const bounds = canvas.bounds || squareDrawBounds({ width, height }, 0.52);
+  const x = Number(bounds.x);
+  const y = Number(bounds.y);
+  const w = Number(bounds.w ?? bounds.width);
+  const h = Number(bounds.h ?? bounds.height);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const v = variant === 'wink' || variant === 'sad' ? variant : 'smiley';
+  const faceFill = typeof fill === 'string' && fill.trim() ? fill.trim() : '#ffd000';
+  const ops = [
+    {
+      name: 'add_shape',
+      args: {
+        type: 'ellipse',
+        x,
+        y,
+        width: w,
+        height: h,
+        fill: faceFill,
+        stroke: '#111111',
+        strokeWidth: 5,
+      },
+    },
+  ];
+  const eyeW = Math.max(16, w * 0.11);
+  const eyeH = Math.max(20, h * 0.14);
+  const eyeY = y + h * 0.28;
+  const leftX = x + w * 0.28 - eyeW / 2;
+  const rightX = x + w * 0.72 - eyeW / 2;
+  ops.push({
+    name: 'add_shape',
+    args: {
+      type: 'ellipse',
+      x: leftX,
+      y: eyeY,
+      width: eyeW,
+      height: eyeH,
+      fill: '#111111',
+    },
+  });
+  if (v === 'wink') {
+    const wy = eyeY + eyeH * 0.45;
+    ops.push({
+      name: 'add_shape',
+      args: {
+        type: 'line',
+        x: rightX,
+        y: wy,
+        x2: rightX + eyeW,
+        y2: wy,
+        stroke: '#111111',
+        strokeWidth: 6,
+      },
+    });
+  } else {
+    ops.push({
+      name: 'add_shape',
+      args: {
+        type: 'ellipse',
+        x: rightX,
+        y: eyeY,
+        width: eyeW,
+        height: eyeH,
+        fill: '#111111',
+      },
+    });
+  }
+  const mouthW = w * 0.46;
+  const mouthH = h * 0.28;
+  const mouthX = cx - mouthW / 2;
+  const mouthY = v === 'sad' ? cy + h * 0.02 : cy + h * 0.08;
+  ops.push({
+    name: 'add_curve',
+    args: {
+      kind: 'arc',
+      bounds: { x: mouthX, y: mouthY, w: mouthW, h: mouthH },
+      phase: v === 'sad' ? Math.PI * 1.2 : Math.PI * 0.2,
+      cycles: v === 'sad' ? 0.6 : 0.65,
+      stroke: '#111111',
+      strokeWidth: 8,
+      samples: 32,
+    },
+  });
+  return ops;
+}
+
+/**
+ * Named recipes the harness can complete even if Gemma emits zero tools.
+ *
+ * @param {string} text
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export function parseNamedDrawIntent(text, _canvas = FALLBACK_CANVAS) {
+  const source = String(text || '').trim();
+  if (!source) return emptyRecipe();
+  const colors = extractStripeColors(source);
+  const color = colors[0];
+
+  if (WINK_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'wink',
+      kind: 'face:wink',
+      family: 'face',
+      variant: 'wink',
+      stroke: '#111111',
+      fill: color || '#ffd000',
+      sides: null,
+    };
+  }
+  if (SAD_FACE_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'sad',
+      kind: 'face:sad',
+      family: 'face',
+      variant: 'sad',
+      stroke: '#111111',
+      fill: color || '#93c5fd',
+      sides: null,
+    };
+  }
+  if (SMILEY_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'smiley',
+      kind: 'face:smiley',
+      family: 'face',
+      variant: 'smiley',
+      stroke: '#111111',
+      fill: color || '#ffd000',
+      sides: null,
+    };
+  }
+  if (STAR_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'star',
+      kind: 'star',
+      family: 'curve',
+      variant: 'star',
+      stroke: color || '#e11d48',
+      fill: null,
+      sides: 5,
+    };
+  }
+  if (HEART_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'heart',
+      kind: 'heart',
+      family: 'curve',
+      variant: 'heart',
+      stroke: color || '#e11d48',
+      fill: null,
+      sides: null,
+    };
+  }
+  if (SPIRAL_RE.test(source)) {
+    return {
+      simplified: true,
+      id: 'spiral',
+      kind: 'spiral',
+      family: 'curve',
+      variant: 'spiral',
+      stroke: color || '#7c3aed',
+      fill: null,
+      sides: null,
+    };
+  }
+  return emptyRecipe();
+}
+
+/**
+ * @param {ReturnType<typeof parseNamedDrawIntent>} plan
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export function formatNamedDrawInstructions(plan, canvas = FALLBACK_CANVAS) {
+  const bounds = squareDrawBounds(canvas);
+  const b = `bounds={x:${bounds.x},y:${bounds.y},w:${bounds.w},h:${bounds.h}}`;
+  if (plan?.family === 'face') {
+    return [
+      'Use tools now. Do not only describe. Draw this face with tools (circle, eyes, mouth).',
+      `1) add_curve kind=${plan.variant} ${b} fill=${plan.fill || '#ffd000'}`,
+      'After the tools run, reply with one short sentence naming only what is actually on the canvas.',
+    ].join('\n');
+  }
+  const extra = plan?.id === 'star' ? ' sides=5' : plan?.id === 'spiral' ? ' cycles=3' : '';
+  return [
+    'Use tools now. Do not only describe.',
+    `1) add_curve kind=${plan?.id || 'star'} ${b} samples=64 stroke=${plan?.stroke || '#e11d48'}${extra}`,
+    'After the tools run, reply with one short sentence naming only what is actually on the canvas.',
+  ].join('\n');
+}
+
+/**
+ * @param {(name: string, args: Record<string, unknown>) => unknown | Promise<unknown>} execute
+ * @param {ReturnType<typeof parseNamedDrawIntent>} plan
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export async function fulfillNamedDrawIntent(execute, plan, canvas = FALLBACK_CANVAS) {
+  if (typeof execute !== 'function' || !plan?.simplified) {
+    return { ok: false, added: 0 };
+  }
+  if (plan.family === 'face') {
+    const ops = faceGlyphPlan(plan.variant, canvas, plan.fill);
+    let added = 0;
+    for (const op of ops) {
+      const res = await execute(op.name, op.args);
+      if (res && res.ok !== false && !res.error) added += 1;
+    }
+    return { ok: true, added };
+  }
+  const bounds = squareDrawBounds(canvas);
+  await execute('add_curve', {
+    kind: plan.id,
+    bounds,
+    samples: 64,
+    stroke: plan.stroke || '#e11d48',
+    strokeWidth: 3,
+    sides: plan.sides || undefined,
+    cycles: plan.id === 'spiral' ? 3 : undefined,
+  });
+  return { ok: true, added: 1 };
+}
+
+/**
+ * True when assistant text claims a draw succeeded.
+ *
+ * @param {string} text
+ */
+export function looksLikeDrawSuccessClaim(text) {
+  const t = String(text || '');
+  if (!t.trim()) return false;
+  if (SUCCESS_CLAIM_NEG_RE.test(t)) return false;
+  return SUCCESS_CLAIM_RE.test(t) || /\bdrawn a\b/i.test(t);
+}
+
 /**
  * Per-turn intent. Never carries bands/plots from a previous user message.
  *
@@ -457,16 +843,26 @@ export function parseDrawTurnIntent(text, canvas = FALLBACK_CANVAS) {
   const stacked = math.simplified
     ? { ...emptyStacked(), text: raw }
     : normalizeDrawUserIntent(raw, canvas);
+  const recipe =
+    math.simplified || stacked.simplified ? emptyRecipe() : parseNamedDrawIntent(raw, canvas);
   let modelText = raw;
   if (stacked.simplified) modelText = stacked.text;
   else if (math.simplified) modelText = formatMathPlotInstructions(math, canvas);
+  else if (recipe.simplified) modelText = formatNamedDrawInstructions(recipe, canvas);
   return {
     raw,
     wantsClear,
     stacked,
     math,
+    recipe,
     modelText,
-    kind: stacked.simplified ? stacked.kind : math.simplified ? math.kind : null,
+    kind: stacked.simplified
+      ? stacked.kind
+      : math.simplified
+        ? math.kind
+        : recipe.simplified
+          ? recipe.kind
+          : null,
     clearOnly: wantsClear && isClearOnlyRequest(raw),
   };
 }
@@ -501,11 +897,17 @@ export function inspectDrawShapes(shapes) {
   let hasAxisX = false;
   let hasAxisY = false;
   let curveCount = 0;
+  let looksLikeStar = false;
+  let looksLikeHeart = false;
   for (const s of list) {
     if (s?.type !== 'line' && s?.type !== 'freehand') continue;
     const { n, x1, y1, x2, y2 } = lineEndpoints(s);
+    const pts = Array.isArray(s?.points) ? s.points : [];
+    const tips = starTipCount(pts);
+    if (tips >= 4 && tips <= 8) looksLikeStar = true;
     if (n >= 8) {
       curveCount += 1;
+      if (isClosedPolyline(s) && n >= 24 && tips !== 5) looksLikeHeart = true;
       continue;
     }
     if (x1 == null || y1 == null || x2 == null || y2 == null) continue;
@@ -515,12 +917,19 @@ export function inspectDrawShapes(shapes) {
     if (dy > 80 && dx < 28) hasAxisY = true;
   }
 
+  const ellipses = list.filter((s) => s?.type === 'ellipse');
+  const looksLikeFace = ellipses.length >= 1 && (ellipses.length >= 2 || curveCount >= 1);
+
   return {
     count: list.length,
     rects,
     fills,
     looksLikeFlag,
     looksLikeStackedBands,
+    looksLikeStar,
+    looksLikeHeart,
+    looksLikeFace,
+    ellipseCount: ellipses.length,
     hasAxes: hasAxisX && hasAxisY,
     hasAxisX,
     hasAxisY,
@@ -559,6 +968,7 @@ export function assistantClaimConflictsWithCanvas(modelReply, snap) {
   const text = String(modelReply || '');
   if (!text.trim()) return false;
   const view = snap || inspectDrawShapes([]);
+  if (view.empty && looksLikeDrawSuccessClaim(text)) return true;
   if (/\b(cleared|empty canvas|canvas is empty)\b/i.test(text) && view.count > 0) return true;
   if (/\bax(?:es|is)\b/i.test(text) && !view.hasAxes) return true;
   if (
@@ -568,6 +978,9 @@ export function assistantClaimConflictsWithCanvas(modelReply, snap) {
     return true;
   }
   if (/\b(flag|tricolou?r|stacked bands?)\b/i.test(text) && view.rects.length < 2) return true;
+  if (/\bstars?\b/i.test(text) && !view.looksLikeStar) return true;
+  if (/\b(smiley|smile face|wink|sad face)\b/i.test(text) && !view.looksLikeFace) return true;
+  if (/\bhearts?\b/i.test(text) && !view.looksLikeHeart && view.curveCount < 1) return true;
   return false;
 }
 
@@ -580,19 +993,31 @@ export function assistantClaimConflictsWithCanvas(modelReply, snap) {
  * @param {string} [modelReply]
  * @returns {string}
  */
-export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '') {
+export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', turn = {}) {
   const snap = inspectDrawShapes(shapes);
   const claimed = String(modelReply || '').trim();
+  const askedToDraw = Boolean(
+    intent.math?.simplified || intent.stacked?.simplified || intent.recipe?.simplified,
+  );
+  const addedCount = turn.addedCount;
+  const unchanged = addedCount === 0;
 
   if (snap.empty) {
-    if (intent.wantsClear && !intent.math?.simplified && !intent.stacked?.simplified) {
+    if (intent.wantsClear && !askedToDraw) {
       return 'The canvas is cleared.';
     }
-    if (intent.math?.simplified || intent.stacked?.simplified) {
+    if (
+      askedToDraw ||
+      looksLikeDrawSuccessClaim(claimed) ||
+      assistantClaimConflictsWithCanvas(claimed, snap)
+    ) {
       return 'Nothing was drawn on the canvas.';
     }
-    if (assistantClaimConflictsWithCanvas(claimed, snap)) return 'The canvas is empty.';
     return claimed || 'The canvas is empty.';
+  }
+
+  if (unchanged && looksLikeDrawSuccessClaim(claimed)) {
+    return `${describeShapesBrief(snap)} Nothing new was drawn.`;
   }
 
   if (intent.math?.simplified) {
@@ -615,6 +1040,20 @@ export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '') {
   if (intent.stacked?.simplified) {
     if (snap.rects.length === 0) return 'No rectangles were added to the canvas.';
     return `Drew ${snap.rects.length} stacked band${snap.rects.length === 1 ? '' : 's'}.`;
+  }
+
+  if (intent.recipe?.simplified) {
+    if (intent.recipe.id === 'star' && snap.looksLikeStar) return 'Drew a five-pointed star.';
+    if (intent.recipe.family === 'face' && snap.looksLikeFace) {
+      if (intent.recipe.variant === 'wink') return 'Drew a winking face.';
+      if (intent.recipe.variant === 'sad') return 'Drew a sad face.';
+      return 'Drew a smiley face.';
+    }
+    if (intent.recipe.id === 'heart' && (snap.looksLikeHeart || snap.curveCount >= 1)) {
+      return 'Drew a heart.';
+    }
+    if (intent.recipe.id === 'spiral' && snap.curveCount >= 1) return 'Drew a spiral.';
+    return describeShapesBrief(snap);
   }
 
   if (assistantClaimConflictsWithCanvas(claimed, snap)) return describeShapesBrief(snap);
@@ -732,6 +1171,11 @@ export async function runDrawTurn({
     await onBeforeGenerate(intent);
   }
 
+  const beforeList = await execute('list_shapes', {});
+  const beforeIds = new Set(
+    (Array.isArray(beforeList) ? beforeList : []).map((s) => s?.id).filter(Boolean),
+  );
+
   let modelReply = '';
   let toolError = null;
   if (typeof generateWithTools === 'function') {
@@ -761,6 +1205,14 @@ export async function runDrawTurn({
     }
   } else if (intent.stacked.simplified && intent.stacked.bands.length) {
     await fulfillStackedBandIntent(execute, intent.stacked.bands);
+  } else if (intent.recipe?.simplified) {
+    const snap = inspectDrawShapes(await execute('list_shapes', {}));
+    const need =
+      (intent.recipe.id === 'star' && !snap.looksLikeStar) ||
+      (intent.recipe.id === 'heart' && !snap.looksLikeHeart && snap.curveCount < 1) ||
+      (intent.recipe.id === 'spiral' && snap.curveCount < 1) ||
+      (intent.recipe.family === 'face' && !snap.looksLikeFace);
+    if (need) await fulfillNamedDrawIntent(execute, intent.recipe, canvas);
   } else if (intent.clearOnly) {
     await execute('clear_canvas', {});
   }
@@ -768,6 +1220,7 @@ export async function runDrawTurn({
   const rawList = await execute('list_shapes', {});
   const shapes = Array.isArray(rawList) ? rawList : [];
   const snapshot = inspectDrawShapes(shapes);
-  const reply = assistantTextFromCanvas(shapes, intent, modelReply);
-  return { intent, modelReply, reply, shapes, snapshot, toolError };
+  const addedCount = shapes.filter((s) => s?.id && !beforeIds.has(s.id)).length;
+  const reply = assistantTextFromCanvas(shapes, intent, modelReply, { addedCount });
+  return { intent, modelReply, reply, shapes, snapshot, toolError, addedCount };
 }

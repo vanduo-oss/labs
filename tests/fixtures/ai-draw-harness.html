@@ -118,7 +118,11 @@
         const last = {
           userText,
           modelText: result.intent.modelText,
-          simplified: Boolean(result.intent.stacked.simplified || result.intent.math.simplified),
+          simplified: Boolean(
+            result.intent.stacked.simplified ||
+              result.intent.math.simplified ||
+              result.intent.recipe?.simplified,
+          ),
           kind: result.intent.kind,
           reply: result.reply,
           modelReply: result.modelReply,
