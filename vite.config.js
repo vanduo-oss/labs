@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const localModelsDir = path.join(root, '.models');
+/** Monorepo sibling — prefer local draw engine while dogfooding harness changes. */
+const localCbunDraw = path.resolve(root, '../perspective/vd3-cbun/dist/draw');
+const useLocalCbunDraw = fs.existsSync(path.join(localCbunDraw, 'index.js'));
 
 /** Dev-only: serve `.models/<id>/…` at `/models/<id>/…` (never copied into `dist/`).
  *  Also accepts HuggingFace-style `/resolve/main/…` suffixes that WebLLM appends.
@@ -64,6 +67,14 @@ export default defineConfig({
       ],
     }),
   ],
+  resolve: {
+    alias: useLocalCbunDraw
+      ? {
+          '@vanduo-oss/vd3-cbun/draw/css': path.join(localCbunDraw, 'vd3-draw.css'),
+          '@vanduo-oss/vd3-cbun/draw': localCbunDraw,
+        }
+      : {},
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -71,6 +82,7 @@ export default defineConfig({
       input: {
         main: path.resolve(root, 'index.html'),
         'ai-chat-demo': path.resolve(root, 'demo/ai-chat-demo.html'),
+        'ai-draw-demo': path.resolve(root, 'demo/ai-draw-demo.html'),
         'hybrid-search-demo': path.resolve(root, 'demo/hybrid-search-demo.html'),
         'model-eval-harness': path.resolve(root, 'demo/model-eval-harness.html'),
       },
