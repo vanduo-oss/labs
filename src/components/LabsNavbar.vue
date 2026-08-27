@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useNavbarGlassScroll, VdIcon, VdThemeCustomizer, VdThemeSwitcher } from '@vanduo-oss/vd3';
 
 const props = defineProps({
-  /** Active top-level route: home | about | demos | tools */
+  /** Active top-level route: home | about | demos */
   route: { type: String, required: true },
 });
 
@@ -22,7 +22,6 @@ const links = [
   { label: 'Home', href: '#home', id: 'home' },
   { label: 'About', href: '#about', id: 'about' },
   { label: 'Demos', href: '#demos', id: 'demos' },
-  { label: 'Tools', href: '#tools', id: 'tools' },
 ];
 
 function toggleMenu() {

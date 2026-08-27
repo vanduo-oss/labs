@@ -10,7 +10,7 @@ Live demos: **https://labs.vanduo.dev**
 |------|------|
 | [`@vanduo-oss/vdl-hybrid-search`](https://www.npmjs.com/package/@vanduo-oss/vdl-hybrid-search) | Headless `HybridSearch` + search guardrails |
 | [`@vanduo-oss/vdl-ai-chat`](https://www.npmjs.com/package/@vanduo-oss/vdl-ai-chat) | Headless `AiChat` + LLM/tools guardrails + markdown |
-| Labs-local `model-eval.js` | Model evaluation harness used by the Tools demo |
+| Labs-local `model-eval.js` | Model evaluation harness (CLI / standalone; not listed on the live site) |
 
 ```bash
 pnpm add @vanduo-oss/vdl-hybrid-search @vanduo-oss/vdl-ai-chat
@@ -65,8 +65,28 @@ See [doc/vdl-ai-chat.md](./doc/vdl-ai-chat.md).
 
 ```bash
 pnpm models:fetch   # optional local .models/ mirror for faster dev
-pnpm model-eval     # Tools page #tools/model-eval — see doc/vdl-model-eval.md
+pnpm model-eval     # local CLI eval harness — see doc/vdl-model-eval.md
 ```
+
+---
+
+## vdl-ai-draw (in-repo / local)
+
+Alpha — **not listed** on the live Labs site. AI-assisted SVG canvas: host-executed DrawPlans from Gemma 4 (E2B default) with a regex recipe fast-path, read-only question turns, and an optional flagged WebLLM Qwen3-0.6B fast planner. Standalone: `demo/ai-draw-demo.html`. Labs UI: `VdlAiDrawUI`.
+
+See [doc/vdl-ai-draw.md](./doc/vdl-ai-draw.md).
+
+```bash
+pnpm model-eval:draw   # darwin/arm64: plan-validity + latency baseline per model
+```
+
+---
+
+## vdl-model-eval (in-repo / local)
+
+Alpha — **not listed** on the live Labs site (Tools nav removed). Local CLI + harness for scoring published models; report UI stays available via `demo/model-eval-harness.html` and `VdlModelEvalUI` for local use.
+
+See [doc/vdl-model-eval.md](./doc/vdl-model-eval.md).
 
 ---
 
@@ -80,6 +100,8 @@ pnpm dev
 - `http://localhost:3000/` — Labs site
 - `http://localhost:3000/demo/hybrid-search-demo.html`
 - `http://localhost:3000/demo/ai-chat-demo.html`
+- `http://localhost:3000/demo/ai-draw-demo.html` — local only (not on live demos)
+- `http://localhost:3000/demo/model-eval-harness.html` — local only
 
 ```bash
 pnpm format:check && pnpm lint && pnpm test:unit && pnpm build

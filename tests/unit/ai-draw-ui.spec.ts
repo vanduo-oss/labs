@@ -92,24 +92,6 @@ test.describe('AI Draw fullscreen chrome', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('ai-draw-stage')).toHaveAttribute('data-fullscreen', 'false');
   });
-
-  test('labs glass card stack still fills the viewport', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        'vanduo-labs-toc-accepted',
-        JSON.stringify({ version: '1', acceptedAt: new Date().toISOString() }),
-      );
-    });
-    await page.goto('/#demos/aidraw');
-    await expect(page.getByTestId('ai-draw-fullscreen-enter')).toBeVisible();
-    await page.getByTestId('ai-draw-fullscreen-enter').click();
-    await expect(page.getByTestId('ai-draw-stage')).toHaveAttribute('data-fullscreen', 'true');
-    await expectStageFillsViewport(page);
-    await expectChatPaneVisibleInOverlay(page);
-    await page.getByTestId('ai-draw-fullscreen-exit').click();
-    await expect(page.getByTestId('ai-draw-stage')).toHaveAttribute('data-fullscreen', 'false');
-    await expect(page.getByTestId('ai-draw-chat-panel')).toBeVisible();
-  });
 });
 
 async function injectChatBubbles(page) {
