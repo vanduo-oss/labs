@@ -4,6 +4,10 @@ Demo playground for the Vanduo ecosystem. Labs **consumes** published VDL engine
 
 Live demos: **https://labs.vanduo.dev**
 
+## Widgets (`@vanduo-oss/vdl-cbun`)
+
+Widget demos (`#widgets/*`) dogfood [`@vanduo-oss/vdl-cbun`](https://github.com/vanduo-oss/vdl-cbun). Until that package is published to npm, `package.json` uses `link:../vdl-cbun` and `vite.config.js` aliases into the sibling `dist/` — keep that for local install; swap to a registry semver pin after publish.
+
 ## Engines (npm)
 
 | Package | Role |

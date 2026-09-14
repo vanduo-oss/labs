@@ -49,7 +49,7 @@ test.describe('vdl theme defaults', () => {
 
     expect(defaults.FONT).toBe('open-sans');
     expect(defaults.NEUTRAL).toBe('neutral');
-    expect(defaults.RADIUS).toBe('0.25');
+    expect(defaults.RADIUS).toBe('0.5');
     expect(defaults.PALETTE).toBe('open-color');
     expect(defaults.THEME).toBe('system');
   });

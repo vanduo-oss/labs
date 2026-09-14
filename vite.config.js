@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const localModelsDir = path.join(root, '.models');
-/** Monorepo sibling — prefer local draw engine while dogfooding harness changes. */
-const localCbunDraw = path.resolve(root, '../perspective/vd3-cbun/dist/draw');
-const useLocalCbunDraw = fs.existsSync(path.join(localCbunDraw, 'index.js'));
+const vdlCbunRoot = path.resolve(root, '../vdl-cbun');
+const vdlCbunDist = path.join(vdlCbunRoot, 'dist');
+const useLocalVdlCbun = fs.existsSync(path.join(vdlCbunDist, 'index.js'));
 
 /** Dev-only: serve `.models/<id>/…` at `/models/<id>/…` (never copied into `dist/`).
  *  Also accepts HuggingFace-style `/resolve/main/…` suffixes that WebLLM appends.
@@ -54,6 +54,30 @@ function localModelsPlugin() {
   };
 }
 
+const vdlCbunAlias = useLocalVdlCbun
+  ? {
+      '@vanduo-oss/vdl-cbun/code-editor/css': path.join(
+        vdlCbunDist,
+        'code-editor/vd3-code-editor.css',
+      ),
+      '@vanduo-oss/vdl-cbun/code-editor/highlight': path.join(
+        vdlCbunDist,
+        'code-editor/highlight.js',
+      ),
+      '@vanduo-oss/vdl-cbun/code-editor': path.join(vdlCbunDist, 'code-editor'),
+      '@vanduo-oss/vdl-cbun/draw/css': path.join(vdlCbunDist, 'draw/vd3-draw.css'),
+      '@vanduo-oss/vdl-cbun/draw': path.join(vdlCbunDist, 'draw'),
+      '@vanduo-oss/vdl-cbun/hex-grid/hex-math': path.join(vdlCbunDist, 'hex-grid/hex-math.js'),
+      '@vanduo-oss/vdl-cbun/hex-grid': path.join(vdlCbunDist, 'hex-grid'),
+      '@vanduo-oss/vdl-cbun/music-player/css': path.join(
+        vdlCbunDist,
+        'music-player/vd3-music-player.css',
+      ),
+      '@vanduo-oss/vdl-cbun/music-player': path.join(vdlCbunDist, 'music-player'),
+      '@vanduo-oss/vdl-cbun': vdlCbunDist,
+    }
+  : {};
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -68,12 +92,9 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: useLocalCbunDraw
-      ? {
-          '@vanduo-oss/vd3-cbun/draw/css': path.join(localCbunDraw, 'vd3-draw.css'),
-          '@vanduo-oss/vd3-cbun/draw': localCbunDraw,
-        }
-      : {},
+    alias: {
+      ...vdlCbunAlias,
+    },
   },
   build: {
     outDir: 'dist',
@@ -93,6 +114,9 @@ export default defineConfig({
     // Large local `.litertlm` downloads need more than the default keep-alive window.
     headers: {
       Connection: 'keep-alive',
+    },
+    fs: {
+      allow: [root, ...(useLocalVdlCbun ? [vdlCbunRoot] : [])],
     },
   },
   preview: {

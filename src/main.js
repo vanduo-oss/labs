@@ -1,8 +1,12 @@
 import { createApp } from 'vue';
 import { VanduoVue } from '@vanduo-oss/vd3';
 import '@vanduo-oss/vd3/css';
+import '@vanduo-oss/vdl-cbun/code-editor/css';
+import '@vanduo-oss/vdl-cbun/draw/css';
+import '@vanduo-oss/vdl-cbun/music-player/css';
 import './styles/legacy-bridge.css';
 import './styles/labs.css';
+import './styles/labs-dock.css';
 import { VDL_THEME_DEFAULTS } from './vdl-theme-defaults.js';
 import { installResolvedTheme } from './vdl-resolved-theme.js';
 import App from './App.vue';

@@ -259,8 +259,8 @@
 <script setup>
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { VdButton, VdCard, VdIcon, VdProgress, VdAlert } from '@vanduo-oss/vd3';
-import { VdDraw } from '@vanduo-oss/vd3-cbun/draw';
-import '@vanduo-oss/vd3-cbun/draw/css';
+import { VdDraw } from '@vanduo-oss/vdl-cbun/draw';
+import '@vanduo-oss/vdl-cbun/draw/css';
 import {
   validateLlmInput,
   LLM_BLOCK_MESSAGE,

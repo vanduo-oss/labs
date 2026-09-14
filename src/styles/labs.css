@@ -104,13 +104,8 @@ body {
   text-overflow: ellipsis;
 }
 
-:root {
-  --labs-main-offset: calc(5rem + var(--vd-navbar-float-inset, 0.75rem));
-}
+/* Navbar leftovers kept for any residual chrome; primary shell is labs-dock.css. */
 
-.labs-main-shell {
-  padding-top: var(--labs-main-offset);
-}
 
 /* Always-visible navbar actions (GitHub + theme) — docs chrome pattern */
 .navbar-actions-always {
@@ -893,6 +888,7 @@ body:has(main[data-labs-route='home']) {
 main[data-labs-route='home'] .labs-view:not(.labs-view-home),
 main[data-labs-route='about'] .labs-view:not(.labs-view-about),
 main[data-labs-route='demos'] .labs-view:not(.labs-view-demos),
+main[data-labs-route='widgets'] .labs-view:not(.labs-view-widgets),
 main[data-labs-route='tools'] .labs-view:not(.labs-view-tools) {
   display: none;
 }

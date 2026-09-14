@@ -12,12 +12,17 @@ import {
   hasAcceptedDisclaimer,
   hasDeclinedDisclaimer,
 } from './lib/disclaimer.js';
-import LabsNavbar from './components/LabsNavbar.vue';
+import LabsSiteDock from './components/LabsSiteDock.vue';
 import LabsDisclaimerGate from './components/LabsDisclaimerGate.vue';
 import LabsFarewell from './components/LabsFarewell.vue';
 import VdlHybridSearchUI from './components/VdlHybridSearchUI.vue';
 import VdlAiChatUI from './components/VdlAiChatUI.vue';
 import VdlHomeAtmosphere from './components/VdlHomeAtmosphere.vue';
+import WidgetsLanding from './components/widgets/WidgetsLanding.vue';
+import WidgetDraw from './pages/widgets/Draw.vue';
+import WidgetHex from './pages/widgets/Hex.vue';
+import WidgetCodeEditor from './pages/widgets/CodeEditor.vue';
+import WidgetMusicPlayer from './pages/widgets/MusicPlayer.vue';
 import {
   isGladosHomeQuote,
   nextHomeQuoteIntervalMs,
@@ -25,7 +30,8 @@ import {
 } from './vdl-home-quotes.js';
 
 const DEMO_SLUGS = new Set(['neptune', 'aichat']);
-const ROUTES = ['home', 'about', 'demos'];
+const WIDGET_SLUGS = new Set(['draw', 'hex', 'code-editor', 'music-player']);
+const ROUTES = ['home', 'about', 'demos', 'widgets'];
 const DOCS_BASE_URL = DEFAULT_DOCS_BASE_URL;
 const HOME_QUOTE_FADE_MS = 180;
 
@@ -40,6 +46,7 @@ const consentView = ref(/** @type {ConsentView} */ ('gate'));
 const consentHydrated = ref(false);
 const route = ref('home');
 const demoSlug = ref(null);
+const widgetSlug = ref(null);
 const docHtml = ref('');
 const docLoading = ref(false);
 const docError = ref('');
@@ -161,15 +168,20 @@ function parseLabsHash() {
     .filter(Boolean);
   let nextRoute = segments[0] || 'home';
   if (nextRoute === 'farewell') {
-    return { route: 'farewell', demoSlug: null };
+    return { route: 'farewell', demoSlug: null, widgetSlug: null };
   }
   if (nextRoute === 'demos') {
     let nextDemo = segments.length > 1 ? segments[1] : null;
     if (nextDemo && !DEMO_SLUGS.has(nextDemo)) nextDemo = null;
-    return { route: nextRoute, demoSlug: nextDemo };
+    return { route: nextRoute, demoSlug: nextDemo, widgetSlug: null };
+  }
+  if (nextRoute === 'widgets') {
+    let nextWidget = segments.length > 1 ? segments[1] : null;
+    if (nextWidget && !WIDGET_SLUGS.has(nextWidget)) nextWidget = null;
+    return { route: nextRoute, demoSlug: null, widgetSlug: nextWidget };
   }
   if (!ROUTES.includes(nextRoute)) nextRoute = 'home';
-  return { route: nextRoute, demoSlug: null };
+  return { route: nextRoute, demoSlug: null, widgetSlug: null };
 }
 
 async function fetchDocumentationHtml(slug) {
@@ -201,7 +213,7 @@ async function loadDocumentationForSlug(slug) {
   }
 }
 
-function applyLabsRoute(nextRoute, nextDemoSlug) {
+function applyLabsRoute(nextRoute, nextDemoSlug, nextWidgetSlug) {
   if (nextRoute === 'farewell') {
     if (!hasAcceptedDisclaimer(TOC_VERSION)) {
       persistDecline();
@@ -210,6 +222,7 @@ function applyLabsRoute(nextRoute, nextDemoSlug) {
       history.replaceState(null, '', '#home');
       nextRoute = 'home';
       nextDemoSlug = null;
+      nextWidgetSlug = null;
     }
   }
 
@@ -221,6 +234,7 @@ function applyLabsRoute(nextRoute, nextDemoSlug) {
   lastTopLevelRoute = nextRoute;
   route.value = nextRoute === 'farewell' ? 'home' : nextRoute;
   demoSlug.value = nextRoute === 'demos' ? nextDemoSlug : null;
+  widgetSlug.value = nextRoute === 'widgets' ? nextWidgetSlug : null;
 
   if (routeChanged) window.scrollTo(0, 0);
 
@@ -251,6 +265,10 @@ function applyLabsRoute(nextRoute, nextDemoSlug) {
       docError.value = '';
       docLoading.value = false;
     }
+  } else if (nextRoute === 'widgets') {
+    liveRegionText.value = nextWidgetSlug
+      ? `Widget ${nextWidgetSlug} opened.`
+      : 'Widgets landing opened.';
   }
 }
 
@@ -258,9 +276,9 @@ function syncLabsRouteFromHash() {
   let parsed = parseLabsHash();
   if (!location.hash) {
     history.replaceState(null, '', '#home');
-    parsed = { route: 'home', demoSlug: null };
+    parsed = { route: 'home', demoSlug: null, widgetSlug: null };
   }
-  applyLabsRoute(parsed.route, parsed.demoSlug);
+  applyLabsRoute(parsed.route, parsed.demoSlug, parsed.widgetSlug);
 }
 
 function selectDemo(slug) {
@@ -305,9 +323,9 @@ watch(demoSlug, (slug) => {
   />
 
   <template v-else-if="appUnlocked">
-    <LabsNavbar :route="route" />
+    <LabsSiteDock :route="route" :widget-slug="widgetSlug" />
 
-    <main class="labs-main-shell" :data-labs-route="route">
+    <main class="labs-main-shell" :data-labs-route="route" :data-labs-widget="widgetSlug || undefined">
       <div
         class="labs-view labs-view-home"
         data-labs-panel="home"
@@ -571,6 +589,21 @@ watch(demoSlug, (slug) => {
               </div>
             </VdCard>
           </section>
+        </div>
+      </div>
+
+      <div
+        class="labs-view labs-view-widgets"
+        data-labs-panel="widgets"
+        :aria-hidden="route === 'widgets' ? 'false' : 'true'"
+        :inert="route !== 'widgets'"
+      >
+        <div class="vd-container-responsive labs-main">
+          <WidgetsLanding v-if="route === 'widgets' && !widgetSlug" />
+          <WidgetDraw v-else-if="widgetSlug === 'draw'" />
+          <WidgetHex v-else-if="widgetSlug === 'hex'" />
+          <WidgetCodeEditor v-else-if="widgetSlug === 'code-editor'" />
+          <WidgetMusicPlayer v-else-if="widgetSlug === 'music-player'" />
         </div>
       </div>
     </main>

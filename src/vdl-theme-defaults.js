@@ -14,7 +14,7 @@ export const VDL_THEME_DEFAULTS = Object.freeze({
   PRIMARY_LIGHT: 'sky',
   PRIMARY_DARK: 'sky',
   NEUTRAL: 'neutral',
-  RADIUS: '0.25',
+  RADIUS: '0.5',
   FONT: 'open-sans',
   THEME: 'system',
 });

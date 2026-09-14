@@ -19,11 +19,11 @@ test.describe('Labs disclaimer gate', () => {
   test('accept unlocks the app shell', async ({ page }) => {
     await page.goto('/#home');
     await expect(page.getByTestId('disclaimer-gate')).toBeVisible();
-    await expect(page.locator('.vd-navbar')).toHaveCount(0);
+    await expect(page.locator('.vd-site-dock')).toHaveCount(0);
 
     await page.getByTestId('disclaimer-accept').click();
     await expect(page.getByTestId('disclaimer-gate')).toHaveCount(0);
-    await expect(page.locator('.vd-navbar')).toBeVisible();
+    await expect(page.locator('.vd-site-dock')).toBeVisible();
     await expect(page.locator('.hero-title')).toBeVisible();
 
     const stored = await page.evaluate((key) => localStorage.getItem(key), TOC_KEY);

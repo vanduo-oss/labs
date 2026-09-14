@@ -1,0 +1,875 @@
+/* Labs site dock — page padding + chrome (adapted from vd3-docs). */
+
+:root {
+  /* Offsets clear the fixed site dock (data-labs-dock). */
+  --labs-dock-clearance: 5.5rem;
+  --labs-dock-edge-pad-bottom: 0;
+  --labs-dock-edge-pad-left: 0;
+  --labs-dock-edge-pad-right: 0;
+  --labs-main-offset: 1rem;
+  --labs-sticky-offset: 1rem;
+  --labs-main-min-height-offset: 12.5rem;
+}
+
+html[data-labs-dock="bottom"],
+html:not([data-labs-dock]) {
+  --labs-main-offset: 1rem;
+  --labs-sticky-offset: 1rem;
+  --labs-dock-edge-pad-bottom: var(--labs-dock-clearance);
+}
+
+html[data-labs-dock="top"] {
+  --labs-main-offset: var(--labs-dock-clearance);
+  --labs-sticky-offset: var(--labs-dock-clearance);
+  --labs-dock-edge-pad-top: var(--labs-dock-clearance);
+  --labs-dock-edge-pad-bottom: 0;
+}
+
+html[data-labs-dock="left"],
+html[data-labs-dock="right"] {
+  --labs-dock-clearance: calc(
+    var(--vd-dock-height) + var(--vd-dock-inset) + 0.5rem
+  );
+}
+
+html[data-labs-dock="left"] {
+  --labs-main-offset: 1rem;
+  --labs-sticky-offset: 1rem;
+  --labs-dock-edge-pad-left: var(--labs-dock-clearance);
+  --labs-dock-edge-pad-bottom: 0;
+}
+
+html[data-labs-dock="right"] {
+  --labs-main-offset: 1rem;
+  --labs-sticky-offset: 1rem;
+  --labs-dock-edge-pad-right: var(--labs-dock-clearance);
+  --labs-dock-edge-pad-bottom: 0;
+}
+
+@media (min-width: 521px) {
+  :root {
+    --vd-site-dock-height: 4.375rem;
+    --vd-site-dock-inset: 0.75rem;
+    --labs-dock-clearance: calc(
+      var(--vd-site-dock-height) + var(--vd-site-dock-inset) + 0.375rem
+    );
+  }
+
+  html[data-labs-dock="left"],
+  html[data-labs-dock="right"] {
+    --labs-dock-clearance: calc(
+      var(--vd-site-dock-height) + var(--vd-site-dock-inset) + 0.375rem
+    );
+  }
+}
+
+.labs-main-shell {
+  padding: var(--labs-main-offset) var(--labs-dock-edge-pad-right, 0)
+    var(--labs-dock-edge-pad-bottom, 0) var(--labs-dock-edge-pad-left, 0);
+  min-height: calc(100vh - var(--labs-main-min-height-offset));
+}
+
+/* Fullscreen demo stages inset from fixed site dock. */
+.labs-stage-fullscreen {
+  position: fixed;
+  inset: var(--labs-dock-edge-pad-top, 0) var(--labs-dock-edge-pad-right, 0)
+    var(--labs-dock-edge-pad-bottom, 0) var(--labs-dock-edge-pad-left, 0);
+  margin: 0;
+  border-radius: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--vd-bg-primary);
+}
+
+/* Site dock action chrome (search + theme + customizer).
+   Consume --vd-dock-tint so dark-mode chrome matches light + brand/active. */
+.vd-site-dock .vd-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--vd-dock-tint, var(--vd-text-primary));
+}
+
+.vd-site-dock .vd-dock-links {
+  color: var(--vd-dock-tint, var(--vd-text-primary));
+}
+
+/* Vertical docks: swatches topmost on both edges (matches horizontal,
+   where the customizer is the outermost/rightmost action). */
+.vd-site-dock.is-vertical .vd-dock-actions {
+  flex-direction: column-reverse;
+  align-items: center;
+}
+
+/* Unify brand corners: horizontal always left, vertical always bottom
+   (package defaults mirror opposite edges via row-/column-reverse). */
+.vd-site-dock.vd-dock-edge-top:not(.is-square),
+.vd-site-dock.vd-dock-edge-top.is-horizontal {
+  flex-direction: row;
+}
+
+.vd-site-dock.vd-dock-edge-right:not(.is-square),
+.vd-site-dock.vd-dock-edge-right.is-vertical {
+  flex-direction: column-reverse;
+}
+
+/* MacOS-style site dock — base matches live mobile polish; desktop compacts below. */
+.vd-site-dock {
+  --vd-dock-height: 5.15rem;
+  --vd-dock-brand-size: 3.375rem;
+
+  /* Keep 90% of the previous full-span bar (cut 10%) on the long axis. */
+  --vd-site-dock-length-ratio: 0.9;
+}
+
+/* Docs-only: deeper ink pill than package vd-dock-dark (#0a0a0a @ 90%).
+   90% mix / 0.90 glass alpha — a small step down from 97% / 0.98 so the
+   bar reads as glass without losing the solid navbar feel. Site dock is
+   always vd-dock-dark, so this covers light and dark page themes. */
+.vd-site-dock.vd-dock-dark.vd-glass-34 {
+  --vd-glass-bg-opacity: 0.9;
+  --vd-glass-blur: 16px;
+  --vd-glass-saturate: 1.15;
+  --vd-glass-border-alpha: 0.1;
+  --vd-glass-highlight-alpha: 0;
+
+  background: color-mix(in srgb, #030303 90%, transparent);
+  background-image: none;
+  border-color: rgb(255 255 255 / 10%);
+  box-shadow:
+    0 10px 32px rgb(0 0 0 / 50%),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vd-site-dock.vd-dock-dark.vd-dock-tint-accent[class*="vd-dock-tint-"] {
+  background: color-mix(in srgb, #030303 90%, transparent);
+  background-image: none;
+}
+
+.vd-site-dock.vd-dock-dark.vd-glass-34::before {
+  opacity: 0;
+}
+
+/* Central nav: ~34px glyphs (~28% under prior 3rem), no visible labels. */
+.vd-site-dock .vd-dock-links .vd-dock-item {
+  gap: 0;
+  padding: 0.3rem 0.45rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item :is(.ph, .ph-fill) {
+  font-size: 2.15rem;
+}
+
+/* Idle + active follow --vd-dock-tint (ink text when accent is unset). */
+.vd-site-dock .vd-dock-links .vd-dock-item:not(.is-active) {
+  opacity: 1;
+  color: color-mix(
+    in srgb,
+    var(--vd-dock-tint, var(--vd-text-primary)) 88%,
+    transparent
+  );
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item:not(.is-active) .ph {
+  opacity: 0.92;
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item.is-active {
+  opacity: 1;
+  color: var(--vd-dock-tint, var(--vd-text-primary));
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item.is-active :is(.ph, .ph-fill) {
+  opacity: 1;
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item:hover:not(.is-active),
+.vd-site-dock .vd-dock-links .vd-dock-item:focus-visible:not(.is-active) {
+  opacity: 1;
+  color: var(--vd-dock-tint, var(--vd-text-primary));
+}
+
+.vd-site-dock .vd-dock-links .vd-dock-item:hover:not(.is-active) .ph,
+.vd-site-dock .vd-dock-links .vd-dock-item:focus-visible:not(.is-active) .ph {
+  opacity: 1;
+}
+
+/* Vertical edges: icon-only nav (labels via tooltip). */
+.vd-site-dock.vd-dock-edge-left .vd-dock-links .vd-dock-label,
+.vd-site-dock.vd-dock-edge-right .vd-dock-links .vd-dock-label {
+  display: none;
+}
+
+.vd-site-dock.is-vertical .vd-dock-links .vd-dock-item {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Horizontal edges (desktop): oola inline icon + label, no tooltips. */
+@media (min-width: 521px) {
+  .vd-site-dock {
+    --vd-dock-height: var(--vd-site-dock-height);
+    --vd-dock-inset: var(--vd-site-dock-inset);
+    --vd-dock-brand-size: 3.0375rem;
+
+    gap: 0.5rem;
+  }
+
+  .vd-site-dock.vd-dock.is-horizontal {
+    padding: 0.45rem 0.875rem;
+  }
+
+  .vd-site-dock.vd-dock.is-vertical {
+    padding: 0.5rem 0.4rem;
+    gap: 0.45rem;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-dock-item {
+    padding: 0.2rem 0.35rem;
+    min-width: 2.35rem;
+    min-height: 2.35rem;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-dock-item :is(.ph, .ph-fill) {
+    font-size: 2.0425rem;
+  }
+
+  .vd-site-dock .vd-dock-actions button {
+    width: 1.9rem;
+    height: 1.9rem;
+    min-width: 1.9rem;
+    min-height: 1.9rem;
+    border-radius: 0.65rem;
+    font-size: 1rem;
+  }
+
+  .vd-site-dock .vd-dock-actions button i {
+    font-size: 1.05rem;
+  }
+
+  .vd-site-dock.vd-dock-edge-top .vd-dock-links .vd-dock-label,
+  .vd-site-dock.vd-dock-edge-bottom .vd-dock-links .vd-dock-label {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+    opacity: 0.92;
+  }
+
+  .vd-site-dock.vd-dock-edge-top
+    .vd-dock-links
+    .vd-dock-item
+    :is(.ph, .ph-fill),
+  .vd-site-dock.vd-dock-edge-bottom
+    .vd-dock-links
+    .vd-dock-item
+    :is(.ph, .ph-fill) {
+    font-size: 1.7813rem;
+  }
+
+  .vd-site-dock.vd-dock-edge-top
+    .vd-dock-links
+    .vd-dock-item.is-active
+    .vd-dock-label,
+  .vd-site-dock.vd-dock-edge-bottom
+    .vd-dock-links
+    .vd-dock-item.is-active
+    .vd-dock-label {
+    opacity: 1;
+    font-weight: 700;
+  }
+
+  .vd-site-dock.vd-dock-edge-top.vd-dock-items-inline
+    .vd-dock-links
+    .vd-dock-item,
+  .vd-site-dock.vd-dock-edge-bottom.vd-dock-items-inline
+    .vd-dock-links
+    .vd-dock-item {
+    flex-direction: row;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: auto;
+    padding: 0.2rem 0.45rem;
+  }
+}
+
+/* Avoid animating horizontal width when not morphing — scrollbar / layout
+   viewport changes would otherwise jiggle the bottom/top pill across routes. */
+.vd-site-dock.vd-dock-edge-bottom:not(.is-square, .is-morphing),
+.vd-site-dock.vd-dock-edge-top:not(.is-square, .is-morphing) {
+  transition-property:
+    height, min-height, left, right, top, bottom, transform, padding, gap,
+    flex-direction;
+}
+
+/* Mobile / narrow: keep the full-span strip. Use 100vw (not left+right+
+   width:auto): html { scrollbar-gutter: stable } shrinks the layout CB
+   (~11px), which made rightGap look like inset+gutter. */
+.vd-site-dock.vd-dock.vd-dock-edge-bottom:not(.is-square),
+.vd-site-dock.vd-dock.vd-dock-edge-top:not(.is-square) {
+  left: var(--vd-dock-inset);
+  right: auto;
+  width: calc(100vw - 2 * var(--vd-dock-inset));
+  max-width: none;
+  transform: none;
+}
+
+/* Desktop: cut 10% of the previous full-span length (keep 90%). Horizontal
+   width and vertical height share --vd-site-dock-length-ratio. Center so
+   the leftover is even; keep --vd-dock-inset on the long screen edge.
+   Playground docks are untouched. Brand mark size is unchanged. */
+@media (min-width: 521px) {
+  .vd-site-dock.vd-dock.vd-dock-edge-bottom:not(.is-square),
+  .vd-site-dock.vd-dock.vd-dock-edge-top:not(.is-square) {
+    left: 50%;
+    right: auto;
+    width: calc(
+      var(--vd-site-dock-length-ratio) * (100vw - 2 * var(--vd-dock-inset))
+    );
+    max-width: none;
+    transform: translateX(-50%);
+  }
+
+  .vd-site-dock.vd-dock.vd-dock-edge-left:not(.is-square),
+  .vd-site-dock.vd-dock.vd-dock-edge-right:not(.is-square) {
+    top: 50%;
+    bottom: auto;
+    height: calc(
+      var(--vd-site-dock-length-ratio) * (100vh - 2 * var(--vd-dock-inset))
+    );
+    min-height: 0;
+    max-height: none;
+    transform: translateY(-50%);
+  }
+
+  .vd-site-dock.vd-dock-edge-left:not(.is-square, .is-morphing),
+  .vd-site-dock.vd-dock-edge-right:not(.is-square, .is-morphing) {
+    transition-property:
+      width, max-width, left, right, top, bottom, transform, padding, gap,
+      flex-direction;
+  }
+}
+
+.vd-site-dock .vd-site-dock-brand-mark,
+.vd-site-dock .vd-site-dock-brand-mark svg {
+  width: var(--vd-dock-brand-size);
+  height: var(--vd-dock-brand-size);
+  display: block;
+}
+
+/* Brand slot: flush padding + optical center (viewBox ink sits high). */
+.vd-site-dock .vd-dock-brand {
+  padding: 0;
+  align-self: center;
+}
+
+.vd-site-dock.is-vertical .vd-dock-brand {
+  padding: 0;
+  width: 100%;
+}
+
+/* Ink dock: brand mark tracks --vd-dock-tint (same hue as active nav icon).
+   When primary is Ink (black), accent is unset — soft grey chrome. */
+.vd-site-dock .vd-site-dock-brand-mark {
+  --vd3-mark-inner-light: color-mix(
+    in srgb,
+    var(--vd-dock-tint, #a1a1aa) 72%,
+    #fff
+  );
+  --vd3-mark-inner-dark: color-mix(
+    in srgb,
+    var(--vd-dock-tint, #71717a) 88%,
+    #000
+  );
+  --vd3-mark-outer-fill: color-mix(
+    in srgb,
+    var(--vd-dock-tint, #8a9199) 78%,
+    #000
+  );
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+/* Horizontal edges (+ square morph waypoint): padded viewBox leaves ink mass
+   high; nudge scales with rendered mark size (0.1em was ~1.6px and did not
+   track --vd-dock-brand-size). */
+.vd-site-dock:not(.is-vertical) .vd-site-dock-brand-mark .vd3-mark {
+  transform: translateY(calc(var(--vd-dock-brand-size) * 0.075));
+}
+
+/* Brand mark: idle still; hover ramps slow→medium; morph spins fast. */
+@property --vd-site-dock-brand-spin {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 12s;
+}
+
+@property --vd-site-dock-brand-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes vd-site-dock-brand-spin {
+  to {
+    --vd-site-dock-brand-angle: 360deg;
+  }
+}
+
+.vd-site-dock .vd-dock-brand .vd3-mark-spin {
+  transform: rotate(var(--vd-site-dock-brand-angle));
+  transform-origin: 361px 361px;
+  animation: vd-site-dock-brand-spin var(--vd-site-dock-brand-spin) linear
+    infinite;
+  animation-play-state: paused;
+}
+
+.vd-site-dock .vd-dock-brand:hover .vd3-mark-spin,
+.vd-site-dock .vd-dock-brand:focus-visible .vd3-mark-spin {
+  animation-play-state: running;
+}
+
+.vd-site-dock.is-morphing .vd-dock-brand .vd3-mark-spin {
+  animation-play-state: running;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vd-site-dock .vd-dock-brand .vd3-mark-spin {
+    animation: none;
+    transition: none;
+  }
+}
+
+.vd-site-dock .vd-dock-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: color-mix(
+    in srgb,
+    var(--vd-dock-tint, var(--vd-text-primary)) 88%,
+    transparent
+  );
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 0;
+  padding: 0;
+  opacity: 0.92;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
+}
+
+.vd-site-dock .vd-dock-actions button:hover,
+.vd-site-dock .vd-dock-actions button:focus-visible,
+.vd-site-dock .vd-dock-actions button[aria-expanded="true"] {
+  opacity: 1;
+  color: var(--vd-dock-tint, var(--vd-text-primary));
+  background: transparent;
+  border-color: transparent;
+}
+
+.vd-site-dock .vd-dock-actions button i {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+/* Desktop-only: modest (~20%) bump to search / theme / customizer icons.
+   Isolated so it can merge with dock-length work; does not touch inset or
+   dock width. Mobile sizes stay in the max-width: 520px block below. */
+@media (min-width: 521px) {
+  .vd-site-dock .vd-dock-actions button {
+    width: 2.7rem;
+    height: 2.7rem;
+    min-width: 2.7rem;
+    min-height: 2.7rem;
+    font-size: 1.32rem;
+  }
+
+  .vd-site-dock .vd-dock-actions button i {
+    font-size: 1.38rem;
+  }
+}
+
+.vd-site-dock .vd-theme-switcher,
+.vd-site-dock .vd-theme-customizer {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Narrow phone dock — keep in sync with DOCK_NARROW_QUERY (520px) in @vanduo-oss/vd3. */
+@media (max-width: 520px) {
+  :root {
+    /* Compact icon + label stack + tighter inset (~0.5rem). */
+    --docs-dock-clearance: 5.5rem;
+  }
+
+  .vd-site-dock {
+    --vd-dock-inset: 0.5rem; /* 8px — closer to viewport edges */
+    --vd-dock-height: 4.65rem;
+    --vd-dock-brand-size: 2.35rem;
+
+    padding-inline: 0.5rem;
+  }
+
+  .vd-site-dock.vd-dock.is-horizontal {
+    padding-block: 0.35rem;
+  }
+
+  .vd-site-dock.vd-dock-edge-bottom:not(.is-square) {
+    bottom: max(var(--vd-dock-inset), env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-labs-dock="top"] .vd-site-dock.vd-dock-edge-top:not(.is-square) {
+    top: max(var(--vd-dock-inset), env(safe-area-inset-top, 0px));
+  }
+
+  .vd-site-dock .vd-dock-brand,
+  .vd-site-dock .vd-dock-actions {
+    flex-shrink: 0;
+  }
+
+  /* Shrink brand further and nudge toward the left edge of the pill. */
+  .vd-site-dock:not(.is-vertical) .vd-site-dock-brand-mark .vd3-mark {
+    transform: translateX(-0.2rem)
+      translateY(calc(var(--vd-dock-brand-size) * 0.075));
+  }
+
+  .vd-site-dock .vd-dock-brand {
+    margin-inline-end: -0.1rem;
+  }
+
+  /* Swipeable middle strip: nav links + theme controls scroll horizontally.
+     Beat .vd-dock.is-horizontal .vd-dock-nav { justify-content: center } so
+     the first item (Home) is not clipped off the scrollport's left edge. */
+  .vd-site-dock.vd-dock.is-horizontal .vd-dock-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto hidden;
+    justify-content: flex-start;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 0.75rem,
+      #000 calc(100% - 0.75rem),
+      transparent
+    );
+  }
+
+  .vd-site-dock .vd-dock-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .vd-site-dock .vd-dock-links {
+    flex-wrap: nowrap;
+    width: max-content;
+    min-width: min-content;
+  }
+
+  /* Mobile: icon above label — beat inline itemLayout on the narrow strip. */
+  .vd-site-dock.vd-dock-items-inline .vd-dock-links .vd-dock-item,
+  .vd-site-dock.vd-dock-items-stack .vd-dock-links .vd-dock-item {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Mobile: show compact labels under the four primary nav icons. */
+  .vd-site-dock .vd-dock-links .vd-dock-item {
+    gap: 0.1rem;
+    min-width: 3.1rem;
+    min-height: auto;
+    padding: 0.1rem 0.3rem;
+    flex-shrink: 0;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-dock-item :is(.ph, .ph-fill) {
+    font-size: 1.55rem;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-dock-item .vd-dock-label {
+    display: block;
+    font-size: 0.575rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    line-height: 1;
+    opacity: 0.88;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-dock-item.is-active .vd-dock-label {
+    opacity: 1;
+    font-weight: 700;
+  }
+
+  .vd-site-dock-strip-divider {
+    flex-shrink: 0;
+    align-self: center;
+    width: 1px;
+    height: 1.45rem;
+    margin-inline: 0.15rem;
+    background: color-mix(in srgb, var(--vd-text-primary) 14%, transparent);
+  }
+
+  .vd-site-dock .vd-dock-actions button {
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    min-height: 2rem;
+    font-size: 1rem;
+  }
+
+  .vd-site-dock .vd-dock-actions button i {
+    font-size: 1.05rem;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-theme-switcher,
+  .vd-site-dock .vd-dock-links .vd-theme-customizer {
+    flex-shrink: 0;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-theme-switcher button,
+  .vd-site-dock .vd-dock-links .vd-theme-customizer-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    min-height: 2rem;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: color-mix(
+      in srgb,
+      var(--vd-dock-tint, var(--vd-text-primary)) 88%,
+      transparent
+    );
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 0;
+    padding: 0;
+    opacity: 0.92;
+    transition:
+      opacity 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .vd-site-dock .vd-dock-links .vd-theme-switcher button:hover,
+  .vd-site-dock .vd-dock-links .vd-theme-switcher button:focus-visible,
+  .vd-site-dock .vd-dock-links .vd-theme-customizer-trigger:hover,
+  .vd-site-dock .vd-dock-links .vd-theme-customizer-trigger:focus-visible,
+  .vd-site-dock
+    .vd-dock-links
+    .vd-theme-customizer-trigger[aria-expanded="true"] {
+    opacity: 1;
+    color: var(--vd-dock-tint, var(--vd-text-primary));
+  }
+
+  .vd-site-dock .vd-dock-links .vd-theme-switcher button i,
+  .vd-site-dock .vd-dock-links .vd-theme-customizer-trigger i {
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+}
+
+/* Navbar trigger button — chess-like borderless chrome (legacy demos) */
+.global-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--vd-card-border-radius);
+  background: transparent;
+  color: var(--vd-text-primary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 0;
+  padding: 0;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+
+.global-search-trigger:hover {
+  color: var(--vd-color-primary);
+  border-color: transparent;
+  background: var(--vd-bg-secondary);
+}
+
+/* Dark mode toggle button */
+.dark-mode-toggle,
+.vd-theme-switcher-toggle.dark-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--vd-card-border-radius);
+  background: transparent;
+  color: var(--vd-text-primary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 0;
+  padding: 0;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+
+.dark-mode-toggle:hover,
+.vd-theme-switcher-toggle.dark-mode-toggle:hover {
+  color: var(--vd-color-primary);
+  border-color: transparent;
+  background: var(--vd-bg-secondary);
+}
+
+/* Theme customizer trigger — match search / theme toggle in navbar */
+.navbar-actions-always .vd-theme-customizer-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--vd-card-border-radius);
+  background: transparent;
+  color: var(--vd-text-primary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 0;
+  padding: 0;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+
+.navbar-actions-always .vd-theme-customizer-trigger:hover,
+.navbar-actions-always .vd-theme-customizer-trigger[aria-expanded="true"] {
+  color: var(--vd-color-primary);
+  border-color: transparent;
+  background: var(--vd-bg-secondary);
+}
+
+.navbar-actions-always .vd-theme-switcher,
+.navbar-actions-always .vd-theme-customizer {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.navbar-actions-always .global-search-trigger i,
+.navbar-actions-always .vd-theme-switcher-toggle .ph,
+.navbar-actions-always .vd-theme-customizer-trigger i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  font-size: 1.2rem;
+}
+
+/* Match vd3 theme switcher hit target to borderless chrome buttons */
+.navbar-actions-always .vd-theme-switcher-toggle {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--vd-card-border-radius);
+  background: transparent;
+  color: var(--vd-text-primary);
+  font-size: 1.2rem;
+  line-height: 0;
+  padding: 0;
+}
+
+.navbar-actions-always .vd-theme-switcher-toggle:hover {
+  background: var(--vd-bg-secondary);
+  color: var(--vd-color-primary);
+  border-color: transparent;
+}
+
+/* Remap vd3 theme-switcher glyphs to Phosphor Bold (chrome weight).
+   Codepoints mirror Spindrift Chess and must be re-checked when bumping
+   Phosphor or when VdThemeSwitcher changes its .ph-* class names. */
+.navbar-actions-always .vd-theme-switcher-toggle .ph {
+  font-family: Phosphor-Bold, sans-serif !important;
+}
+
+.navbar-actions-always .vd-theme-switcher-toggle .ph-desktop::before {
+  content: "\e560";
+}
+
+.navbar-actions-always .vd-theme-switcher-toggle .ph-sun::before {
+  content: "\e472";
+}
+
+.navbar-actions-always .vd-theme-switcher-toggle .ph-moon::before {
+  content: "\e330";
+}
+
+/* Hero search wrapper — matches .hero-content width (same as CTA button row) */
+
+/* Labs brand: vertical edges = logo only (hide wordmark). */
+.vd-site-dock.is-vertical .labs-dock-brand-title {
+  display: none;
+}
+
+.vd-site-dock .labs-site-dock-brand-mark,
+.vd-site-dock .vd-site-dock-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.vd-site-dock .labs-dock-atom-icon {
+  width: var(--vd-dock-brand-size);
+  height: var(--vd-dock-brand-size);
+}
+
+.vd-site-dock .labs-dock-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  border-radius: 0.75rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vd-site-dock .labs-dock-github:hover,
+.vd-site-dock .labs-dock-github:focus-visible {
+  color: var(--vd-dock-tint, var(--vd-color-primary));
+}
+
+.vd-site-dock .labs-dock-github i {
+  font-size: 1.15rem;
+}

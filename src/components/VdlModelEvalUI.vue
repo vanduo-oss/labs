@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { VdCard, VdSpinner } from '@vanduo-oss/vd3';
-import { VdBarChart } from '@vanduo-oss/vd3-cbun/charts';
-import '@vanduo-oss/vd3-cbun/charts/css';
+import { VdBarChart } from '@vanduo-oss/vd3-charts';
+import '@vanduo-oss/vd3-charts/css';
 import { VDL_MODEL_EVAL_VERSION } from '../../model-eval.js';
 
 const report = ref(null);
@@ -10,7 +10,7 @@ const loading = ref(true);
 const error = ref('');
 
 /**
- * Short x-axis labels for vd3-cbun bar charts.
+ * Short x-axis labels for vd3-charts bar charts.
  * Categorical axes ignore `xFormat` and render the category string as-is
  * (no rotate / truncate API), so Labs supplies compact display names here
  * while the summary table keeps full `modelId`s.
