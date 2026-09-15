@@ -20,9 +20,11 @@ function onReady(instance) {
 .cbun-draw-wrap {
   display: flex;
   flex-direction: column;
-  height: 420px;
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
   overflow: hidden;
+  clip-path: inset(0 round var(--vd-card-border-radius, var(--card-border-radius, 0.5rem)));
 }
 
 .cbun-draw-wrap :deep(.vd-draw),
@@ -36,6 +38,14 @@ function onReady(instance) {
 .cbun-draw-wrap :deep(.vd-draw-shell) {
   height: 100%;
   min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+}
+
+.cbun-draw-wrap :deep(.vd-draw-canvas) {
+  border-bottom-left-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  border-bottom-right-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {

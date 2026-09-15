@@ -62,9 +62,9 @@ The catalog MUST NOT offer SmolLM2-360M, Qwen2.5-1.5B, or Llama-3.2-3B as select
 - **THEN** SmolLM2-360M, Qwen2.5-1.5B, and Llama-3.2-3B are not present
 
 
-### Requirement: AiChat engine comes from npm
-The labs AI chat demo MUST import `AiChat` and related helpers from `@vanduo-oss/vdl-ai-chat`, and markdown from `@vanduo-oss/vdl-ai-chat/markdown`. Labs MUST NOT treat a local `ai-chat.js` as the engine SoT.
+### Requirement: AiChat engine comes from sibling Labs repo
+The labs AI chat demo MUST import `AiChat` and related helpers from `@vanduo-oss/vdl-ai-chat`, and markdown from `@vanduo-oss/vdl-ai-chat/markdown`, resolved via `link:../vdl-ai-chat`. Labs MUST NOT treat a local `ai-chat.js` as the engine SoT.
 
-#### Scenario: Vue chat UI imports published package
+#### Scenario: Vue chat UI imports sibling package
 - **WHEN** `VdlAiChatUI` loads the chat engine and markdown helper
 - **THEN** imports resolve from `@vanduo-oss/vdl-ai-chat` and `@vanduo-oss/vdl-ai-chat/markdown`

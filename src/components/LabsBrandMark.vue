@@ -16,20 +16,22 @@ defineProps({
       viewBox="0 0 100 100"
       aria-hidden="true"
     >
-      <g
-        fill="none"
-        stroke="currentColor"
-        stroke-width="6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        opacity="0.9"
-      >
-        <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
-        <g transform="rotate(60 50 50)">
+      <g class="labs-dock-atom-spin">
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity="0.9"
+        >
           <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
-        </g>
-        <g transform="rotate(-60 50 50)">
-          <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+          <g transform="rotate(60 50 50)">
+            <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+          </g>
+          <g transform="rotate(-60 50 50)">
+            <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+          </g>
         </g>
       </g>
       <circle
@@ -52,9 +54,10 @@ defineProps({
 .labs-site-dock-brand-mark {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4em;
-  line-height: 1;
-  color: var(--vd-dock-tint, var(--vd-color-primary));
+  line-height: 0;
+  color: var(--vd-dock-ink, var(--vd-dock-tint, var(--vd-color-primary)));
   font-family: 'Zen Dots', sans-serif;
   text-transform: lowercase;
 }
@@ -64,10 +67,14 @@ defineProps({
   height: var(--labs-brand-size, 2rem);
   flex-shrink: 0;
   display: block;
+  line-height: 0;
 }
 
 .labs-dock-brand-title {
   white-space: nowrap;
   font-size: 1.05rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 </style>

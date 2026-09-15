@@ -4,12 +4,12 @@
 Hybrid in-browser docs search demo powered by `@vanduo-oss/vdl-hybrid-search`. The Vue UI warms the semantic path early and runs hybrid search automatically as the user types (no Enter required for AI results).
 
 ## Requirements
-### Requirement: HybridSearch engine comes from npm
-The labs hybrid search demo MUST construct search via `HybridSearch` from `@vanduo-oss/vdl-hybrid-search` (not a local engine SoT). Search guardrails MUST be imported from `@vanduo-oss/vdl-hybrid-search/guardrails/search`.
+### Requirement: HybridSearch engine comes from sibling Labs repo
+The labs hybrid search demo MUST construct search via `HybridSearch` from `@vanduo-oss/vdl-hybrid-search` via `link:../vdl-hybrid-search` (not a local engine SoT). Search guardrails MUST be imported from `@vanduo-oss/vdl-hybrid-search/guardrails/search`.
 
 #### Scenario: Vue demo uses HybridSearch
 - **WHEN** the hybrid search Vue UI initializes without an injected engine
-- **THEN** it constructs `HybridSearch` from the published package
+- **THEN** it constructs `HybridSearch` from the sibling linked package
 
 #### Scenario: Search guardrails from package subpath
 - **WHEN** the UI validates queries or sanitizes doc hrefs

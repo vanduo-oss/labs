@@ -21,6 +21,32 @@ html {
   background-color: var(--bg-primary);
 }
 
+/*
+ * Dark text contrast — Labs override.
+ * vd3 ships two [data-theme=dark] token blocks; the later one maps muted /
+ * secondary through --vd-color-gray-500/400 (= gray-6/5), which resolve to
+ * ~#525252 / #737373 on neutral — too dim on Labs dark surfaces + atmosphere.
+ * Restore the lighter gray-step mapping so .vd-text-muted / body copy stay
+ * readable while remaining softer than primary. Light mode untouched.
+ */
+html[data-theme='dark'] {
+  --vd-text-secondary: var(--vd-gray-3);
+  --vd-text-muted: var(--vd-gray-4);
+  --vd-text-light: var(--vd-gray-5);
+  --vd-text-tertiary: var(--vd-text-secondary);
+  --vd-text-disabled: var(--vd-text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --vd-text-secondary: var(--vd-gray-3);
+    --vd-text-muted: var(--vd-gray-4);
+    --vd-text-light: var(--vd-gray-5);
+    --vd-text-tertiary: var(--vd-text-secondary);
+    --vd-text-disabled: var(--vd-text-muted);
+  }
+}
+
 body {
   margin: 0;
   background:
@@ -203,12 +229,14 @@ body {
 .hero-atom-icon {
   margin-right: 0.2em;
   flex-shrink: 0;
+  overflow: visible;
   transform: translateY(-0.05em);
+  color: var(--vd-color-primary, var(--color-primary));
 }
 
 .hero-atom-orbit {
   fill: none;
-  stroke: var(--vd-color-primary);
+  stroke: currentColor;
   stroke-width: 6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -216,12 +244,12 @@ body {
 }
 
 .hero-atom-core {
-  fill: var(--vd-color-primary);
+  fill: currentColor;
 }
 
 .hero-atom-core-ring {
-  fill: rgba(var(--vd-color-primary-rgb), 0.18);
-  stroke: var(--vd-color-primary);
+  fill: color-mix(in srgb, currentColor 18%, transparent);
+  stroke: currentColor;
   stroke-width: 3;
 }
 
@@ -253,8 +281,8 @@ body {
   }
 }
 
-/* Home liquid atmosphere: skip static body washes so WebGL can read cleanly. */
-body:has(main[data-labs-route='home']) {
+/* Site liquid atmosphere: skip static body washes so WebGL can read cleanly. */
+body:has(main[data-labs-route]) {
   background-color: var(--bg-primary);
   background-image: none;
 }
@@ -267,11 +295,13 @@ body:has(main[data-labs-route='home']) {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.35s ease;
-  /* Labs home liquid knobs (vd3 --vd-liquid-* contract) */
-  --vd-liquid-intensity: 1.7;
-  --vd-liquid-speed: 0.35;
-  --vd-liquid-grain: 0.14;
-  --vd-liquid-distort: 0.22;
+  /* Labs site liquid knobs (vd3 --vd-liquid-* contract) */
+  --vd-liquid-intensity: 0.30;
+  --vd-liquid-speed: 0.143;
+  --vd-liquid-grain: 0.38;
+  --vd-liquid-distort: 0.68;
+  --vd-liquid-primary-weight: 0.75;
+  --vd-liquid-neutral-weight: 0.22;
 }
 
 .vdl-home-atmosphere-active {
@@ -289,29 +319,6 @@ body:has(main[data-labs-route='home']) {
   position: relative;
   z-index: 1;
   min-height: calc(100vh - var(--labs-main-offset));
-}
-
-.vdl-home-atmosphere-credit {
-  margin: 2.75rem auto 0;
-  padding: 0 1rem;
-  max-width: 28rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
-  color: var(--text-muted, var(--vd-color-muted, #888));
-  opacity: 0.72;
-}
-
-.vdl-home-atmosphere-credit a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-color: rgba(var(--vd-color-primary-rgb), 0.35);
-  text-underline-offset: 0.15em;
-}
-
-.vdl-home-atmosphere-credit a:hover {
-  color: var(--color-primary);
-  text-decoration-color: var(--color-primary);
 }
 
 .hero {
@@ -350,6 +357,10 @@ body:has(main[data-labs-route='home']) {
   transition: opacity 0.18s ease;
 }
 
+[data-theme='dark'] .hero .hero-home-quote {
+  color: var(--vd-text-secondary, var(--text-secondary));
+}
+
 .hero .hero-home-quote-fading {
   opacity: 0;
 }
@@ -362,6 +373,29 @@ body:has(main[data-labs-route='home']) {
 
 .labs-main {
   padding-bottom: 4rem;
+}
+
+/* Shared page title for Widgets / Demos (and similar list landings).
+   Shell already applies --labs-main-offset for dock clearance; this adds
+   breathing room so the h2 is not flush under a top dock (~88px). */
+.labs-page-header,
+.about-header {
+  padding-top: clamp(2.5rem, 7vh, 4.5rem);
+  margin-bottom: 1.5rem;
+}
+
+.labs-page-header h2,
+.about-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  color: var(--vd-color-primary);
+}
+
+.labs-page-header p,
+.about-header p {
+  margin: 0;
 }
 
 .labs-section {
@@ -477,6 +511,7 @@ body:has(main[data-labs-route='home']) {
   gap: 1.25rem;
   grid-template-columns: 1fr;
   max-width: 70rem;
+  /* Top spacing comes from .labs-page-header so Widgets/Demos stay in sync. */
   margin: 0 auto 2.5rem;
 }
 
@@ -730,7 +765,7 @@ body:has(main[data-labs-route='home']) {
   flex-direction: column;
   gap: 1rem;
   padding: 1.35rem 1.4rem 1.2rem;
-  border-radius: var(--vd-radius-md, 0.5rem);
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   border: var(--vd-border-width, 1px) solid var(--vd-border-color, var(--border-color));
   background: var(--vd-bg-primary, var(--bg-primary));
   box-shadow: var(--vd-shadow-md, 0 8px 30px rgb(0 0 0 / 25%));

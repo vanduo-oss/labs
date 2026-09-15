@@ -1,3 +1,8 @@
+import { SKETCH_STENCILS, matchSketchStencil } from './draw-stencils.js';
+import { logAiDrawEvent } from './draw-logger.js';
+
+export { SKETCH_STENCILS, matchSketchStencil, logAiDrawEvent };
+
 /** Fallback when the host does not pass a measured canvas. */
 const FALLBACK_CANVAS = Object.freeze({ width: 1000, height: 800 });
 
@@ -402,7 +407,14 @@ export const FACE_CURVE_KINDS = Object.freeze(['smiley', 'wink', 'sad']);
 export const ADD_SHAPE_TYPES = Object.freeze(['rectangle', 'ellipse', 'line', 'text', 'freehand']);
 
 const ADD_SHAPE_TYPE_SET = new Set(ADD_SHAPE_TYPES);
-const POLYGON_SHAPE_TYPES = new Set(['polygon', 'hexagon', 'hex']);
+const POLYGON_SHAPE_TYPES = new Set([
+  'polygon',
+  'hexagon',
+  'hex',
+  'triangle',
+  'pentagon',
+  'octagon',
+]);
 
 /** Default / cap for host hex-grid recipes (must fit in DRAW_PLAN_MAX_STEPS). */
 export const HEX_GRID_DEFAULT_CELLS = 9;
@@ -951,6 +963,26 @@ export function parseNamedDrawIntent(text, _canvas = FALLBACK_CANVAS) {
       sides: null,
     };
   }
+
+  const matched = matchSketchStencil(source);
+  if (matched?.stencil) {
+    const { stencil } = matched;
+    const finalColor = color || stencil.defaultColor;
+    return {
+      simplified: true,
+      id: stencil.id,
+      name: stencil.name,
+      kind: `stencil:${stencil.id}`,
+      family: 'stencil',
+      variant: stencil.id,
+      stroke: finalColor,
+      fill: finalColor,
+      color: finalColor,
+      sides: null,
+      stencil,
+    };
+  }
+
   return emptyRecipe();
 }
 
@@ -959,6 +991,20 @@ export function parseNamedDrawIntent(text, _canvas = FALLBACK_CANVAS) {
  * @param {{ width?: number, height?: number }} [canvas]
  */
 export function formatNamedDrawInstructions(plan, canvas = FALLBACK_CANVAS) {
+  if (plan?.family === 'stencil') {
+    const steps = plan.stencil?.build ? plan.stencil.build(canvas, plan.color) : [];
+    const lines = [`Use tools now. Do not only describe. Draw a ${plan.name || plan.id}.`];
+    steps.forEach((s, i) => {
+      const argsStr = Object.entries(s.args || {})
+        .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .join(' ');
+      lines.push(`${i + 1}) ${s.op} ${argsStr}`);
+    });
+    lines.push(
+      'After the tools run, reply with one short sentence naming only what is actually on the canvas.',
+    );
+    return lines.join('\n');
+  }
   if (plan?.family === 'hex-grid') {
     const cells = layoutHexagonGrid(plan.count || HEX_GRID_DEFAULT_CELLS, canvas);
     const stroke = plan.stroke || HEX_GRID_STROKE;
@@ -1030,6 +1076,15 @@ export async function fulfillHexGridIntent(execute, plan, canvas = FALLBACK_CANV
 export async function fulfillNamedDrawIntent(execute, plan, canvas = FALLBACK_CANVAS) {
   if (typeof execute !== 'function' || !plan?.simplified) {
     return { ok: false, added: 0 };
+  }
+  if (plan.family === 'stencil') {
+    const steps = plan.stencil?.build ? plan.stencil.build(canvas, plan.color) : [];
+    let added = 0;
+    for (const op of steps) {
+      const res = await execute(op.op || op.name, op.args);
+      if (res && res.ok !== false && !res.error) added += 1;
+    }
+    return { ok: true, added };
   }
   if (plan.family === 'hex-grid') {
     return fulfillHexGridIntent(execute, plan, canvas);
@@ -1118,6 +1173,7 @@ export function parseDrawTurnIntent(text, canvas = FALLBACK_CANVAS) {
           ? recipe.kind
           : null,
     clearOnly: wantsClear && isClearOnlyRequest(raw),
+    question: isCanvasQuestion(raw),
   };
 }
 
@@ -1325,7 +1381,20 @@ export function assistantTextFromCanvas(shapes, intent = {}, modelReply = '', tu
       return 'Drew a heart.';
     }
     if (intent.recipe.id === 'spiral' && snap.curveCount >= 1) return 'Drew a spiral.';
+    if (intent.recipe.family === 'stencil' && (snap.count > 0 || addedCount > 0)) {
+      const name = intent.recipe.name || intent.recipe.id;
+      const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
+      return `Drew ${article} ${name}.`;
+    }
     return describeShapesBrief(snap);
+  }
+
+  if (turn.plan?.title && snap.count > 0) {
+    const title = String(turn.plan.title).trim();
+    if (title && !looksLikeDrawPlanDump(title)) {
+      const prefix = /^(?:a|an|the)\b/i.test(title) ? '' : /^[aeiou]/i.test(title) ? 'an ' : 'a ';
+      return `Drew ${prefix}${title}.`;
+    }
   }
 
   if (assistantClaimConflictsWithCanvas(claimed, snap) || jsonDump)
@@ -1517,14 +1586,54 @@ function coerceDrawPlanStep(op, args) {
       .trim()
       .toLowerCase();
     if (!type) return null;
+
+    if (type === 'circle') {
+      const r = Number(normalized.radius ?? normalized.r);
+      const size =
+        Number.isFinite(r) && r > 0
+          ? r * 2
+          : Number(normalized.width ?? normalized.w ?? normalized.height ?? normalized.h ?? 80);
+      const x = Number(normalized.x ?? (Number.isFinite(r) ? Number(normalized.cx ?? 0) - r : 0));
+      const y = Number(normalized.y ?? (Number.isFinite(r) ? Number(normalized.cy ?? 0) - r : 0));
+      return {
+        op: 'add_shape',
+        args: {
+          ...normalized,
+          type: 'ellipse',
+          x,
+          y,
+          width: size,
+          height: size,
+        },
+      };
+    }
+
+    if (type === 'rect' || type === 'square') {
+      return {
+        op: 'add_shape',
+        args: {
+          ...normalized,
+          type: 'rectangle',
+          width: normalized.width ?? normalized.w ?? normalized.size ?? 100,
+          height: normalized.height ?? normalized.h ?? normalized.size ?? 100,
+        },
+      };
+    }
+
     if (POLYGON_SHAPE_TYPES.has(type)) {
       const sidesRaw = Number(normalized.sides);
       const sides =
-        type === 'hexagon' || type === 'hex'
-          ? 6
-          : Number.isFinite(sidesRaw) && sidesRaw >= 3
-            ? Math.round(sidesRaw)
-            : 6;
+        type === 'triangle'
+          ? 3
+          : type === 'pentagon'
+            ? 5
+            : type === 'hexagon' || type === 'hex'
+              ? 6
+              : type === 'octagon'
+                ? 8
+                : Number.isFinite(sidesRaw) && sidesRaw >= 3
+                  ? Math.round(sidesRaw)
+                  : 6;
       /** @type {Record<string, unknown>} */
       const curveArgs = { kind: 'polygon', sides };
       if (normalized.stroke) curveArgs.stroke = normalized.stroke;
@@ -1697,8 +1806,14 @@ export function parseDrawPlanFromModelText(text) {
   const raw = String(text || '').trim();
   if (!raw) return { ok: false, plan: emptyDrawPlan(), error: 'empty' };
 
-  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fence ? fence[1].trim() : raw;
+  // Strip thinking blocks first so braces inside reasoning are not confused for JSON.
+  // Covers Gemma <thought> and Qwen3 <think> wrappers.
+  const noThought = raw
+    .replace(/<(thought|think)>[\s\S]*?<\/\1>/gi, '')
+    .replace(/^<(thought|think)>[\s\S]*$/i, '')
+    .trim();
+  const fence = (noThought || raw).match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fence ? fence[1].trim() : noThought || raw;
   const start = candidate.indexOf('{');
   const end = candidate.lastIndexOf('}');
   if (start < 0 || end <= start) {
@@ -1808,6 +1923,14 @@ export function intentToDrawPlan(intent, canvas = FALLBACK_CANVAS) {
   }
 
   if (intent?.recipe?.simplified) {
+    if (intent.recipe.family === 'stencil' && intent.recipe.stencil?.build) {
+      const steps = intent.recipe.stencil.build(canvas, intent.recipe.color);
+      return compressDrawPlan({
+        title: intent.recipe.name || intent.recipe.id || 'stencil',
+        clear: Boolean(intent.wantsClear),
+        steps,
+      });
+    }
     if (intent.recipe.family === 'hex-grid') {
       const cells = layoutHexagonGrid(intent.recipe.count || HEX_GRID_DEFAULT_CELLS, canvas);
       const stroke = intent.recipe.stroke || HEX_GRID_STROKE;
@@ -1887,24 +2010,64 @@ export function mergeDrawPlans(prev, next) {
 /**
  * User message for the LLM planner (no tools). Includes lastPlan when present.
  *
+ * `compact` drops the long few-shot examples for small-context planners
+ * (e.g. Qwen3-0.6B WebLLM, 4K window) while keeping the schema and rules.
+ *
  * @param {string} userText
  * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} [lastPlan]
  * @param {{ width?: number, height?: number }} [canvas]
+ * @param {{ compact?: boolean }} [opts]
  */
-export function formatPlannerUserPrompt(userText, lastPlan = null, canvas = FALLBACK_CANVAS) {
+export function formatPlannerUserPrompt(
+  userText,
+  lastPlan = null,
+  canvas = FALLBACK_CANVAS,
+  opts = {},
+) {
   const width = canvas.width ?? FALLBACK_CANVAS.width;
   const height = canvas.height ?? FALLBACK_CANVAS.height;
-  const lines = [
-    `Canvas size: ${width}x${height}.`,
-    'Return ONLY a JSON object (no markdown) with shape:',
-    '{"title":"short name","clear":false,"steps":[{"op":"add_shape|add_curve|eval_geometry|clear_canvas|update_shape|remove_shape","args":{...}}]}',
-    `Max ${DRAW_PLAN_MAX_STEPS} steps. Prefer add_curve recipes (sine, star, heart, smiley, polygon, …) over freehand points.`,
-    'add_shape types: rectangle, ellipse, line, text, freehand only. Never add_shape type=polygon.',
-    'Hexagons / hex grids: add_curve kind=polygon sides=6 with a distinct bounds box per cell (not place=center for every cell).',
-    'Use concrete coordinates and CSS/#hex colors. Do not call tools — plan only.',
-    '',
-    `User request: ${String(userText || '').trim()}`,
-  ];
+  const cx = Math.round(width / 2);
+  const cy = Math.round(height / 2);
+
+  const lines = opts.compact
+    ? [
+        `You are the 2D SVG Canvas Composer. Canvas: (0,0) top-left to (${width},${height}). Center (${cx},${cy}).`,
+        'Break the request into 4-12 layered 2D shapes. Background first (ground/sky), then subjects at distinct x, then details.',
+        'Relative words ("below", "next to"): keep clear:false, keep earlier steps, place new shapes relative to them.',
+        'add_shape types: rectangle, ellipse, line (points array). Use add_curve for polygon/star/heart/sine/wave with bounds {x,y,w,h}.',
+        'Concrete numbers and #hex fills only.',
+        'Return ONLY valid JSON: {"title":"short name","clear":true,"steps":[{"op":"add_shape|add_curve","args":{...}}]}',
+      ]
+    : [
+        `You are the 2D SVG Canvas Composer. The canvas coordinate system is (0,0) top-left to (${width},${height}) bottom-right. Center is (${cx},${cy}).`,
+        'Your job is to break down ANY user request into 4 to 12 layered 2D geometric shapes.',
+        '',
+        'SPATIAL COMPOSITION RULES:',
+        '1. BACKGROUND (Step 1-2): For landscapes/scenes (forest, beach, city, sky, desert), start with ground or sky rectangles (e.g. ground at y=500, width=1000, height=300).',
+        '2. DISTRIBUTED SUBJECTS (Step 3-8): For multiple items (e.g. 3 pyramids, trees in a forest), place instances across distinct x positions (e.g. x=120, x=450, x=750).',
+        '3. RELATIVE POSITIONING & MULTI-VIEW (CRITICAL):',
+        '   - If the user says "below", "next to", "beside", or asks for a new angle (e.g. "draw each from front below"): keep clear: false, retain previous shapes, and place new shapes at the requested relative coordinates (e.g. y=450..750 for "below").',
+        '4. SHAPE DECOMPOSITION:',
+        '   - Front view pyramids: Triangles along baseline, e.g. add_shape line points: [[topX, topY], [rightX, baseY], [leftX, baseY], [topX, topY]] with fill="#d97706" (large: x=100..400, medium: x=440..700, small: x=720..900).',
+        '   - Top view pyramids: Concentric/spaced rectangles or squares with sand fills.',
+        '   - Pine tree: brown trunk rectangle + green triangle polylines/polygons.',
+        '   - Celestial / Atmosphere: sun ellipse, clouds, stars.',
+        '5. AVAILABLE OPERATIONS:',
+        '   - add_shape: {"type":"rectangle", "x":N, "y":N, "width":N, "height":N, "fill":"#hex", "stroke":"#hex", "strokeWidth":N}',
+        '   - add_shape: {"type":"ellipse", "x":N, "y":N, "width":N, "height":N, "fill":"#hex", "stroke":"#hex", "strokeWidth":N}',
+        '   - add_shape: {"type":"line", "points":[[x1,y1],[x2,y2],...], "fill":"#hex", "stroke":"#hex", "strokeWidth":N}',
+        '   - add_curve: {"kind":"polygon|star|heart|sine|wave", "bounds":{"x":N,"y":N,"w":N,"h":N}, "sides":N, "fill":"#hex", "stroke":"#hex"}',
+        '',
+        'OUTPUT FORMAT (CRITICAL):',
+        'Return ONLY valid JSON (no markdown fences, no explanatory text outside the JSON):',
+        '{"title":"descriptive short name","clear":true,"steps":[{"op":"add_shape|add_curve","args":{...}}]}',
+        '',
+        `User request: ${String(userText || '').trim()}`,
+      ];
+  if (!opts.compact) {
+    // compact variant already embeds the user request below.
+    lines.splice(lines.length - 1, 0, '');
+  }
   const prev = compressDrawPlan(lastPlan);
   if (prev.steps.length || prev.clear) {
     lines.push('', `Previous plan JSON: ${JSON.stringify(prev)}`);
@@ -1912,7 +2075,21 @@ export function formatPlannerUserPrompt(userText, lastPlan = null, canvas = FALL
       'Merge the user request into a full plan to replay (include earlier steps unless clear is true).',
     );
   }
+  if (opts.compact) {
+    lines.push('', `User request: ${String(userText || '').trim()}`);
+  }
   return lines.join('\n');
+}
+
+/**
+ * Small-context variant of the planner prompt (Qwen3-0.6B fast planner).
+ *
+ * @param {string} userText
+ * @param {ReturnType<typeof emptyDrawPlan> | null | undefined} [lastPlan]
+ * @param {{ width?: number, height?: number }} [canvas]
+ */
+export function compactPlannerUserPrompt(userText, lastPlan = null, canvas = FALLBACK_CANVAS) {
+  return formatPlannerUserPrompt(userText, lastPlan, canvas, { compact: true });
 }
 
 function intentNeedsLlmPlanner(intent) {
@@ -1924,9 +2101,56 @@ function intentNeedsLlmPlanner(intent) {
   return Boolean(String(intent.raw || '').trim());
 }
 
+const QUESTION_START_RE =
+  /^(what|whats|which|where|when|who|whos|why|how|is|are|was|were|do|does|did|can|could|would|will|should|tell|show|describe|explain|list|count|summar\w*)\b/i;
+const ACTION_VERB_RE =
+  /\b(draw|sketch|paint|add|make|create|place|put|render|fill|colou?r|remove|delete|clear|wipe|plan)\b/i;
+const CAPABILITY_QUESTION_RE = /\b(?:what|how)\s+(?:can|do(?:es)?)\s+you\b/i;
+
 /**
- * One user turn: regex fast-path or LLM plan → cleared-context draw. Clear wins.
- * Fulfill is not sticky across messages.
+ * True when the message asks ABOUT the canvas instead of requesting a change.
+ * Questions get a read-only analysis turn — never a drawing pass.
+ *
+ * @param {string} text
+ */
+export function isCanvasQuestion(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return false;
+  if (!raw.includes('?') && !QUESTION_START_RE.test(raw)) return false;
+  if (ACTION_VERB_RE.test(raw)) {
+    // "what can you draw?" is still a question; "can you draw a star?" is not.
+    return CAPABILITY_QUESTION_RE.test(raw);
+  }
+  return true;
+}
+
+/**
+ * Grounded prompt for read-only canvas questions. The harness-authored summary
+ * is the source of truth; the model may only phrase it.
+ *
+ * @param {string} userText
+ * @param {string} canvasSummary
+ */
+export function formatCanvasQuestionPrompt(userText, canvasSummary) {
+  return [
+    'You are the read-only analyst of an SVG drawing canvas.',
+    'Answer the question in ONE short sentence using ONLY the facts below.',
+    'Never claim anything was drawn, changed, or cleared — this mode has no tools.',
+    '',
+    `Canvas summary: ${canvasSummary}`,
+    '',
+    `Question: ${String(userText || '').trim()}`,
+  ].join('\n');
+}
+
+/**
+ * One user turn: regex fast-path or LLM plan → host-executed plan steps.
+ * Clear wins. Fulfill is not sticky across messages.
+ *
+ * Validated DrawPlans (host recipes and LLM planner output) are executed
+ * directly by the host executor under an `executing` phase. The cleared-context
+ * model tool loop (`generateWithTools`) is the fallback path for turns with no
+ * valid plan (missing planner, invalid JSON, empty merged plan).
  *
  * @param {object} opts
  * @param {string} opts.userText
@@ -1934,8 +2158,9 @@ function intentNeedsLlmPlanner(intent) {
  * @param {{ width?: number, height?: number }} [opts.canvas]
  * @param {(modelText: string, extras: { execute: Function, intent: object, plan?: object, phase?: string }) => Promise<string>} [opts.generateWithTools]
  * @param {(prompt: string, extras: { intent: object, lastPlan?: object | null }) => Promise<string>} [opts.generatePlan]
+ * @param {(prompt: string, extras: { intent: object }) => Promise<string>} [opts.generateAnswer]
  * @param {(intent: object, meta?: { phase?: string, plan?: object | null }) => unknown | Promise<unknown>} [opts.onBeforeGenerate]
- * @param {(phase: 'planning' | 'drawing' | 'fallback', meta: object) => unknown | Promise<unknown>} [opts.onPhase]
+ * @param {(phase: 'planning' | 'executing' | 'answering' | 'fallback', meta: object) => unknown | Promise<unknown>} [opts.onPhase]
  * @param {ReturnType<typeof emptyDrawPlan> | null} [opts.lastPlan]
  */
 export async function runDrawTurn({
@@ -1944,6 +2169,7 @@ export async function runDrawTurn({
   canvas = FALLBACK_CANVAS,
   generateWithTools,
   generatePlan,
+  generateAnswer,
   onBeforeGenerate,
   onPhase,
   lastPlan = null,
@@ -1951,16 +2177,74 @@ export async function runDrawTurn({
   if (typeof execute !== 'function') {
     throw new Error('runDrawTurn requires execute');
   }
+  await logAiDrawEvent('TURN_START', `Turn: "${userText}"`, { userText, lastPlan, canvas });
+
   const intent = parseDrawTurnIntent(userText, canvas);
+  await logAiDrawEvent('INTENT_PARSED', 'Parsed user turn intent', { intent });
+
   if (intent.wantsClear || intent.math.replacesCanvas) {
     await execute('clear_canvas', {});
+  }
+
+  // Read-only analysis turn: questions are answered from the canvas summary,
+  // never planned or drawn.
+  if (
+    intent.question &&
+    !intent.clearOnly &&
+    !intent.stacked.simplified &&
+    !intent.math.simplified &&
+    !intent.recipe?.simplified
+  ) {
+    await onPhase?.('answering', { intent });
+    if (typeof onBeforeGenerate === 'function') {
+      await onBeforeGenerate(intent, { phase: 'answering', plan: null });
+    }
+    const answerList = await execute('list_shapes', {});
+    const answerShapes = Array.isArray(answerList) ? answerList : [];
+    const answerSnapshot = inspectDrawShapes(answerShapes);
+    let modelReply = '';
+    if (typeof generateAnswer === 'function') {
+      try {
+        const out = await generateAnswer(
+          formatCanvasQuestionPrompt(intent.raw, describeShapesBrief(answerSnapshot)),
+          { intent },
+        );
+        modelReply = out == null ? '' : String(out);
+      } catch (err) {
+        const msg = err?.message || String(err);
+        await logAiDrawEvent('ANSWER_ERROR', 'generateAnswer error', { error: msg }, 'ERROR');
+      }
+    }
+    const answerReply = assistantTextFromCanvas(answerShapes, intent, modelReply, {
+      addedCount: 0,
+      plan: null,
+    });
+    const prevPlan = compressDrawPlan(lastPlan);
+    const retainedAnswerPlan = prevPlan.steps.length || prevPlan.clear ? prevPlan : null;
+    await logAiDrawEvent('TURN_END', `Answer turn finished (${answerShapes.length} shapes)`, {
+      shapesCount: answerShapes.length,
+      reply: answerReply,
+    });
+    return {
+      intent,
+      plan: null,
+      planSource: 'answer',
+      planSummary: '',
+      lastPlan: retainedAnswerPlan,
+      modelReply,
+      reply: answerReply,
+      shapes: answerShapes,
+      snapshot: answerSnapshot,
+      toolError: null,
+      addedCount: 0,
+      stepErrors: 0,
+    };
   }
 
   /** @type {ReturnType<typeof emptyDrawPlan> | null} */
   let plan = null;
   /** @type {'host' | 'llm' | 'fallback' | null} */
   let planSource = null;
-  let usedFallback = false;
 
   if (intent.clearOnly) {
     plan = intentToDrawPlan(intent, canvas);
@@ -1980,15 +2264,29 @@ export async function runDrawTurn({
         attempt === 0
           ? formatPlannerUserPrompt(intent.raw, lastPlan, canvas)
           : `${formatPlannerUserPrompt(intent.raw, lastPlan, canvas)}\n\nPrevious output was invalid (${parsed.error || 'error'}). Return ONLY valid JSON for the DrawPlan.`;
+      await logAiDrawEvent('PLAN_PROMPT', `Planner prompt attempt ${attempt + 1}`, { prompt });
       try {
         const out = await generatePlan(prompt, { intent, lastPlan });
-        parsed = parseDrawPlanFromModelText(out == null ? '' : String(out));
+        const rawOutput = out == null ? '' : String(out);
+        await logAiDrawEvent('PLAN_RAW_OUTPUT', `Planner raw output attempt ${attempt + 1}`, {
+          rawOutput,
+        });
+        parsed = parseDrawPlanFromModelText(rawOutput);
+        await logAiDrawEvent('PLAN_PARSED', `Parsed plan result attempt ${attempt + 1}`, {
+          parsed,
+        });
         if (parsed.ok) {
           planned = parsed.plan;
           break;
         }
       } catch (err) {
         const msg = err?.message || String(err);
+        await logAiDrawEvent(
+          'PLAN_ERROR',
+          `Planner error attempt ${attempt + 1}`,
+          { error: msg },
+          'ERROR',
+        );
         if (/guardrail|policy/i.test(msg)) throw err;
         parsed = { ok: false, plan: emptyDrawPlan(), error: msg };
       }
@@ -1996,11 +2294,21 @@ export async function runDrawTurn({
     if (parsed.ok) {
       plan = mergeDrawPlans(intent.wantsClear ? null : lastPlan, planned);
       planSource = 'llm';
+      await logAiDrawEvent('PLAN_MERGED', 'Merged plan for execution', { plan });
+      if (!plan.clear && !plan.steps.length) {
+        await logAiDrawEvent(
+          'PLAN_EMPTY',
+          'Merged plan has no actionable steps; falling back to tool loop',
+          {},
+          'WARN',
+        );
+        plan = null;
+        planSource = null;
+      }
     }
   }
 
   if (!plan && typeof generateWithTools === 'function') {
-    usedFallback = true;
     planSource = 'fallback';
     await onPhase?.('fallback', { intent, lastPlan });
     if (typeof onBeforeGenerate === 'function') {
@@ -2014,17 +2322,59 @@ export async function runDrawTurn({
   const beforeIds = new Set(
     (Array.isArray(beforeList) ? beforeList : []).map((s) => s?.id).filter(Boolean),
   );
+  await logAiDrawEvent('CANVAS_BEFORE', 'Shapes before turn execution', {
+    shapeCount: beforeIds.size,
+    shapes: beforeList,
+  });
 
   let modelReply = '';
   let toolError = null;
-  if (typeof generateWithTools === 'function' && !intent.clearOnly) {
-    const phase = usedFallback ? 'fallback' : 'drawing';
-    if (!usedFallback) {
-      await onPhase?.('drawing', { intent, plan });
-      if (typeof onBeforeGenerate === 'function') {
-        await onBeforeGenerate(intent, { phase: 'drawing', plan });
+  let stepErrors = 0;
+
+  if (plan && !intent.clearOnly) {
+    // Host-first execution: validated plans run deterministically, no model pass.
+    await onPhase?.('executing', { intent, plan });
+    if (typeof onBeforeGenerate === 'function') {
+      await onBeforeGenerate(intent, { phase: 'executing', plan });
+    }
+    // LLM plans describe the full intended scene — wipe before replaying so a
+    // merged follow-up does not duplicate shapes it re-emits. Host recipes stay
+    // additive unless the user asked to clear (already handled above).
+    if (planSource === 'llm' || plan.clear || intent.wantsClear) {
+      await execute('clear_canvas', {});
+    }
+    await logAiDrawEvent('HOST_EXEC_START', 'Executing validated plan via host runner', {
+      source: planSource,
+      steps: plan.steps,
+    });
+    for (const step of plan.steps) {
+      try {
+        if (step.op === 'clear_canvas') {
+          await execute('clear_canvas', {});
+        } else {
+          await execute(step.op, step.args || {});
+        }
+      } catch (err) {
+        stepErrors += 1;
+        const msg = err?.message || String(err);
+        await logAiDrawEvent(
+          'STEP_ERROR',
+          `Planned step failed: ${step.op}`,
+          { error: msg },
+          'ERROR',
+        );
       }
     }
+    await logAiDrawEvent('HOST_EXEC_END', 'Host plan execution finished', {
+      steps: plan.steps.length,
+      stepErrors,
+    });
+  } else if (typeof generateWithTools === 'function' && !intent.clearOnly) {
+    const phase = 'fallback';
+    await logAiDrawEvent('DRAWING_START', 'Starting generateWithTools fallback pass', {
+      phase,
+      modelText: intent.modelText,
+    });
     try {
       const out = await generateWithTools(intent.modelText, {
         execute,
@@ -2033,8 +2383,10 @@ export async function runDrawTurn({
         phase,
       });
       modelReply = out == null ? '' : String(out);
+      await logAiDrawEvent('DRAWING_END', 'generateWithTools finished', { modelReply });
     } catch (err) {
       const msg = err?.message || String(err);
+      await logAiDrawEvent('DRAWING_ERROR', 'generateWithTools error', { error: msg }, 'ERROR');
       if (/tools unsupported|not support tools|guardrail/i.test(msg) && !/maxRounds/i.test(msg)) {
         throw err;
       }
@@ -2065,6 +2417,7 @@ export async function runDrawTurn({
       (intent.recipe.id === 'heart' && !snap.looksLikeHeart && snap.curveCount < 1) ||
       (intent.recipe.id === 'spiral' && snap.curveCount < 1) ||
       (intent.recipe.family === 'face' && !snap.looksLikeFace) ||
+      (intent.recipe.family === 'stencil' && snap.count < 2) ||
       (intent.recipe.family === 'hex-grid' &&
         (!snap.looksLikeHexGrid ||
           snap.hexCount < (intent.recipe.count || HEX_GRID_DEFAULT_CELLS) - 1));
@@ -2077,10 +2430,18 @@ export async function runDrawTurn({
   const shapes = Array.isArray(rawList) ? rawList : [];
   const snapshot = inspectDrawShapes(shapes);
   const addedCount = shapes.filter((s) => s?.id && !beforeIds.has(s.id)).length;
-  const reply = assistantTextFromCanvas(shapes, intent, modelReply, { addedCount });
+  const reply = assistantTextFromCanvas(shapes, intent, modelReply, { addedCount, plan });
   const retainedPlan =
     planSource === 'fallback' || !plan ? null : compressDrawPlan({ ...plan, clear: false });
   const planSummary = plan ? summarizeDrawPlan(plan) : '';
+
+  await logAiDrawEvent('TURN_END', `Turn finished (${shapes.length} shapes on canvas)`, {
+    shapesCount: shapes.length,
+    addedCount,
+    reply,
+    planSummary,
+  });
+
   return {
     intent,
     plan,
@@ -2093,5 +2454,6 @@ export async function runDrawTurn({
     snapshot,
     toolError,
     addedCount,
+    stepErrors,
   };
 }

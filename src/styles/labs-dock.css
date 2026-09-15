@@ -64,6 +64,8 @@ html[data-labs-dock="right"] {
 }
 
 .labs-main-shell {
+  position: relative;
+  z-index: 1;
   padding: var(--labs-main-offset) var(--labs-dock-edge-pad-right, 0)
     var(--labs-dock-edge-pad-bottom, 0) var(--labs-dock-edge-pad-left, 0);
   min-height: calc(100vh - var(--labs-main-min-height-offset));
@@ -84,16 +86,16 @@ html[data-labs-dock="right"] {
 }
 
 /* Site dock action chrome (search + theme + customizer).
-   Consume --vd-dock-tint so dark-mode chrome matches light + brand/active. */
+   Consume --vd-dock-ink so chrome stays legible on surface-tinted pills. */
 .vd-site-dock .vd-dock-actions {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--vd-dock-tint, var(--vd-text-primary));
+  color: var(--vd-dock-ink);
 }
 
 .vd-site-dock .vd-dock-links {
-  color: var(--vd-dock-tint, var(--vd-text-primary));
+  color: var(--vd-dock-ink);
 }
 
 /* Vertical docks: swatches topmost on both edges (matches horizontal,
@@ -118,23 +120,25 @@ html[data-labs-dock="right"] {
 /* MacOS-style site dock — base matches live mobile polish; desktop compacts below. */
 .vd-site-dock {
   --vd-dock-height: 5.15rem;
-  --vd-dock-brand-size: 3.375rem;
+  --vd-dock-brand-size: 3.125rem;
 
   /* Keep 90% of the previous full-span bar (cut 10%) on the long axis. */
   --vd-site-dock-length-ratio: 0.9;
 }
 
-/* Docs-only: deeper ink pill than package vd-dock-dark (#0a0a0a @ 90%).
-   90% mix / 0.90 glass alpha — a small step down from 97% / 0.98 so the
-   bar reads as glass without losing the solid navbar feel. Site dock is
-   always vd-dock-dark, so this covers light and dark page themes. */
+/* Glass tuning for all site docks. Surface tint (`tint-mode="surface"`) keeps
+   the package vd-dock-tint-* background; ink override applies only when
+   untinted or in accent mode. */
 .vd-site-dock.vd-dock-dark.vd-glass-34 {
   --vd-glass-bg-opacity: 0.9;
   --vd-glass-blur: 16px;
   --vd-glass-saturate: 1.15;
   --vd-glass-border-alpha: 0.1;
   --vd-glass-highlight-alpha: 0;
+}
 
+.vd-site-dock.vd-dock-dark.vd-glass-34:not([class*="vd-dock-tint-"]),
+.vd-site-dock.vd-dock-dark.vd-glass-34.vd-dock-tint-accent[class*="vd-dock-tint-"] {
   background: color-mix(in srgb, #030303 90%, transparent);
   background-image: none;
   border-color: rgb(255 255 255 / 10%);
@@ -143,13 +147,22 @@ html[data-labs-dock="right"] {
     inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
-.vd-site-dock.vd-dock-dark.vd-dock-tint-accent[class*="vd-dock-tint-"] {
-  background: color-mix(in srgb, #030303 90%, transparent);
-  background-image: none;
+.vd-site-dock.vd-dock-dark.vd-glass-34:not([class*="vd-dock-tint-"])::before,
+.vd-site-dock.vd-dock-dark.vd-glass-34.vd-dock-tint-accent[class*="vd-dock-tint-"]::before {
+  opacity: 0;
 }
 
-.vd-site-dock.vd-dock-dark.vd-glass-34::before {
-  opacity: 0;
+/* Chrome ink vs surface tint: --vd-dock-tint paints the pill; --vd-dock-ink is
+   foreground-only (nav, actions, brand atom). Lighten on surface-tinted pills
+   so darkened primaries stay readable on the same-hue background. */
+.vd-site-dock {
+  --vd-dock-ink: var(--vd-dock-tint, var(--vd-text-primary));
+  --vd-dock-ink-active: var(--vd-dock-ink);
+}
+
+.vd-site-dock[class*="vd-dock-tint-"] {
+  --vd-dock-ink: color-mix(in srgb, var(--vd-dock-tint) 35%, white);
+  --vd-dock-ink-active: color-mix(in srgb, var(--vd-dock-tint) 22%, white);
 }
 
 /* Central nav: ~34px glyphs (~28% under prior 3rem), no visible labels. */
@@ -164,14 +177,10 @@ html[data-labs-dock="right"] {
   font-size: 2.15rem;
 }
 
-/* Idle + active follow --vd-dock-tint (ink text when accent is unset). */
+/* Idle + active follow --vd-dock-ink (accent mode keeps neutral pill). */
 .vd-site-dock .vd-dock-links .vd-dock-item:not(.is-active) {
   opacity: 1;
-  color: color-mix(
-    in srgb,
-    var(--vd-dock-tint, var(--vd-text-primary)) 88%,
-    transparent
-  );
+  color: color-mix(in srgb, var(--vd-dock-ink) 88%, transparent);
 }
 
 .vd-site-dock .vd-dock-links .vd-dock-item:not(.is-active) .ph {
@@ -180,7 +189,7 @@ html[data-labs-dock="right"] {
 
 .vd-site-dock .vd-dock-links .vd-dock-item.is-active {
   opacity: 1;
-  color: var(--vd-dock-tint, var(--vd-text-primary));
+  color: var(--vd-dock-ink-active);
 }
 
 .vd-site-dock .vd-dock-links .vd-dock-item.is-active :is(.ph, .ph-fill) {
@@ -190,7 +199,7 @@ html[data-labs-dock="right"] {
 .vd-site-dock .vd-dock-links .vd-dock-item:hover:not(.is-active),
 .vd-site-dock .vd-dock-links .vd-dock-item:focus-visible:not(.is-active) {
   opacity: 1;
-  color: var(--vd-dock-tint, var(--vd-text-primary));
+  color: var(--vd-dock-ink-active);
 }
 
 .vd-site-dock .vd-dock-links .vd-dock-item:hover:not(.is-active) .ph,
@@ -215,7 +224,7 @@ html[data-labs-dock="right"] {
   .vd-site-dock {
     --vd-dock-height: var(--vd-site-dock-height);
     --vd-dock-inset: var(--vd-site-dock-inset);
-    --vd-dock-brand-size: 3.0375rem;
+    --vd-dock-brand-size: 2.8125rem;
 
     gap: 0.5rem;
   }
@@ -255,7 +264,7 @@ html[data-labs-dock="right"] {
   .vd-site-dock.vd-dock-edge-top .vd-dock-links .vd-dock-label,
   .vd-site-dock.vd-dock-edge-bottom .vd-dock-links .vd-dock-label {
     display: block;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -357,17 +366,23 @@ html[data-labs-dock="right"] {
   }
 }
 
-.vd-site-dock .vd-site-dock-brand-mark,
-.vd-site-dock .vd-site-dock-brand-mark svg {
+/* Size the atom icon only — not the flex wrapper (horizontal includes wordmark). */
+.vd-site-dock .labs-dock-atom-icon {
   width: var(--vd-dock-brand-size);
   height: var(--vd-dock-brand-size);
   display: block;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
-/* Brand slot: flush padding + optical center (viewBox ink sits high). */
+/* Brand slot: flush padding; flex-center atom (+ wordmark on horizontal). */
 .vd-site-dock .vd-dock-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   align-self: center;
+  line-height: 0;
 }
 
 .vd-site-dock.is-vertical .vd-dock-brand {
@@ -375,36 +390,19 @@ html[data-labs-dock="right"] {
   width: 100%;
 }
 
-/* Ink dock: brand mark tracks --vd-dock-tint (same hue as active nav icon).
-   When primary is Ink (black), accent is unset — soft grey chrome. */
+.vd-site-dock .labs-site-dock-brand-mark,
 .vd-site-dock .vd-site-dock-brand-mark {
-  --vd3-mark-inner-light: color-mix(
-    in srgb,
-    var(--vd-dock-tint, #a1a1aa) 72%,
-    #fff
-  );
-  --vd3-mark-inner-dark: color-mix(
-    in srgb,
-    var(--vd-dock-tint, #71717a) 88%,
-    #000
-  );
-  --vd3-mark-outer-fill: color-mix(
-    in srgb,
-    var(--vd-dock-tint, #8a9199) 78%,
-    #000
-  );
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.4em;
   line-height: 0;
 }
 
-/* Horizontal edges (+ square morph waypoint): padded viewBox leaves ink mass
-   high; nudge scales with rendered mark size (0.1em was ~1.6px and did not
-   track --vd-dock-brand-size). */
-.vd-site-dock:not(.is-vertical) .vd-site-dock-brand-mark .vd3-mark {
-  transform: translateY(calc(var(--vd-dock-brand-size) * 0.075));
+.vd-site-dock .labs-dock-brand-title {
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Brand mark: idle still; hover ramps slow→medium; morph spins fast. */
@@ -426,25 +424,26 @@ html[data-labs-dock="right"] {
   }
 }
 
-.vd-site-dock .vd-dock-brand .vd3-mark-spin {
+.vd-site-dock .vd-dock-brand .labs-dock-atom-spin {
   transform: rotate(var(--vd-site-dock-brand-angle));
-  transform-origin: 361px 361px;
+  transform-origin: 50px 50px;
   animation: vd-site-dock-brand-spin var(--vd-site-dock-brand-spin) linear
     infinite;
   animation-play-state: paused;
 }
 
-.vd-site-dock .vd-dock-brand:hover .vd3-mark-spin,
-.vd-site-dock .vd-dock-brand:focus-visible .vd3-mark-spin {
+.vd-site-dock .vd-dock-brand:hover .labs-dock-atom-spin,
+.vd-site-dock .vd-dock-brand:focus-visible .labs-dock-atom-spin {
   animation-play-state: running;
 }
 
-.vd-site-dock.is-morphing .vd-dock-brand .vd3-mark-spin {
+.vd-site-dock.is-morphing .vd-dock-brand .labs-dock-atom-spin,
+.vd-site-dock.is-square .vd-dock-brand .labs-dock-atom-spin {
   animation-play-state: running;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vd-site-dock .vd-dock-brand .vd3-mark-spin {
+  .vd-site-dock .vd-dock-brand .labs-dock-atom-spin {
     animation: none;
     transition: none;
   }
@@ -462,11 +461,7 @@ html[data-labs-dock="right"] {
   border: 0;
   border-radius: 0.75rem;
   background: transparent;
-  color: color-mix(
-    in srgb,
-    var(--vd-dock-tint, var(--vd-text-primary)) 88%,
-    transparent
-  );
+  color: color-mix(in srgb, var(--vd-dock-ink) 88%, transparent);
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 0;
@@ -481,7 +476,7 @@ html[data-labs-dock="right"] {
 .vd-site-dock .vd-dock-actions button:focus-visible,
 .vd-site-dock .vd-dock-actions button[aria-expanded="true"] {
   opacity: 1;
-  color: var(--vd-dock-tint, var(--vd-text-primary));
+  color: var(--vd-dock-ink-active);
   background: transparent;
   border-color: transparent;
 }
@@ -524,7 +519,7 @@ html[data-labs-dock="right"] {
   .vd-site-dock {
     --vd-dock-inset: 0.5rem; /* 8px — closer to viewport edges */
     --vd-dock-height: 4.65rem;
-    --vd-dock-brand-size: 2.35rem;
+    --vd-dock-brand-size: 2.175rem;
 
     padding-inline: 0.5rem;
   }
@@ -547,9 +542,8 @@ html[data-labs-dock="right"] {
   }
 
   /* Shrink brand further and nudge toward the left edge of the pill. */
-  .vd-site-dock:not(.is-vertical) .vd-site-dock-brand-mark .vd3-mark {
-    transform: translateX(-0.2rem)
-      translateY(calc(var(--vd-dock-brand-size) * 0.075));
+  .vd-site-dock:not(.is-vertical) .labs-dock-atom-icon {
+    transform: translateX(-0.2rem);
   }
 
   .vd-site-dock .vd-dock-brand {
@@ -661,11 +655,7 @@ html[data-labs-dock="right"] {
     border: 0;
     border-radius: 0.75rem;
     background: transparent;
-    color: color-mix(
-      in srgb,
-      var(--vd-dock-tint, var(--vd-text-primary)) 88%,
-      transparent
-    );
+    color: color-mix(in srgb, var(--vd-dock-ink) 88%, transparent);
     cursor: pointer;
     font-size: 1.1rem;
     line-height: 0;
@@ -684,7 +674,7 @@ html[data-labs-dock="right"] {
     .vd-dock-links
     .vd-theme-customizer-trigger[aria-expanded="true"] {
     opacity: 1;
-    color: var(--vd-dock-tint, var(--vd-text-primary));
+    color: var(--vd-dock-ink-active);
   }
 
   .vd-site-dock .vd-dock-links .vd-theme-switcher button i,
@@ -813,6 +803,74 @@ html[data-labs-dock="right"] {
   border-color: transparent;
 }
 
+/* -------------------------------------------------------------------------
+   Phosphor Bold fallback — @vanduo-oss/vd3/css ships regular+fill only.
+   VdThemeCustomizer (swatches) and dock chrome use ph-bold glyphs; remap to
+   the regular-weight codepoints (same glyphs as vd3-docs icons-all, without
+   the ~3MB bundle). Re-check when bumping Phosphor or vd3 icon class names.
+   ------------------------------------------------------------------------- */
+.vd-site-dock .vd-theme-customizer-trigger i.ph-bold.ph-swatches,
+.vd-site-dock .labs-dock-github i.ph-bold.ph-github-logo {
+  font-family: "Phosphor" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  letter-spacing: 0;
+  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+.vd-site-dock .vd-theme-customizer-trigger i.ph-bold.ph-swatches::before {
+  content: "\e5b8";
+}
+
+.vd-site-dock .labs-dock-github i.ph-bold.ph-github-logo::before {
+  content: "\e576";
+}
+
+/* Surface-tinted pills: full-strength ink (88% mix vanishes on same-hue backgrounds). */
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-dock-item:not(.is-active),
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions button,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-switcher-toggle,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-customizer-trigger,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-switcher button,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-customizer-trigger,
+.vd-site-dock[class*="vd-dock-tint-"] .labs-dock-github,
+.vd-site-dock[class*="vd-dock-tint-"] .labs-site-dock-brand-mark {
+  color: var(--vd-dock-ink);
+  opacity: 1;
+}
+
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-dock-item.is-active,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-dock-item:hover:not(.is-active),
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-dock-item:focus-visible:not(.is-active),
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions button:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions button:focus-visible,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions button[aria-expanded="true"],
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-switcher-toggle:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-switcher-toggle:focus-visible,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-customizer-trigger:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-actions .vd-theme-customizer-trigger:focus-visible,
+.vd-site-dock[class*="vd-dock-tint-"]
+  .vd-dock-actions
+  .vd-theme-customizer-trigger[aria-expanded="true"],
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-switcher button:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-switcher button:focus-visible,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-customizer-trigger:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .vd-dock-links .vd-theme-customizer-trigger:focus-visible,
+.vd-site-dock[class*="vd-dock-tint-"]
+  .vd-dock-links
+  .vd-theme-customizer-trigger[aria-expanded="true"],
+.vd-site-dock[class*="vd-dock-tint-"] .labs-dock-github:hover,
+.vd-site-dock[class*="vd-dock-tint-"] .labs-dock-github:focus-visible {
+  color: var(--vd-dock-ink-active);
+  opacity: 1;
+}
+
 /* Remap vd3 theme-switcher glyphs to Phosphor Bold (chrome weight).
    Codepoints mirror Spindrift Chess and must be re-checked when bumping
    Phosphor or when VdThemeSwitcher changes its .ph-* class names. */
@@ -834,22 +892,14 @@ html[data-labs-dock="right"] {
 
 /* Hero search wrapper — matches .hero-content width (same as CTA button row) */
 
-/* Labs brand: vertical edges = logo only (hide wordmark). */
-.vd-site-dock.is-vertical .labs-dock-brand-title {
+/* Labs brand wordmark visibility:
+   - Horizontal (settled): atom + title
+   - Vertical: logo only
+   - Morph / square waypoint: logo only (spinning) */
+.vd-site-dock.is-vertical .labs-dock-brand-title,
+.vd-site-dock.is-morphing .labs-dock-brand-title,
+.vd-site-dock.is-square .labs-dock-brand-title {
   display: none;
-}
-
-.vd-site-dock .labs-site-dock-brand-mark,
-.vd-site-dock .vd-site-dock-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
-}
-
-.vd-site-dock .labs-dock-atom-icon {
-  width: var(--vd-dock-brand-size);
-  height: var(--vd-dock-brand-size);
 }
 
 .vd-site-dock .labs-dock-github {
@@ -867,7 +917,7 @@ html[data-labs-dock="right"] {
 
 .vd-site-dock .labs-dock-github:hover,
 .vd-site-dock .labs-dock-github:focus-visible {
-  color: var(--vd-dock-tint, var(--vd-color-primary));
+  color: var(--vd-dock-ink-active, var(--vd-color-primary));
 }
 
 .vd-site-dock .labs-dock-github i {

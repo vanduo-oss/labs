@@ -51,7 +51,44 @@ test.describe('vdl theme defaults', () => {
     expect(defaults.NEUTRAL).toBe('neutral');
     expect(defaults.RADIUS).toBe('0.5');
     expect(defaults.PALETTE).toBe('open-color');
+    expect(defaults.PRIMARY_LIGHT).toBe('sky');
+    expect(defaults.PRIMARY_DARK).toBe('sky');
     expect(defaults.THEME).toBe('system');
+  });
+
+  test('maps theme primary to VdDock surface tint tokens', async ({ page }) => {
+    await page.goto('/tests/fixtures/neptune-harness.html');
+
+    const mapping = await page.evaluate(async () => {
+      const mod = await import('/src/composables/useLabsDockTint.js');
+      return {
+        sky: mod.labsPrimaryToDockTint('sky'),
+        yellow: mod.labsPrimaryToDockTint('yellow'),
+        black: mod.labsPrimaryToDockTint('black'),
+        purple: mod.labsPrimaryToDockTint('purple'),
+      };
+    });
+
+    expect(mapping).toEqual({
+      sky: 'blue',
+      yellow: 'yellow',
+      black: '',
+      purple: 'violet',
+    });
+  });
+
+  test('exports Labs primary fan swatch keys (Ink + 12 hues)', async ({ page }) => {
+    await page.goto('/tests/fixtures/neptune-harness.html');
+
+    const keys = await page.evaluate(async () => {
+      const mod = await import('/src/labs-primary-swatches.js');
+      return mod.LABS_PRIMARY_SWATCH_KEYS;
+    });
+
+    expect(keys).toHaveLength(13);
+    expect(keys[0]).toBe('black');
+    expect(keys).toContain('sky');
+    expect(keys).not.toContain('gray');
   });
 });
 
@@ -105,7 +142,8 @@ test.describe('resolved theme (system → light|dark)', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     const boot = await page.evaluate(() => ({
       theme: document.documentElement.getAttribute('data-theme'),
-      colorScheme: document.documentElement.style.colorScheme ||
+      colorScheme:
+        document.documentElement.style.colorScheme ||
         document.documentElement.style.getPropertyValue('color-scheme'),
       pref: localStorage.getItem('vdl-theme-preference'),
     }));

@@ -268,7 +268,8 @@ const mathTargetQ = ref(2);
 const mathTargetR = ref(-1);
 const mathDistance = computed(() => hexDistance(0, 0, mathTargetQ.value, mathTargetR.value));
 
-const installShell = `pnpm add @vanduo-oss/vdl-cbun`;
+const installShell = `# clone beside Labs, then in package.json:
+# "@vanduo-oss/vdl-cbun": "link:../vdl-cbun"`;
 const vue3Usage = `<script setup>
 import { VdHexGrid } from '@vanduo-oss/vdl-cbun/hex-grid';
 <\/script>
@@ -291,7 +292,7 @@ import { VdHexGrid } from '@vanduo-oss/vdl-cbun/hex-grid';
     <div class="vd-row vd-mb-6">
       <div class="vd-col-12 vd-col-lg-8 vd-mb-6">
         <div class="vd-card demo-card" style="padding: 1rem">
-          <div class="hex-demo-container" style="position: relative; width: 100%; height: 420px; background: var(--vd-bg-primary)">
+          <div class="hex-demo-container">
             <VdHexGrid
               :key="hexThemeKey"
               data-testid="labs-widget-hex"
@@ -385,3 +386,15 @@ import { VdHexGrid } from '@vanduo-oss/vdl-cbun/hex-grid';
     </div>
   </section>
 </template>
+
+<style scoped>
+.hex-demo-container {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  background: var(--vd-bg-primary);
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+  clip-path: inset(0 round var(--vd-card-border-radius, var(--card-border-radius, 0.5rem)));
+}
+</style>

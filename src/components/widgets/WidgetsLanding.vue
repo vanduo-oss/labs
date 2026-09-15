@@ -65,14 +65,15 @@ const entries = [
   },
 ];
 
-const installShell = `pnpm add @vanduo-oss/vdl-cbun`;
+const installShell = `# clone beside Labs, then in package.json:
+# "@vanduo-oss/vdl-cbun": "link:../vdl-cbun"`;
 </script>
 
 <template>
   <section id="labs-widgets" data-labs-panel="widgets-landing">
-    <div class="about-header vd-mb-4">
-      <h2 style="color: var(--vd-color-primary)">
-        <i class="ph ph-package"></i> Widgets
+    <div class="labs-page-header about-header">
+      <h2>
+        <i class="ph ph-package" aria-hidden="true"></i> Widgets
       </h2>
       <p class="vd-text-lg vd-text-muted">
         Live previews from <code>@vanduo-oss/vdl-cbun</code> — draw, hex grid, code editor, and music

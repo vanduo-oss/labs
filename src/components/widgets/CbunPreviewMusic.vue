@@ -33,8 +33,10 @@ const tracks = [
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 420px;
-  height: 420px;
-  padding: 0.5rem;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+  --vd-music-player-border-radius: var(--vd-card-border-radius, var(--card-border-radius));
 }
 </style>

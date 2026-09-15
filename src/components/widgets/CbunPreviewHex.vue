@@ -29,7 +29,7 @@ function onReady(instance) {
 </script>
 
 <template>
-  <div class="cbun-hex-wrap" style="height: 420px">
+  <div class="cbun-hex-wrap">
     <VdHexGrid
       :key="hexThemeKey"
       :size="28"
@@ -46,9 +46,11 @@ function onReady(instance) {
 .cbun-hex-wrap {
   position: relative;
   width: 100%;
-  min-height: 240px;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
   overflow: hidden;
+  clip-path: inset(0 round var(--vd-card-border-radius, var(--card-border-radius, 0.5rem)));
   background: var(--vd-bg-primary);
-  border-radius: var(--vd-radius-md, 0.5rem);
 }
 </style>

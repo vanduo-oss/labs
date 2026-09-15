@@ -56,10 +56,6 @@ export const VDL_HOME_QUOTES = Object.freeze([
     id: 'ai-weapon',
     text: 'Remember: If the robot asks for a weapon, say no. If it asks twice, run.',
   },
-  {
-    id: 'ai-privacy',
-    text: 'Data privacy is important to us. We keep all your secrets locked in the same room as the sentient mainframe.',
-  },
 
   // Lab Safety & OSHA Violations
   {
@@ -69,10 +65,6 @@ export const VDL_HOME_QUOTES = Object.freeze([
   {
     id: 'lab-99',
     text: "99% of our experiments are safe. Please don't ask about the 1%.",
-  },
-  {
-    id: 'lab-almonds',
-    text: 'If it smells like burning plastic, it means progress. If it smells like almonds, evacuate.',
   },
   {
     id: 'lab-beverage',
@@ -87,20 +79,12 @@ export const VDL_HOME_QUOTES = Object.freeze([
     text: 'Welcome to Vanduo Labs. Bring your own Geiger counter.',
   },
   {
-    id: 'lab-eyebrows',
-    text: 'We measure success by the number of intact eyebrows left on the team.',
-  },
-  {
     id: 'lab-waiver',
     text: 'Please sign this waiver before looking directly at the prototype.',
   },
   {
     id: 'lab-laser',
     text: 'Do not look directly into the laser. Do not look away from the laser either. Good luck.',
-  },
-  {
-    id: 'lab-pencil',
-    text: 'Our safety protocols are written in pencil.',
   },
   {
     id: 'lab-glowing',
@@ -123,10 +107,6 @@ export const VDL_HOME_QUOTES = Object.freeze([
   {
     id: 'eng-volatile',
     text: "At Vanduo Labs, we don't make mistakes. We create unexpected, highly volatile features.",
-  },
-  {
-    id: 'eng-syntax',
-    text: 'We are exactly three syntax errors away from a global catastrophe.',
   },
   {
     id: 'eng-coffee',

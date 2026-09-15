@@ -223,10 +223,10 @@ test.describe('AI Draw local inference (simple requests)', () => {
     expect(String(hex.reply || '')).not.toMatch(/"steps"|"op":/);
   });
 
-  test('two-step harness: unknown scene uses planner then draws something', async () => {
+  test('two-step harness: unknown scene plans once and host-executes the plan', async () => {
     const page = sharedPage;
     if (!page) throw new Error('inference page not initialized');
-    test.setTimeout(10 * 60 * 1000);
+    test.setTimeout(4 * 60 * 1000);
 
     const scene = await page.evaluate(async () => {
       await window.__vdlAiDrawClear();
@@ -234,9 +234,10 @@ test.describe('AI Draw local inference (simple requests)', () => {
     });
 
     expect(scene.simplified).toBe(false);
+    // Host-first: a valid planner JSON skips the model tool pass entirely.
     expect(
-      scene.planSource === 'llm' || scene.planSource === 'fallback',
-      `expected llm or fallback plan; got ${scene.planSource}; reply=${scene.reply}`,
+      scene.planSource === 'llm',
+      `expected llm plan; got ${scene.planSource}; reply=${scene.reply}`,
     ).toBe(true);
     expect(
       scene.snapshot?.empty,

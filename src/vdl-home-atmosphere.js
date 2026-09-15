@@ -86,15 +86,23 @@ vec3 getGradientColor(vec2 uv, float time) {
   color += uColor2 * i6 * (0.55 + 0.45 * cos(time * uSpeed * 0.9)) * uNeutralWeight;
   color += uColor3 * i7 * (0.55 + 0.45 * sin(time * uSpeed * 1.4)) * uPrimaryWeight * 0.7;
   color += uColor4 * i8 * (0.55 + 0.45 * cos(time * uSpeed * 1.5)) * uNeutralWeight * 0.85;
-  color += mix(uColor1, uColor3, radial) * 0.28 * uPrimaryWeight;
+  color += mix(uColor1, uColor3, radial) * 0.18 * uPrimaryWeight;
 
   color = clamp(color, vec3(0.0), vec3(1.0)) * uIntensity;
+  // Hard channel ceiling — overlapping blobs cannot rebuild toward white.
+  color = min(color, vec3(0.52));
   float luminance = dot(color, vec3(0.299, 0.587, 0.114));
-  color = mix(vec3(luminance), color, 1.2);
-  color = pow(color, vec3(0.94));
+  // Soft-cap peak luminance so cores stay tinted.
+  float maxBlobLum = 0.42;
+  if (luminance > maxBlobLum) {
+    color *= maxBlobLum / max(luminance, 0.001);
+    luminance = maxBlobLum;
+  }
+  color = mix(vec3(luminance), color, 1.1);
+  color = pow(color, vec3(1.02));
 
   float brightness = length(color);
-  float mixFactor = max(brightness * 1.15, 0.18);
+  float mixFactor = max(brightness * 0.85, 0.26);
   color = mix(uBase, color, mixFactor);
   return clamp(color, vec3(0.0), vec3(1.0));
 }
@@ -114,7 +122,11 @@ void main() {
   uv += vec2(ripple);
 
   vec3 color = getGradientColor(uv, uTime);
-  color += grain(uv, uTime) * uGrainIntensity;
+  float g = grain(uv, uTime) * uGrainIntensity;
+  // Light bases bleach easily with additive grain — bias grain down as base brightens.
+  float baseLum = dot(uBase, vec3(0.299, 0.587, 0.114));
+  float grainScale = mix(1.0, 0.42, smoothstep(0.45, 0.82, baseLum));
+  color += g * grainScale;
 
   float timeShift = uTime * 0.4;
   color.r += sin(timeShift) * 0.015;
@@ -122,7 +134,13 @@ void main() {
   color.b += sin(timeShift * 1.1) * 0.015;
 
   float brightness = length(color);
-  color = mix(uBase, color, max(brightness * 1.1, 0.2));
+  color = mix(uBase, color, max(brightness * 0.82, 0.16));
+  color = clamp(color, vec3(0.0), vec3(1.0));
+  // Suppress washed near-white peaks (high lum, low chroma) without crushing light bases.
+  float peakLum = dot(color, vec3(0.299, 0.587, 0.114));
+  float chroma = distance(color, vec3(peakLum));
+  float wash = smoothstep(0.1, 0.03, chroma) * smoothstep(0.62, 0.88, peakLum);
+  color = mix(color, mix(uBase, color, 0.28), wash);
   color = clamp(color, vec3(0.0), vec3(1.0));
 
   // Soft center veil so hero type stays readable.
@@ -283,15 +301,15 @@ function readCssNumber(styles, name, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/** Labs home defaults — match vd3-docs liquid demo knobs. */
+/** Labs site defaults — match vd3-docs “Move pointer · theme-aware primary + neutrals” panel. */
 const DEFAULT_KNOBS = Object.freeze({
-  speed: 0.35,
-  intensity: 1.7,
-  grain: 0.14,
-  distort: 0.22,
+  speed: 0.143,
+  intensity: 0.30,
+  grain: 0.38,
+  distort: 0.68,
   gradientSize: 0.48,
-  primaryWeight: 0.85,
-  neutralWeight: 1.15,
+  primaryWeight: 0.75,
+  neutralWeight: 0.22,
   alpha: 1,
 });
 
@@ -409,16 +427,28 @@ export function createVdlHomeAtmosphere(canvas, options = {}) {
       colors.base;
     const n8 = parseCssColor(styles.getPropertyValue('--vd-neutral-8')) || [0.15, 0.15, 0.15];
     const n6 = parseCssColor(styles.getPropertyValue('--vd-neutral-6')) || [0.32, 0.32, 0.32];
-    const n2 = parseCssColor(styles.getPropertyValue('--vd-neutral-2')) || [0.9, 0.9, 0.9];
     const isDark = (themeEl.getAttribute('data-theme') || 'dark') === 'dark';
 
-    // Two poles: primary accent vs dark base/neutral (avoids dual bright blobs on dark).
+    // Two poles: primary accent vs tinted neutrals (keeps depth without grey washes).
     colors.primary = primary;
-    colors.primarySoft = isDark ? mixRgb(primary, base, 0.72) : mixRgb(primary, base, 0.4);
-    colors.neutralA = isDark ? mixRgb(n8, base, 0.55) : mixRgb(n2, base, 0.2);
-    colors.neutralB = isDark ? mixRgb(base, n8, 0.35) : mixRgb(n6, primary, 0.08);
-    colors.base = base;
+    if (isDark) {
+      // Anchor soft/neutral washes on base so overlapping blobs don't glare near-white.
+      colors.primarySoft = mixRgb(primary, base, 0.86);
+      colors.neutralA = mixRgb(mixRgb(n8, primary, 0.08), base, 0.78);
+      colors.neutralB = mixRgb(mixRgb(base, primary, 0.06), n8, 0.22);
+      colors.base = base;
+    } else {
+      // Mid neutrals + heavier page-base pull (no near-white n2). Tint atmosphere base
+      // so gaps between blobs aren't paper-white “hotspots.”
+      colors.primarySoft = mixRgb(primary, base, 0.58);
+      colors.neutralA = mixRgb(mixRgb(n6, primary, 0.14), base, 0.52);
+      colors.neutralB = mixRgb(mixRgb(n6, primary, 0.16), base, 0.42);
+      colors.base = mixRgb(base, mixRgb(n6, primary, 0.18), 0.28);
+    }
     syncKnobs(root);
+    if (isDark) {
+      knobs.neutralWeight *= 0.45;
+    }
   }
 
   function resize() {

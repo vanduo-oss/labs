@@ -12,16 +12,8 @@ defineProps({
 <template>
   <section class="cbun-row" :class="{ 'is-reversed': reversed }">
     <div class="cbun-row-demo">
-      <div class="vd-card demo-card cbun-stage">
-        <div class="vd-card-header cbun-stage-header">
-          <h6>
-            <i :class="`ph ph-${icon}`"></i>
-            {{ title }}
-          </h6>
-        </div>
-        <div class="vd-card-body cbun-stage-body">
-          <slot />
-        </div>
+      <div class="cbun-row-demo-stage">
+        <slot />
       </div>
     </div>
 
@@ -47,14 +39,14 @@ defineProps({
 <style scoped>
 .cbun-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.55fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 0.5fr);
   gap: 2rem;
   align-items: center;
   padding: 2.5rem 0;
 }
 
 .cbun-row.is-reversed {
-  grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(0, 0.5fr) minmax(0, 2fr);
 }
 
 .cbun-row.is-reversed .cbun-row-demo {
@@ -96,19 +88,26 @@ defineProps({
   gap: 0.75rem;
 }
 
-.cbun-stage-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+.cbun-row-demo {
+  min-width: 0;
 }
 
-.cbun-stage-body {
+.cbun-row-demo-stage {
   display: flex;
   flex-direction: column;
-  min-height: 420px;
+  width: 100%;
+  min-height: 520px;
+  height: 520px;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
   overflow: hidden;
+  clip-path: inset(0 round var(--vd-card-border-radius, var(--card-border-radius, 0.5rem)));
+}
+
+.cbun-row-demo-stage > :deep(*) {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
 }
 
 @media (max-width: 900px) {

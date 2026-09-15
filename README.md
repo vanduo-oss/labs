@@ -1,24 +1,19 @@
 # Vanduo Labs
 
-Demo playground for the Vanduo ecosystem. Labs **consumes** published VDL engines from npm — it is **not** an engine source of truth and does **not** publish `@vanduo-oss/vdl-engines`.
+Demo playground for the Vanduo ecosystem. Labs dogfoods **sibling vanduo-oss Labs repos** (`vdl-*`) via `link:../vdl-*` — it is **not** an engine source of truth and does **not** publish a `vdl-*` npm family.
 
 Live demos: **https://labs.vanduo.dev**
 
-## Widgets (`@vanduo-oss/vdl-cbun`)
+## Sibling Labs repos (`vdl-*`)
 
-Widget demos (`#widgets/*`) dogfood [`@vanduo-oss/vdl-cbun`](https://github.com/vanduo-oss/vdl-cbun). Until that package is published to npm, `package.json` uses `link:../vdl-cbun` and `vite.config.js` aliases into the sibling `dist/` — keep that for local install; swap to a registry semver pin after publish.
+Clone these beside Labs (same parent directory) so `link:../vdl-*` resolves:
 
-## Engines (npm)
-
-| Package | Role |
+| Repo | Role |
 |------|------|
-| [`@vanduo-oss/vdl-hybrid-search`](https://www.npmjs.com/package/@vanduo-oss/vdl-hybrid-search) | Headless `HybridSearch` + search guardrails |
-| [`@vanduo-oss/vdl-ai-chat`](https://www.npmjs.com/package/@vanduo-oss/vdl-ai-chat) | Headless `AiChat` + LLM/tools guardrails + markdown |
+| [`vanduo-oss/vdl-cbun`](https://github.com/vanduo-oss/vdl-cbun) | Widgets: code-editor, draw, hex-grid, music-player (`#widgets/*`); Vite aliases into sibling `dist/` |
+| [`vanduo-oss/vdl-hybrid-search`](https://github.com/vanduo-oss/vdl-hybrid-search) | Headless `HybridSearch` + search guardrails |
+| [`vanduo-oss/vdl-ai-chat`](https://github.com/vanduo-oss/vdl-ai-chat) | Headless `AiChat` + LLM/tools guardrails + markdown |
 | Labs-local `model-eval.js` | Model evaluation harness (CLI / standalone; not listed on the live site) |
-
-```bash
-pnpm add @vanduo-oss/vdl-hybrid-search @vanduo-oss/vdl-ai-chat
-```
 
 ```javascript
 import { HybridSearch } from '@vanduo-oss/vdl-hybrid-search';
@@ -44,8 +39,7 @@ Guardrails docs: [doc/vdl-guardrails.md](./doc/vdl-guardrails.md)
 
 ## vd-hex (VdHexGrid) — Graduated
 
-- npm: [`@vanduo-oss/hex-grid`](https://www.npmjs.com/package/@vanduo-oss/hex-grid)
-- Repo: [`github.com/vanduo-oss/hex-grid`](https://github.com/vanduo-oss/hex-grid)
+Hex-grid now lives in Labs [`vdl-cbun`](https://github.com/vanduo-oss/vdl-cbun) (`#widgets/hex-grid`). It is **not** published under `@vanduo-oss/hex-grid` on npm (that package is unpublished).
 
 ---
 
@@ -95,6 +89,16 @@ See [doc/vdl-model-eval.md](./doc/vdl-model-eval.md).
 ---
 
 ## Develop
+
+Expect sibling checkouts:
+
+```text
+0_vanduo/
+  labs/
+  vdl-ai-chat/
+  vdl-hybrid-search/
+  vdl-cbun/
+```
 
 ```bash
 pnpm install

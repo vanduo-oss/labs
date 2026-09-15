@@ -1,0 +1,73 @@
+{
+  "version": "0.1.0",
+  "name": "vdl-ai-draw-quality",
+  "description": "Draw harness evaluation: plan validity, shapes drawn, and wall time per prompt/model against the local WebGPU inference harness.",
+  "cases": [
+    {
+      "id": "flag-lithuania",
+      "category": "recipe",
+      "prompt": "paint big fat nice Lithuanian flag (yellow-green-red)",
+      "expect": { "simplified": true, "kind": "flag:lithuania", "minShapes": 3 }
+    },
+    {
+      "id": "stacked-bands",
+      "category": "recipe",
+      "prompt": "ok, three fat big rectangle lines stacked: yellow on top, then green then red",
+      "expect": { "simplified": true, "minShapes": 3, "distinctRectY": 3 }
+    },
+    {
+      "id": "math-plot",
+      "category": "recipe",
+      "prompt": "draw x y axis and sin, cosin, tan and hyperbola on them - as in maths",
+      "expect": { "simplified": true, "kind": "math-plot", "minShapes": 4, "hasAxes": true }
+    },
+    {
+      "id": "star",
+      "category": "recipe",
+      "prompt": "draw a five pointed star",
+      "expect": { "kind": "star", "minShapes": 1, "looksLikeStar": true }
+    },
+    {
+      "id": "smiley",
+      "category": "recipe",
+      "prompt": "draw a yellow smiley face",
+      "expect": { "kind": "face:smiley", "minShapes": 3, "looksLikeFace": true }
+    },
+    {
+      "id": "heart",
+      "category": "recipe",
+      "prompt": "draw a green heart",
+      "expect": { "kind": "heart", "minShapes": 1 }
+    },
+    {
+      "id": "hex-grid",
+      "category": "recipe",
+      "prompt": "pls draw a hexagon grid of 9 identical hex cells",
+      "expect": { "simplified": true, "kind": "hex-grid", "planSource": "host", "minShapes": 8 }
+    },
+    {
+      "id": "scene-house-sun",
+      "category": "unknown-scene",
+      "prompt": "draw a small house with a yellow sun",
+      "expect": { "planSourceIn": ["llm"], "minShapes": 1 }
+    },
+    {
+      "id": "scene-pine-forest",
+      "category": "unknown-scene",
+      "prompt": "please draw pine forest",
+      "expect": { "planSourceIn": ["llm"], "minShapes": 3 }
+    },
+    {
+      "id": "scene-three-pyramids",
+      "category": "unknown-scene",
+      "prompt": "draw 3 pyramids like in Egypt, one is biggest others smaller",
+      "expect": { "planSourceIn": ["llm"], "minShapes": 3 }
+    },
+    {
+      "id": "scene-car",
+      "category": "stencil",
+      "prompt": "draw a car",
+      "expect": { "kind": "stencil:car", "planSource": "host", "minShapes": 5 }
+    }
+  ]
+}

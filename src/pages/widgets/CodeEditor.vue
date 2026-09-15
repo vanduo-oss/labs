@@ -72,7 +72,8 @@ function onLanguageChange() {
 const charCount = computed(() => code.value.length);
 const lineCount = computed(() => code.value.split('\n').length);
 
-const installShell = `pnpm add @vanduo-oss/vdl-cbun`;
+const installShell = `# clone beside Labs, then in package.json:
+# "@vanduo-oss/vdl-cbun": "link:../vdl-cbun"`;
 const vue3Usage = `<script setup>
 import { ref } from 'vue';
 import { VdCodeEditor } from '@vanduo-oss/vdl-cbun/code-editor';
@@ -185,6 +186,6 @@ const code = ref('const hello = "world";');
   color: var(--vd-text-primary);
   background: var(--vd-bg-primary);
   border: 1px solid var(--vd-border-color);
-  border-radius: 0.375rem;
+  border-radius: var(--vd-border-radius-md, var(--radius-md, 0.5rem));
 }
 </style>

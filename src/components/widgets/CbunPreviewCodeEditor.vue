@@ -20,11 +20,34 @@ const increment = () => {
 </script>
 
 <template>
-  <VdCodeEditor
-    v-model="code"
-    language="vue"
-    :auto-close="true"
-    :highlight-active-line="true"
-    :style="{ height: '420px', minHeight: '220px' }"
-  />
+  <div class="cbun-code-wrap">
+    <VdCodeEditor
+      v-model="code"
+      language="vue"
+      :auto-close="true"
+      :highlight-active-line="true"
+    />
+  </div>
 </template>
+
+<style scoped>
+.cbun-code-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+  clip-path: inset(0 round var(--vd-card-border-radius, var(--card-border-radius, 0.5rem)));
+  --vd-code-editor-radius: var(--vd-card-border-radius, var(--card-border-radius));
+}
+
+.cbun-code-wrap :deep(.vd-code-editor) {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+}
+</style>

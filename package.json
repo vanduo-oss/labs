@@ -28,6 +28,7 @@
     "index": "node utils/hybrid-search-indexer.mjs",
     "models:fetch": "node utils/fetch-ai-models.mjs",
     "model-eval": "node utils/model-eval-runner.mjs",
+    "model-eval:draw": "node utils/model-eval-draw-runner.mjs",
     "lint": "eslint model-eval.js \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs}\"",
     "format": "prettier --write \"model-eval.js\" \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs,vue,css}\"",
     "format:check": "prettier --check \"model-eval.js\" \"utils/**/*.{js,mjs}\" \"src/**/*.{js,mjs,vue,css}\"",
@@ -50,11 +51,11 @@
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "@litert-lm/core": "^0.15.0",
-    "@vanduo-oss/vd3": "^1.6.0",
+    "@vanduo-oss/vd3": "^1.7.2",
     "@vanduo-oss/vd3-charts": "1.1.0",
-    "@vanduo-oss/vdl-ai-chat": "^0.1.1",
+    "@vanduo-oss/vdl-ai-chat": "link:../vdl-ai-chat",
     "@vanduo-oss/vdl-cbun": "link:../vdl-cbun",
-    "@vanduo-oss/vdl-hybrid-search": "^0.1.2",
+    "@vanduo-oss/vdl-hybrid-search": "link:../vdl-hybrid-search",
     "fuse.js": "^7.5.0",
     "vue": "^3.5.41"
   }

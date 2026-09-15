@@ -15,3 +15,4 @@ gemma-4-debug.md
 demo/gemma-*.html
 utils/gemma-smoke-runner.mjs
 *.tgz
+logs/

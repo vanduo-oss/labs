@@ -138,6 +138,29 @@
               </VdButton>
             </div>
 
+            <!-- Experimental fast planner -->
+            <label
+              class="ts-ai-fast-planner"
+              for="vdl-ai-draw-fast-planner"
+              title="Experimental: plan scenes with Qwen3 0.6B (WebLLM) instead of Gemma. Gemma still runs the fallback tool pass."
+            >
+              <input
+                id="vdl-ai-draw-fast-planner"
+                v-model="fastPlanner"
+                type="checkbox"
+                :disabled="loading || streaming"
+                @change="onFastPlannerToggle"
+              />
+              <span>Fast planner (experimental)</span>
+            </label>
+            <p
+              v-if="fastPlannerStatus"
+              class="vd-text-sm vd-text-muted ts-ai-fast-planner-status"
+              role="status"
+            >
+              {{ fastPlannerStatus }}
+            </p>
+
             <!-- Load Progress Bar -->
             <div
               v-if="loading || progressText"
@@ -276,14 +299,22 @@ import {
   composeDrawSystemExtra,
   composeDrawPlannerExtra,
   composeDrawExecuteExtra,
+  composeDrawQaExtra,
+  compactPlannerUserPrompt,
   createDrawToolExecutor,
   runDrawTurn,
 } from '../demos/draw-tools.js';
+import { logAiDrawEvent } from '../demos/draw-logger.js';
+import {
+  createTinyDrawPlanner,
+  readTinyPlannerFlag,
+  writeTinyPlannerFlag,
+} from '../demos/draw-planner-webllm.js';
 import '../styles/ai-draw-demo.css';
 
 const gemmaModels = ref([
-  { id: 'gemma-4-E4B-it-web', label: 'Gemma 4 E4B (Recommended)' },
-  { id: 'gemma-4-E2B-it-web', label: 'Gemma 4 E2B (Lighter)' },
+  { id: 'gemma-4-E2B-it-web', label: 'Gemma 4 E2B (Recommended)' },
+  { id: 'gemma-4-E4B-it-web', label: 'Gemma 4 E4B (Quality)' },
 ]);
 
 const examplePrompts = DRAW_EXAMPLE_PROMPTS;
@@ -291,7 +322,7 @@ const examplePrompts = DRAW_EXAMPLE_PROMPTS;
 const drawRef = ref(null);
 const stageRef = ref(null);
 const selectedTool = ref('draw');
-const modelId = ref('gemma-4-E4B-it-web');
+const modelId = ref('gemma-4-E2B-it-web');
 
 const loaded = ref(false);
 const loading = ref(false);
@@ -313,6 +344,19 @@ const chatRef = shallowRef(null);
 const aiDrawing = ref(false);
 /** @type {import('vue').Ref<object | null>} */
 const lastDrawPlan = ref(null);
+
+const fastPlanner = ref(readTinyPlannerFlag());
+const fastPlannerStatus = ref('');
+/** @type {import('vue').Ref<import('../demos/draw-planner-webllm.js').TinyDrawPlanner | null>} */
+const tinyPlannerRef = shallowRef(null);
+
+function onFastPlannerToggle() {
+  writeTinyPlannerFlag(fastPlanner.value);
+  fastPlannerStatus.value = '';
+  if (!fastPlanner.value && tinyPlannerRef.value) {
+    tinyPlannerRef.value.disable();
+  }
+}
 
 const chipLayout = computed(() =>
   drawPromptChipLayout({
@@ -417,6 +461,20 @@ function applyDrawPhasePrompt(instance, phase) {
         canvasWidth: 1000,
         canvasHeight: 800,
         lastPlan: lastDrawPlan.value,
+      }),
+    });
+    return;
+  }
+  if (phase === 'answering') {
+    instance.registerTools([]);
+    instance.setSystemPromptOptions({
+      product: 'AI Draw',
+      extra: composeDrawQaExtra({
+        editor: drawRef.value,
+        canvasWidth: 1000,
+        canvasHeight: 800,
+        selectedTool: selectedTool.value,
+        selectedColor: '#000000',
       }),
     });
     return;
@@ -587,11 +645,50 @@ async function send() {
       lastPlan: lastDrawPlan.value,
       onPhase: (phase) => {
         if (phase === 'planning') statusText.value = 'Planning...';
-        else if (phase === 'drawing') statusText.value = 'Drawing...';
+        else if (phase === 'executing') statusText.value = 'Drawing...';
+        else if (phase === 'answering') statusText.value = 'Thinking...';
         else statusText.value = 'Generating...';
-        applyDrawPhasePrompt(chat, phase);
+        if (phase === 'planning' || phase === 'answering') {
+          // Fresh conversation so the preface picks up the phase preface
+          // (tool-free planner / read-only analyst) before generating.
+          chat.reset();
+          applyDrawPhasePrompt(chat, phase);
+          return;
+        }
+        // Host-executed plans never touch the chat conversation, so no reset is
+        // needed for the `executing` phase. The fallback tool loop still needs a
+        // fresh LiteRT conversation whose preface includes the re-registered
+        // tool definitions — without it, the model never emits tool calls.
+        if (phase === 'fallback') {
+          chat.reset();
+          applyDrawPhasePrompt(chat, phase);
+        }
       },
-      generatePlan: (prompt) => chat.generate(prompt),
+      generatePlan: async (prompt, extras) => {
+        if (fastPlanner.value) {
+          if (!tinyPlannerRef.value) {
+            tinyPlannerRef.value = createTinyDrawPlanner({
+              loadLiteRT: async () => import('@litert-lm/core'),
+              onFail: (message) => {
+                fastPlannerStatus.value = message;
+                fastPlanner.value = false;
+              },
+            });
+          }
+          // Compact prompt keeps the plan inside Qwen3-0.6B's 4K window.
+          const planned = await tinyPlannerRef.value.generatePlan(
+            compactPlannerUserPrompt(
+              extras?.intent?.raw ?? text,
+              extras?.lastPlan ?? lastDrawPlan.value,
+              { width: 1000, height: 800 },
+            ),
+          );
+          if (planned != null) return planned;
+          statusText.value = 'Planning...';
+        }
+        return chat.generate(prompt);
+      },
+      generateAnswer: (qaPrompt) => chat.generate(qaPrompt),
       generateWithTools: (modelText) =>
         chat.generateWithTools(modelText, {
           execute,
@@ -700,6 +797,10 @@ onBeforeUnmount(() => {
   }
   if (progressUnsub) {
     progressUnsub();
+  }
+  if (tinyPlannerRef.value) {
+    tinyPlannerRef.value.dispose();
+    tinyPlannerRef.value = null;
   }
   if (chatRef.value) {
     chatRef.value.dispose();

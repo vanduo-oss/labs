@@ -9,6 +9,8 @@ import {
   LABS_DOCK_TOOLTIP_DELAY_MS,
 } from '../composables/labsDock.js';
 import { useLabsDockNarrow } from '../composables/useLabsDockNarrow.js';
+import { useLabsDockTint } from '../composables/useLabsDockTint.js';
+import { useSiteDockBrandSpin } from '../composables/useSiteDockBrandSpin.js';
 
 const props = defineProps({
   /** Active top-level route: home | about | demos | widgets */
@@ -29,6 +31,8 @@ const tooltipRoot = ref(null);
 const dockEl = ref(null);
 const dockInst = ref(null);
 const lastWidePlacement = ref('top');
+
+const { dockTint } = useLabsDockTint();
 
 const isNarrow = useLabsDockNarrow({
   onExitNarrow: () => {
@@ -178,6 +182,7 @@ function setDockRef(inst) {
 }
 
 useTooltips(tooltipRoot, { showDelay: LABS_DOCK_TOOLTIP_DELAY_MS });
+useSiteDockBrandSpin(dockEl);
 
 watch(
   placement,
@@ -260,7 +265,8 @@ onUnmounted(() => {
     :storage-key="LABS_DOCK_STORAGE_KEY"
     :radius="LABS_DOCK_RADIUS"
     :item-layout="itemLayout"
-    tint-mode="accent"
+    tint-mode="surface"
+    :tint="dockTint"
     label="Site"
   >
     <template #brand>

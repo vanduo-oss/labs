@@ -116,7 +116,7 @@ test.describe('vdl home quotes shuffle bag', () => {
     expect(result.bagIsPermutation).toBe(true);
     expect(result.consecutiveRepeat).toBe(false);
     expect(result.tinyConsecutive).toBe(false);
-    expect(result.catalogSize).toBe(43);
+    expect(result.catalogSize).toBe(38);
     expect(result.gladosText).toBe('We are not yet building GLaDOS, but we might soon…');
     expect(result.isGlados).toBe(true);
     expect(result.intervalA).toBe(3000);

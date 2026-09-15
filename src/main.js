@@ -6,6 +6,7 @@ import '@vanduo-oss/vdl-cbun/draw/css';
 import '@vanduo-oss/vdl-cbun/music-player/css';
 import './styles/legacy-bridge.css';
 import './styles/labs.css';
+import './styles/labs-primary-darken.css';
 import './styles/labs-dock.css';
 import { VDL_THEME_DEFAULTS } from './vdl-theme-defaults.js';
 import { installResolvedTheme } from './vdl-resolved-theme.js';

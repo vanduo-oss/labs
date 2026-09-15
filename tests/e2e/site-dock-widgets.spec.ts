@@ -64,6 +64,36 @@ test.describe('Labs site dock', () => {
     await expect(page).toHaveURL(/#widgets/);
     await expect(page.locator('#labs-widgets')).toBeVisible();
   });
+
+  test('theme customizer opens primary-only swatches fan', async ({ page }) => {
+    await acceptDisclaimer(page);
+
+    const trigger = page.locator('nav.vd-site-dock [data-theme-customizer-trigger]');
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-label', 'Choose theme color');
+
+    await trigger.click();
+
+    const fan = page.locator('.vd-theme-customizer-fan');
+    await expect(fan).toHaveClass(/is-open/);
+    await expect(fan.locator('.tc-fan-item')).toHaveCount(13);
+
+    // Panel editor (palette / neutral / radius / font) must not appear.
+    await expect(page.locator('.vd-theme-customizer-panel')).toHaveCount(0);
+    await expect(page.locator('.tc-radius-group, .tc-font-select')).toHaveCount(0);
+
+    // Fan blades overlap in hit-testing; drive the pick through the DOM like
+    // the vd3-docs unit tests do.
+    await fan.locator('[data-color="yellow"]').evaluate((el) => {
+      (el as HTMLButtonElement).click();
+    });
+    await expect(fan).not.toHaveClass(/is-open/);
+    await expect(page.locator('html')).toHaveAttribute('data-primary', 'yellow');
+    await expect
+      .poll(async () => page.evaluate(() => localStorage.getItem('vdl-primary-color')))
+      .toBe('yellow');
+    expect(await page.evaluate(() => localStorage.getItem('vanduo-primary-color'))).toBeNull();
+  });
 });
 
 test.describe('Labs widget hash routes', () => {

@@ -54,6 +54,49 @@ function localModelsPlugin() {
   };
 }
 
+/** Dev-only: write verbose telemetry/trace logs from browser harness to project root `logs/` (gitignored). */
+function devLogsPlugin() {
+  const logsDir = path.join(root, 'logs');
+  return {
+    name: 'labs-dev-logs',
+    configureServer(server) {
+      server.middlewares.use('/api/dev-log', (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next();
+        }
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk;
+        });
+        req.on('end', () => {
+          try {
+            if (!fs.existsSync(logsDir)) {
+              fs.mkdirSync(logsDir, { recursive: true });
+            }
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const logFile = path.join(logsDir, `aidraw-${dateStr}.log`);
+            const payload = JSON.parse(body || '{}');
+            const timestamp = new Date().toISOString();
+            const level = payload.level || 'INFO';
+            const tag = payload.tag || 'AI-DRAW';
+            const title = payload.title || '';
+            const dataStr =
+              typeof payload.data === 'string' ? payload.data : JSON.stringify(payload.data, null, 2);
+            const entry = `[${timestamp}] [${level}] [${tag}] ${title}\n${dataStr}\n${'─'.repeat(80)}\n`;
+            fs.appendFileSync(logFile, entry, 'utf8');
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
 const vdlCbunAlias = useLocalVdlCbun
   ? {
       '@vanduo-oss/vdl-cbun/code-editor/css': path.join(
@@ -82,6 +125,7 @@ export default defineConfig({
   plugins: [
     vue(),
     localModelsPlugin(),
+    devLogsPlugin(),
     viteStaticCopy({
       targets: [
         { src: 'model-eval.js', dest: '.' },

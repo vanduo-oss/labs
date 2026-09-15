@@ -182,7 +182,8 @@ const brushDetails = [
   { name: 'calligraphy', label: 'Calligraphy', icon: 'ph ph-scribble-loop', color: '#7048e8' },
 ];
 
-const installShell = `pnpm add @vanduo-oss/vdl-cbun`;
+const installShell = `# clone beside Labs, then in package.json:
+# "@vanduo-oss/vdl-cbun": "link:../vdl-cbun"`;
 const vue3Usage = `<script setup>
 import { VdDraw } from '@vanduo-oss/vdl-cbun/draw';
 import '@vanduo-oss/vdl-cbun/draw/css';
@@ -316,8 +317,22 @@ import '@vanduo-oss/vdl-cbun/draw/css';
   gap: 0.35rem;
   margin: 0;
 }
+.draw-stage {
+  overflow: hidden;
+}
 .draw-stage-body {
   min-height: 420px;
+  border-radius: inherit;
+  overflow: hidden;
+}
+.draw-stage-body :deep(.vd-draw-shell) {
+  border-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
+}
+.draw-stage-body :deep(.vd-draw-canvas) {
+  border-bottom-left-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  border-bottom-right-radius: var(--vd-card-border-radius, var(--card-border-radius));
+  overflow: hidden;
 }
 .draw-state-bar {
   display: flex;
@@ -325,7 +340,7 @@ import '@vanduo-oss/vdl-cbun/draw/css';
   gap: 0.75rem;
   padding: 0.6rem 1rem;
   background: var(--vd-bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--vd-border-radius-md, var(--radius-md, 0.5rem));
   font-size: 0.85rem;
 }
 .brush-grid {

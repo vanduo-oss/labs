@@ -13,7 +13,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, buildDrawChatContext } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -106,7 +106,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, buildDrawChatContext } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -151,7 +151,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, sampleCurve, hasSlopeSignChanges, pointsBBox } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -204,7 +204,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('sparse line with sine user hint returns too_few_samples coaching', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -239,7 +239,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('unknown add_shape type is rejected (no silent rectangle)', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -263,7 +263,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('update_shape can patch points', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -305,7 +305,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('eval_geometry samples Math.sin and rejects forbidden identifiers', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, evalGeometryCode } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -433,7 +433,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -487,7 +487,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -517,7 +517,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('place=center preserves explicit y (does not recenter a stack offset)', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -555,7 +555,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('fillColor alias and color-without-fill still paint solid rectangles', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, resolveShapeFill } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -605,7 +605,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, normalizeDrawUserIntent, fulfillStackedBandIntent } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -741,7 +741,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('after a flag, clear canvas leaves zero bands (fulfill is not sticky)', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -783,7 +783,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn, inspectDrawShapes } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -815,7 +815,9 @@ test.describe('AI Draw tool executor unit tests', () => {
       return { math, liveSnap: inspectDrawShapes(live) };
     });
 
-    expect(res.math.modelReply).toMatch(/drew/i);
+    // Host-first execution: the model tool pass never runs for math recipes,
+    // so the stale lie is not even captured as modelReply.
+    expect(res.math.modelReply).toBe('');
     expect(res.math.snapshot.looksLikeFlag).toBe(false);
     expect(res.liveSnap.looksLikeFlag).toBe(false);
     expect(res.math.shapes.filter((s: { type?: string }) => s.type === 'rectangle')).toHaveLength(
@@ -833,7 +835,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('add_curve tangent and hyperbola produce dense samples', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -861,7 +863,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn, normalizeDrawUserIntent } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -906,7 +908,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('clear then draw a star does not wipe the new drawing', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -952,7 +954,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, starTipCount, inspectDrawShapes } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -995,7 +997,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn, starTipCount } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -1026,7 +1028,8 @@ test.describe('AI Draw tool executor unit tests', () => {
 
     expect(res.turn.intent.recipe.simplified).toBe(true);
     expect(res.turn.intent.kind).toBe('star');
-    expect(res.turn.modelReply).toMatch(/have drawn a five-pointed star/i);
+    // Host-first: the model never runs, so its lie is not captured either.
+    expect(res.turn.modelReply).toBe('');
     expect(res.liveCount).toBeGreaterThanOrEqual(1);
     expect(res.turn.snapshot.empty).toBe(false);
     expect(res.turn.snapshot.looksLikeStar).toBe(true);
@@ -1041,7 +1044,7 @@ test.describe('AI Draw tool executor unit tests', () => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn, assistantTextFromCanvas } =
         await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -1077,7 +1080,7 @@ test.describe('AI Draw tool executor unit tests', () => {
   test('yellow smiley recipe adds a face even with zero tool calls', async ({ page }) => {
     const res = await page.evaluate(async () => {
       const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const container = document.createElement('div');
       document.body.appendChild(container);
@@ -1186,7 +1189,7 @@ test.describe('AI Draw tool executor unit tests', () => {
         runDrawTurn,
         createDrawToolExecutor,
       } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const canvas = { width: 1000, height: 800 };
       const bad = validateDrawPlan({ title: 'x', steps: [{ op: 'explode', args: {} }] });
@@ -1248,7 +1251,7 @@ test.describe('AI Draw tool executor unit tests', () => {
       });
 
       const planPhases = [];
-      let planDrawText = '';
+      let plannedDrawCalls = 0;
       const planned = await runDrawTurn({
         userText: 'draw a small house with a sun',
         execute,
@@ -1261,7 +1264,14 @@ test.describe('AI Draw tool executor unit tests', () => {
             steps: [
               {
                 op: 'add_shape',
-                args: { type: 'rectangle', x: 200, y: 400, width: 300, height: 220, fill: '#c4a574' },
+                args: {
+                  type: 'rectangle',
+                  x: 200,
+                  y: 400,
+                  width: 300,
+                  height: 220,
+                  fill: '#c4a574',
+                },
               },
               {
                 op: 'add_shape',
@@ -1270,8 +1280,21 @@ test.describe('AI Draw tool executor unit tests', () => {
             ],
           }),
         generateWithTools: async (text) => {
-          planDrawText = text;
+          plannedDrawCalls += 1;
           return 'done';
+        },
+      });
+
+      const emptyPlanPhases = [];
+      const emptyPlan = await runDrawTurn({
+        userText: 'draw a small house with a sun',
+        execute,
+        canvas,
+        onPhase: (phase) => emptyPlanPhases.push(phase),
+        generatePlan: async () => '{"title":"nothing","clear":false,"steps":[]}',
+        generateWithTools: async (text) => {
+          planDrawCalls += 10;
+          return 'fallback ran';
         },
       });
 
@@ -1295,9 +1318,12 @@ test.describe('AI Draw tool executor unit tests', () => {
         houseDrawIsRaw: /small house with a sun/i.test(drawText),
         plannedSource: planned.planSource,
         plannedPhases: planPhases,
-        plannedHasInstructions:
-          /add_shape/.test(planDrawText) && /house with sun|ellipse/i.test(planDrawText),
+        plannedDrawCalls,
+        plannedShapeCount: planned.shapes.length,
         plannedSummary: planned.planSummary,
+        emptyPlanSource: emptyPlan.planSource,
+        emptyPlanPhases,
+        emptyPlanAddedCount: emptyPlan.addedCount,
         formatSample: formatDrawPlanInstructions(hostPlan).includes('add_shape'),
       };
     });
@@ -1311,15 +1337,22 @@ test.describe('AI Draw tool executor unit tests', () => {
     expect(res.mergedSteps).toBeGreaterThanOrEqual(3);
     expect(res.compressedTitle).toBe('house');
     expect(res.flagSource).toBe('host');
-    expect(res.flagPhases).toEqual(['drawing']);
+    // Host-first: host recipes execute directly, no model draw pass.
+    expect(res.flagPhases).toEqual(['executing']);
     expect(res.flagPlannerCalls).toBe(0);
     expect(res.houseSource).toBe('fallback');
     expect(res.housePhases).toEqual(['planning', 'fallback']);
     expect(res.houseDrawIsRaw).toBe(true);
     expect(res.plannedSource).toBe('llm');
-    expect(res.plannedPhases).toEqual(['planning', 'drawing']);
-    expect(res.plannedHasInstructions).toBe(true);
+    // Host-first: a valid LLM plan skips the tool loop entirely.
+    expect(res.plannedPhases).toEqual(['planning', 'executing']);
+    expect(res.plannedDrawCalls).toBe(0);
+    expect(res.plannedShapeCount).toBe(2);
     expect(res.plannedSummary).toMatch(/house/i);
+    // An empty merged plan is a planning failure → tool-loop fallback.
+    expect(res.emptyPlanSource).toBe('fallback');
+    expect(res.emptyPlanPhases).toEqual(['planning', 'fallback']);
+    expect(res.emptyPlanAddedCount).toBe(0);
     expect(res.formatSample).toBe(true);
   });
 
@@ -1409,7 +1442,7 @@ test.describe('AI Draw tool executor unit tests', () => {
         inspectDrawShapes,
         layoutHexagonGrid,
       } = await import('/src/demos/draw-tools.js');
-      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
 
       const canvas = { width: 1000, height: 800 };
       const prompt = 'pls draw a hexagon grid of 9 identical hex cells';
@@ -1441,7 +1474,8 @@ test.describe('AI Draw tool executor unit tests', () => {
       });
       const snap = inspectDrawShapes(turn.shapes);
       const hexShapes = (turn.shapes || []).filter(
-        (s) => (s.type === 'line' || s.type === 'freehand') && (s.pointCount || s.points?.length) >= 6,
+        (s) =>
+          (s.type === 'line' || s.type === 'freehand') && (s.pointCount || s.points?.length) >= 6,
       );
       const centers = hexShapes.map((s) => {
         const pts = s.points || [];
@@ -1482,16 +1516,750 @@ test.describe('AI Draw tool executor unit tests', () => {
     expect(res.planSource).toBe('host');
     expect(res.plannerCalls).toBe(0);
     expect(res.hostSteps).toBe(9);
-    expect(res.hostOps.every((s) => s.op === 'add_curve' && s.kind === 'polygon' && s.sides === 6)).toBe(
-      true,
-    );
+    expect(
+      res.hostOps.every((s) => s.op === 'add_curve' && s.kind === 'polygon' && s.sides === 6),
+    ).toBe(true);
     expect(res.layoutCount).toBe(9);
     expect(res.layoutDistinct).toBe(9);
     expect(res.hexCount).toBeGreaterThanOrEqual(8);
     expect(res.looksLikeHexGrid).toBe(true);
     expect(res.distinctCenters).toBeGreaterThanOrEqual(8);
-    expect(res.modelReply).toMatch(/"steps"/);
+    // Host-first: the leaked planner JSON never reaches the chat as modelReply.
+    expect(res.modelReply).toBe('');
     expect(res.reply).not.toMatch(/"steps"|"op":|add_shape/);
     expect(res.reply).toMatch(/hexagon grid/i);
+  });
+
+  test('sketch stencil: "draw a car" matches stencil, builds host plan, and fulfills multi-shape car on canvas without LLM planner', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const {
+        parseDrawTurnIntent,
+        intentToDrawPlan,
+        createDrawToolExecutor,
+        runDrawTurn,
+        inspectDrawShapes,
+        SKETCH_STENCILS,
+      } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const prompt = 'draw a car';
+      const intent = parseDrawTurnIntent(prompt, canvas);
+      const hostPlan = intentToDrawPlan(intent, canvas);
+
+      let plannerCalls = 0;
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+
+      const turn = await runDrawTurn({
+        userText: prompt,
+        execute,
+        canvas,
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return '{"title":"Car","clear":false,"steps":[]}';
+        },
+        generateWithTools: async () => 'Drew a car.',
+      });
+
+      const shapes = turn.shapes || [];
+      const snap = inspectDrawShapes(shapes);
+      const rects = shapes.filter((s) => s.type === 'rectangle');
+      const ellipses = shapes.filter((s) => s.type === 'ellipse');
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        catalogCount: SKETCH_STENCILS.length,
+        simplified: intent.recipe?.simplified,
+        kind: intent.kind,
+        family: intent.recipe?.family,
+        id: intent.recipe?.id,
+        plannerCalls,
+        planSource: turn.planSource,
+        hostStepCount: hostPlan.steps.length,
+        totalShapes: shapes.length,
+        rectCount: rects.length,
+        ellipseCount: ellipses.length,
+        reply: turn.reply,
+      };
+    });
+
+    expect(res.catalogCount).toBeGreaterThanOrEqual(20);
+    expect(res.simplified).toBe(true);
+    expect(res.kind).toBe('stencil:car');
+    expect(res.family).toBe('stencil');
+    expect(res.id).toBe('car');
+    expect(res.plannerCalls).toBe(0);
+    expect(res.planSource).toBe('host');
+    expect(res.hostStepCount).toBeGreaterThanOrEqual(6);
+    expect(res.totalShapes).toBeGreaterThanOrEqual(6);
+    expect(res.rectCount).toBeGreaterThanOrEqual(3);
+    expect(res.ellipseCount).toBeGreaterThanOrEqual(2);
+    expect(res.reply).toMatch(/drew a car/i);
+  });
+
+  test('sketch stencil: "draw a green tree" and "draw a house" match respective stencils and extract color', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { parseDrawTurnIntent, intentToDrawPlan } = await import('/src/demos/draw-tools.js');
+      const canvas = { width: 1000, height: 800 };
+
+      const treeIntent = parseDrawTurnIntent('draw a green tree', canvas);
+      const treePlan = intentToDrawPlan(treeIntent, canvas);
+
+      const houseIntent = parseDrawTurnIntent('paint a nice house with red roof', canvas);
+      const housePlan = intentToDrawPlan(houseIntent, canvas);
+
+      const rocketIntent = parseDrawTurnIntent('sketch a rocket ship', canvas);
+      const rocketPlan = intentToDrawPlan(rocketIntent, canvas);
+
+      return {
+        tree: {
+          simplified: treeIntent.recipe?.simplified,
+          id: treeIntent.recipe?.id,
+          family: treeIntent.recipe?.family,
+          color: treeIntent.recipe?.color,
+          stepCount: treePlan.steps.length,
+        },
+        house: {
+          simplified: houseIntent.recipe?.simplified,
+          id: houseIntent.recipe?.id,
+          family: houseIntent.recipe?.family,
+          stepCount: housePlan.steps.length,
+        },
+        rocket: {
+          simplified: rocketIntent.recipe?.simplified,
+          id: rocketIntent.recipe?.id,
+          family: rocketIntent.recipe?.family,
+          stepCount: rocketPlan.steps.length,
+        },
+      };
+    });
+
+    expect(res.tree.simplified).toBe(true);
+    expect(res.tree.id).toBe('tree');
+    expect(res.tree.family).toBe('stencil');
+    expect(res.tree.color).toBe('#006a44');
+    expect(res.tree.stepCount).toBeGreaterThanOrEqual(3);
+
+    expect(res.house.simplified).toBe(true);
+    expect(res.house.id).toBe('house');
+    expect(res.house.family).toBe('stencil');
+    expect(res.house.stepCount).toBeGreaterThanOrEqual(5);
+
+    expect(res.rocket.simplified).toBe(true);
+    expect(res.rocket.id).toBe('rocket');
+    expect(res.rocket.family).toBe('stencil');
+    expect(res.rocket.stepCount).toBeGreaterThanOrEqual(5);
+  });
+
+  test('scene prompt: "please draw pine forest" routes to LLM planner and renders composed forest scene on canvas', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const {
+        parseDrawTurnIntent,
+        createDrawToolExecutor,
+        runDrawTurn,
+        inspectDrawShapes,
+        validateDrawPlan,
+      } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const prompt = 'please draw pine forest';
+      const intent = parseDrawTurnIntent(prompt, canvas);
+
+      // Verify shape coercion for circle and triangle in validateDrawPlan
+      const coercedPlan = validateDrawPlan({
+        title: 'test shapes',
+        steps: [
+          {
+            op: 'add_shape',
+            args: { type: 'circle', radius: 40, cx: 500, cy: 200, fill: '#facc15' },
+          },
+          {
+            op: 'add_shape',
+            args: { type: 'triangle', bounds: { x: 100, y: 300, w: 80, h: 100 }, fill: '#15803d' },
+          },
+        ],
+      });
+
+      let plannerCalls = 0;
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+
+      const forestPlanJson = JSON.stringify({
+        title: 'pine forest',
+        clear: true,
+        steps: [
+          // Ground
+          {
+            op: 'add_shape',
+            args: { type: 'rectangle', x: 0, y: 500, width: 1000, height: 300, fill: '#14532d' },
+          },
+          // Tree 1: trunk + canopy
+          {
+            op: 'add_shape',
+            args: { type: 'rectangle', x: 160, y: 460, width: 30, height: 90, fill: '#78350f' },
+          },
+          {
+            op: 'add_shape',
+            args: {
+              type: 'line',
+              points: [
+                [175, 300],
+                [230, 470],
+                [120, 470],
+                [175, 300],
+              ],
+              fill: '#16a34a',
+              stroke: '#052e16',
+              strokeWidth: 2,
+            },
+          },
+          // Tree 2: trunk + canopy
+          {
+            op: 'add_shape',
+            args: { type: 'rectangle', x: 420, y: 440, width: 36, height: 110, fill: '#78350f' },
+          },
+          {
+            op: 'add_shape',
+            args: {
+              type: 'line',
+              points: [
+                [438, 260],
+                [500, 450],
+                [376, 450],
+                [438, 260],
+              ],
+              fill: '#15803d',
+              stroke: '#052e16',
+              strokeWidth: 2,
+            },
+          },
+          // Tree 3: trunk + canopy
+          {
+            op: 'add_shape',
+            args: { type: 'rectangle', x: 700, y: 470, width: 28, height: 80, fill: '#78350f' },
+          },
+          {
+            op: 'add_shape',
+            args: {
+              type: 'line',
+              points: [
+                [714, 320],
+                [764, 480],
+                [664, 480],
+                [714, 320],
+              ],
+              fill: '#16a34a',
+              stroke: '#052e16',
+              strokeWidth: 2,
+            },
+          },
+          // Sun
+          {
+            op: 'add_shape',
+            args: { type: 'ellipse', x: 800, y: 80, width: 90, height: 90, fill: '#facc15' },
+          },
+        ],
+      });
+
+      const turn = await runDrawTurn({
+        userText: prompt,
+        execute,
+        canvas,
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return forestPlanJson;
+        },
+        generateWithTools: async () => 'Drew a pine forest.',
+      });
+
+      const shapes = turn.shapes || [];
+      const snap = inspectDrawShapes(shapes);
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        isStencil: Boolean(intent.recipe?.simplified),
+        plannerCalls,
+        planSource: turn.planSource,
+        coercedStepTypes: coercedPlan.plan.steps.map((s) => ({
+          op: s.op,
+          type: s.args.type,
+          kind: s.args.kind,
+          sides: s.args.sides,
+        })),
+        totalShapes: shapes.length,
+        reply: turn.reply,
+      };
+    });
+
+    // Should NOT be intercepted by the single-tree stencil
+    expect(res.isStencil).toBe(false);
+    expect(res.plannerCalls).toBe(1);
+    expect(res.planSource).toBe('llm');
+    // Circle coerced to ellipse, triangle coerced to polygon sides=3
+    expect(res.coercedStepTypes[0].op).toBe('add_shape');
+    expect(res.coercedStepTypes[0].type).toBe('ellipse');
+    expect(res.coercedStepTypes[1].op).toBe('add_curve');
+    expect(res.coercedStepTypes[1].kind).toBe('polygon');
+    expect(res.coercedStepTypes[1].sides).toBe(3);
+    // Forest shapes rendered onto the canvas
+    expect(res.totalShapes).toBeGreaterThanOrEqual(7);
+    expect(res.reply).toMatch(/pine forest/i);
+  });
+
+  test('host-first: llm plan replay wipes before redraw and per-step errors do not abort', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn } = await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const realExecute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+      const execute = realExecute;
+
+      const turn1 = await runDrawTurn({
+        userText: 'draw a small house with a sun',
+        execute,
+        canvas,
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'house',
+            clear: true,
+            steps: [
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'rectangle',
+                  x: 200,
+                  y: 400,
+                  width: 300,
+                  height: 220,
+                  fill: '#c4a574',
+                },
+              },
+            ],
+          }),
+        generateWithTools: async () => 'should not run',
+      });
+
+      // Turn 2 merges into lastPlan and replays the full scene: the canvas must
+      // be wiped first or the replayed house would duplicate. Prompt avoids
+      // stencil words (sun, boat, …) so it routes to the LLM planner.
+      const turn2 = await runDrawTurn({
+        userText: 'ok now also add a tall windmill next to it',
+        execute,
+        canvas,
+        lastPlan: turn1.lastPlan,
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'house with windmill',
+            clear: false,
+            steps: [
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'rectangle',
+                  x: 700,
+                  y: 300,
+                  width: 60,
+                  height: 220,
+                  fill: '#a16207',
+                },
+              },
+            ],
+          }),
+        generateWithTools: async () => 'should not run',
+      });
+
+      // A throwing step is logged and does not abort the remaining steps.
+      let boomCalls = 0;
+      const failingExecute = async (name, args) => {
+        if (name === 'eval_geometry') {
+          boomCalls += 1;
+          throw new Error('geometry exploded');
+        }
+        return realExecute(name, args);
+      };
+      const failing = await runDrawTurn({
+        userText: 'draw a lighthouse on a rocky cliff at dusk',
+        execute: failingExecute,
+        canvas,
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'lighthouse',
+            clear: true,
+            steps: [
+              { op: 'eval_geometry', args: { code: '({ Math }) => null;' } },
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'rectangle',
+                  x: 400,
+                  y: 500,
+                  width: 200,
+                  height: 60,
+                  fill: '#7c3aed',
+                },
+              },
+            ],
+          }),
+        generateWithTools: async () => 'nope',
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+      return {
+        turn1Count: turn1.shapes.length,
+        turn2Count: turn2.shapes.length,
+        turn2Source: turn2.planSource,
+        failingStepErrors: failing.stepErrors,
+        failingShapes: failing.shapes.map((s) => s.type),
+        boomCalls,
+      };
+    });
+
+    expect(res.turn1Count).toBe(1);
+    expect(res.turn2Source).toBe('llm');
+    // Replay wiped turn1's house before drawing house + sun (no duplicates).
+    expect(res.turn2Count).toBe(2);
+    expect(res.failingStepErrors).toBe(1);
+    expect(res.failingShapes).toEqual(['rectangle']);
+  });
+
+  test('parseDrawPlanFromModelText strips <thought> blocks with braces before parsing JSON', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { parseDrawPlanFromModelText } = await import('/src/demos/draw-tools.js');
+      const modelOutputWithThought = `<thought>
+I need to plan { key: "some thought with braces" } to draw a pyramid.
+Coordinates should be { x: 100, y: 200 }.
+</thought>
+\`\`\`json
+{
+  "title": "3 Pyramids Front View",
+  "clear": false,
+  "steps": [
+    { "op": "add_shape", "args": { "type": "line", "points": [[250, 450], [350, 650], [150, 650], [250, 450]], "fill": "#d97706" } },
+    { "op": "add_shape", "args": { "type": "line", "points": [[550, 480], [630, 650], [470, 650], [550, 480]], "fill": "#ca8a04" } },
+    { "op": "add_shape", "args": { "type": "line", "points": [[800, 520], [860, 650], [740, 650], [800, 520]], "fill": "#b45309" } }
+  ]
+}
+\`\`\``;
+
+      const parsed = parseDrawPlanFromModelText(modelOutputWithThought);
+      return {
+        ok: parsed.ok,
+        title: parsed.plan.title,
+        stepsCount: parsed.plan.steps.length,
+        step1Fill: parsed.plan.steps[0]?.args?.fill,
+      };
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.title).toBe('3 Pyramids Front View');
+    expect(res.stepsCount).toBe(3);
+    expect(res.step1Fill).toBe('#d97706');
+  });
+
+  test('compact planner prompt keeps schema and request while fitting small contexts', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { formatPlannerUserPrompt, compactPlannerUserPrompt } =
+        await import('/src/demos/draw-tools.js');
+      const lastPlan = {
+        title: 'house',
+        clear: false,
+        steps: [
+          {
+            op: 'add_shape',
+            args: { type: 'rectangle', x: 200, y: 400, width: 300, height: 220, fill: '#c4a574' },
+          },
+        ],
+      };
+      const full = formatPlannerUserPrompt('now add a windmill', lastPlan, {
+        width: 1000,
+        height: 800,
+      });
+      const compact = compactPlannerUserPrompt('now add a windmill', lastPlan, {
+        width: 1000,
+        height: 800,
+      });
+      return {
+        fullLength: full.length,
+        compactLength: compact.length,
+        hasSchema: compact.includes('"title"'),
+        hasRequest: compact.includes('User request: now add a windmill'),
+        hasCoords: compact.includes('(0,0)'),
+        hasPrevPlan: compact.includes('Previous plan JSON'),
+      };
+    });
+
+    // Compact variant must be dramatically smaller for the 4K-token window.
+    expect(res.compactLength).toBeLessThan(Math.round(res.fullLength * 0.6));
+    expect(res.hasSchema).toBe(true);
+    expect(res.hasRequest).toBe(true);
+    expect(res.hasCoords).toBe(true);
+    expect(res.hasPrevPlan).toBe(true);
+  });
+
+  test('multi-turn sequence: "draw 3 pyramids" (top view) then "now below - draw each from front" adds 3 front triangles below without wiping', async ({
+    page,
+  }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, inspectDrawShapes } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+
+      // Turn 1: Top-down view (3 squares)
+      const turn1 = await runDrawTurn({
+        userText: 'draw 3 pyramids like in Egypt, one is biggest others smaller',
+        execute,
+        canvas,
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'Egyptian Pyramids Top View',
+            clear: true,
+            steps: [
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'rectangle',
+                  x: 150,
+                  y: 150,
+                  width: 120,
+                  height: 120,
+                  fill: '#eab308',
+                },
+              },
+              {
+                op: 'add_shape',
+                args: { type: 'rectangle', x: 450, y: 180, width: 90, height: 90, fill: '#ca8a04' },
+              },
+              {
+                op: 'add_shape',
+                args: { type: 'rectangle', x: 750, y: 200, width: 60, height: 60, fill: '#a16207' },
+              },
+            ],
+          }),
+        generateWithTools: async () => 'Drew 3 pyramids from above.',
+      });
+
+      const shapesTurn1 = editor.getShapes();
+
+      // Turn 2: Front view below (3 triangles below the squares)
+      const turn2 = await runDrawTurn({
+        userText: 'ok, you drew 3 pyramids from above - now below - draw each from front',
+        execute,
+        canvas,
+        lastPlan: turn1.lastPlan,
+        generatePlan: async () =>
+          JSON.stringify({
+            title: 'Egyptian Pyramids Front View Below',
+            clear: false,
+            steps: [
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'line',
+                  points: [
+                    [210, 420],
+                    [280, 650],
+                    [140, 650],
+                    [210, 420],
+                  ],
+                  fill: '#eab308',
+                  stroke: '#111',
+                  strokeWidth: 2,
+                },
+              },
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'line',
+                  points: [
+                    [495, 470],
+                    [550, 650],
+                    [440, 650],
+                    [495, 470],
+                  ],
+                  fill: '#ca8a04',
+                  stroke: '#111',
+                  strokeWidth: 2,
+                },
+              },
+              {
+                op: 'add_shape',
+                args: {
+                  type: 'line',
+                  points: [
+                    [780, 520],
+                    [820, 650],
+                    [740, 650],
+                    [780, 520],
+                  ],
+                  fill: '#a16207',
+                  stroke: '#111',
+                  strokeWidth: 2,
+                },
+              },
+            ],
+          }),
+        generateWithTools: async () => 'Drew 3 pyramids from the front below.',
+      });
+
+      const shapesTurn2 = editor.getShapes();
+      const snapTurn2 = inspectDrawShapes(shapesTurn2);
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        turn1ShapeCount: shapesTurn1.length,
+        turn2ShapeCount: shapesTurn2.length,
+        turn2AddedCount: turn2.addedCount,
+        reply2: turn2.reply,
+      };
+    });
+
+    expect(res.turn1ShapeCount).toBe(3);
+    // Canvas now contains both top view (3 rects) and front view (3 triangles) = 6 shapes!
+    expect(res.turn2ShapeCount).toBe(6);
+    expect(res.reply2).toMatch(/pyramid/i);
+  });
+
+  test('questions get a read-only answer turn without planning or drawing', async ({ page }) => {
+    const res = await page.evaluate(async () => {
+      const { createDrawToolExecutor, runDrawTurn, isCanvasQuestion } =
+        await import('/src/demos/draw-tools.js');
+      const { VdDrawCore } = await import('/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js');
+
+      const canvas = { width: 1000, height: 800 };
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = new VdDrawCore({ element: container });
+      const execute = createDrawToolExecutor({
+        getEditor: () => editor,
+        canvasSize: canvas,
+      });
+
+      // Seed the canvas with the Lithuanian flag (host recipe).
+      const flagTurn = await runDrawTurn({
+        userText: 'paint big fat nice Lithuanian flag (yellow-green-red)',
+        execute,
+        canvas,
+        generateWithTools: async () => 'should not run',
+      });
+
+      let plannerCalls = 0;
+      let toolPassCalls = 0;
+      const phases = [];
+      const questionTurn = await runDrawTurn({
+        userText: 'what is on canvas now ?',
+        execute,
+        canvas,
+        lastPlan: flagTurn.lastPlan,
+        onPhase: (phase) => phases.push(phase),
+        generatePlan: async () => {
+          plannerCalls += 1;
+          return '{"title":"x","clear":true,"steps":[]}';
+        },
+        generateWithTools: async () => {
+          toolPassCalls += 1;
+          return 'should not run';
+        },
+        generateAnswer: async () => 'There are three stacked bands on the canvas.',
+      });
+
+      // Without a model answer hook the local summary still answers honestly.
+      const localOnly = await runDrawTurn({
+        userText: 'how many shapes are there?',
+        execute,
+        canvas,
+        generatePlan: async () => '',
+        generateWithTools: async () => 'should not run',
+      });
+
+      editor.destroy();
+      document.body.removeChild(container);
+
+      return {
+        detection: {
+          what: isCanvasQuestion('what is on canvas now ?'),
+          howMany: isCanvasQuestion('how many shapes are there?'),
+          capability: isCanvasQuestion('what can you draw?'),
+          canYouDrawStar: isCanvasQuestion('can you draw a star?'),
+          drawRequest: isCanvasQuestion('draw a star'),
+        },
+        planSource: questionTurn.planSource,
+        phases,
+        shapeCount: questionTurn.shapes.length,
+        addedCount: questionTurn.addedCount,
+        plannerCalls,
+        toolPassCalls,
+        reply: questionTurn.reply,
+        lastPlanKept: Boolean(questionTurn.lastPlan),
+        localReply: localOnly.reply,
+        localPlanSource: localOnly.planSource,
+        localAddedCount: localOnly.addedCount,
+      };
+    });
+
+    expect(res.detection.what).toBe(true);
+    expect(res.detection.howMany).toBe(true);
+    expect(res.detection.capability).toBe(true);
+    expect(res.detection.canYouDrawStar).toBe(false);
+    expect(res.detection.drawRequest).toBe(false);
+    // Read-only: no planner, no tool pass, nothing drawn.
+    expect(res.planSource).toBe('answer');
+    expect(res.phases).toEqual(['answering']);
+    expect(res.shapeCount).toBe(3);
+    expect(res.addedCount).toBe(0);
+    expect(res.plannerCalls).toBe(0);
+    expect(res.toolPassCalls).toBe(0);
+    expect(res.reply).toMatch(/three stacked bands/i);
+    expect(res.lastPlanKept).toBe(true);
+    // Local fallback summary without generateAnswer.
+    expect(res.localPlanSource).toBe('answer');
+    expect(res.localAddedCount).toBe(0);
+    expect(res.localReply).toMatch(/canvas has/i);
   });
 });

@@ -1,5 +1,5 @@
 /* AI Draw Demo CSS — Wide Desktop + ts-school Sidebar */
-@import '@vanduo-oss/vd3-cbun/draw/css';
+@import '@vanduo-oss/vdl-cbun/draw/css';
 
 .vdl-ai-draw-card {
   padding: 0.75rem !important;
@@ -70,7 +70,7 @@ body.ai-draw-app-fullscreen {
   margin-bottom: 0.45rem;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--vd-draw-border, var(--border-color, #334155));
-  border-radius: var(--vd-radius-md, 8px);
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   background: var(--vd-draw-panel, var(--bg-secondary, #1e293b));
 }
 
@@ -96,7 +96,7 @@ body.ai-draw-app-fullscreen {
   transform: translateX(-50%);
   width: min(36rem, calc(100% - 2rem));
   padding: 0.85rem 1rem;
-  border-radius: 12px;
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   background: color-mix(in srgb, var(--bg-primary, #ffffff) 92%, transparent);
   border: 1px solid var(--border-color, #e2e8f0);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
@@ -234,7 +234,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
   min-height: 600px;
   height: 100%;
   position: relative;
-  border-radius: var(--vd-radius-md, 8px);
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   overflow: hidden;
 }
 
@@ -242,7 +242,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
   flex: 1;
   min-height: 580px;
   position: relative;
-  border-radius: var(--vd-radius-md, 8px);
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   overflow: hidden;
   box-shadow: inset 0 0 1px rgba(0, 0, 0, 0.1);
 }
@@ -293,7 +293,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: var(--vd-radius-md, 8px);
+  border-radius: var(--vd-card-border-radius, var(--vd-border-radius-md, 0.5rem));
   background-color: var(--bg-secondary, #f8f9fa);
   overflow: hidden;
   height: 100%;
@@ -346,7 +346,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
   min-width: 0;
   font-size: 0.8125rem;
   padding: 0.3rem 0.5rem;
-  border-radius: var(--vd-radius-md, 6px);
+  border-radius: var(--vd-border-radius-md, var(--radius-md, 0.5rem));
   border: 1px solid var(--border-color, #cbd5e1);
   background-color: var(--bg-primary, #ffffff);
   color: var(--text-primary, #0f172a);
@@ -354,6 +354,28 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
 
 .ts-ai-load-btn.is-awaiting-load {
   animation: ts-ai-load-pulse 2.8s ease-in-out infinite;
+}
+
+/* Experimental fast planner toggle */
+.ts-ai-fast-planner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  font-size: 0.8125rem;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ts-ai-fast-planner input {
+  accent-color: var(--vd-color-primary, #0ea5e9);
+}
+
+.ts-ai-fast-planner-status {
+  padding: 0 1rem 0.45rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
 }
 
 @keyframes ts-ai-load-pulse {
@@ -430,7 +452,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
 .ts-ai-bubble {
   max-width: 88%;
   padding: 0.65rem 0.9rem;
-  border-radius: 12px;
+  border-radius: var(--vd-border-radius-lg, var(--radius-lg, 0.75rem));
   font-size: 0.875rem;
   line-height: 1.45;
   word-break: break-word;
@@ -508,7 +530,7 @@ html[data-theme='dark'] .vdl-ai-draw-stage,
   max-height: 7rem;
   resize: vertical;
   padding: 0.6rem 0.75rem;
-  border-radius: var(--vd-radius-md, 6px);
+  border-radius: var(--vd-border-radius-md, var(--radius-md, 0.5rem));
   border: 1px solid var(--border-color, #cbd5e1);
   background-color: var(--bg-primary, #ffffff);
   color: var(--text-primary, #0f172a);

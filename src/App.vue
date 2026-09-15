@@ -323,6 +323,8 @@ watch(demoSlug, (slug) => {
   />
 
   <template v-else-if="appUnlocked">
+    <VdlHomeAtmosphere :active="true" />
+
     <LabsSiteDock :route="route" :widget-slug="widgetSlug" />
 
     <main class="labs-main-shell" :data-labs-route="route" :data-labs-widget="widgetSlug || undefined">
@@ -332,7 +334,6 @@ watch(demoSlug, (slug) => {
         :aria-hidden="route === 'home' ? 'false' : 'true'"
         :inert="route !== 'home'"
       >
-        <VdlHomeAtmosphere :active="route === 'home'" />
         <section class="hero">
           <h2
             class="hero-title"
@@ -352,15 +353,22 @@ watch(demoSlug, (slug) => {
               aria-hidden="true"
             >
               <g class="hero-atom-spin">
-                <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
-              </g>
-              <g transform="rotate(60 50 50)">
-                <g class="hero-atom-spin-reverse">
-                  <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
+                <g
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  opacity="0.9"
+                >
+                  <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                  <g transform="rotate(60 50 50)">
+                    <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                  </g>
+                  <g transform="rotate(-60 50 50)">
+                    <ellipse cx="50" cy="50" rx="31" ry="13"></ellipse>
+                  </g>
                 </g>
-              </g>
-              <g transform="rotate(-60 50 50)">
-                <ellipse class="hero-atom-orbit" cx="50" cy="50" rx="31" ry="13"></ellipse>
               </g>
               <circle class="hero-atom-core-ring" cx="50" cy="50" r="10"></circle>
               <circle class="hero-atom-core" cx="50" cy="50" r="5.5"></circle>
@@ -370,7 +378,7 @@ watch(demoSlug, (slug) => {
             >
           </h2>
           <p
-            class="vd-text-lg vd-text-muted hero-home-quote"
+            class="vd-text-base vd-text-muted hero-home-quote"
             :class="{ 'hero-home-quote-fading': !homeQuoteVisible }"
             aria-live="polite"
           >
@@ -385,16 +393,6 @@ watch(demoSlug, (slug) => {
               >, but we might soon…
             </template>
             <template v-else-if="homeQuoteEntry">{{ homeQuoteEntry.text }}</template>
-          </p>
-          <p class="vdl-home-atmosphere-credit">
-            Atmosphere inspired by
-            <a
-              href="https://codepen.io/cameronknight/pen/ogxWmBP"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Interactive Liquid Gradient</a
-            >
-            by Cameron Knight
           </p>
         </section>
       </div>
@@ -459,7 +457,15 @@ watch(demoSlug, (slug) => {
         :inert="route !== 'demos'"
       >
         <div class="vd-container-responsive labs-main">
-          <section id="labs-demos" class="labs-section" aria-label="Component demos">
+          <section id="labs-demos" class="labs-section" aria-labelledby="labs-demos-heading">
+            <div class="labs-page-header about-header">
+              <h2 id="labs-demos-heading">
+                <i class="ph ph-flask" aria-hidden="true"></i> Demos
+              </h2>
+              <p class="vd-text-lg vd-text-muted">
+                Live component demos — hybrid search, AI chat, and more.
+              </p>
+            </div>
             <div class="labs-demo-card-grid" role="list">
               <button
                 type="button"

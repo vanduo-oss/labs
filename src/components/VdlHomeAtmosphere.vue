@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Decorative home atmosphere.
+ * Decorative site-wide atmosphere (unlocked routes only).
  *
  * Inspired by Cameron Knight — “Interactive Liquid Gradient using Three.js”
  * https://codepen.io/cameronknight/pen/ogxWmBP

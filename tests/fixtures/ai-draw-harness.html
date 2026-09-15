@@ -10,18 +10,22 @@
     <pre id="log"></pre>
     <script type="module">
       import { AiChat } from '/node_modules/@vanduo-oss/vdl-ai-chat/dist/index.js';
-      import { VdDrawCore } from '/node_modules/@vanduo-oss/vd3-cbun/dist/draw/index.js';
+      import { VdDrawCore } from '/node_modules/@vanduo-oss/vdl-cbun/dist/draw/index.js';
       import {
         DRAW_TOOL_DEFS,
         DRAW_TOOL_MAX_ROUNDS,
         composeDrawSystemExtra,
         composeDrawPlannerExtra,
         composeDrawExecuteExtra,
+        composeDrawQaExtra,
+        compactPlannerUserPrompt,
         createDrawToolExecutor,
         runDrawTurn,
       } from '/src/demos/draw-tools.js';
+      import { createTinyDrawPlanner } from '/src/demos/draw-planner-webllm.js';
 
       const CANVAS = { width: 1000, height: 800 };
+      const FAST_PLANNER = new URLSearchParams(location.search).get('fastPlanner') === '1';
       const logEl = document.getElementById('log');
 
       function log(msg) {
@@ -41,6 +45,12 @@
       let editor = null;
       let chat = null;
       let execute = null;
+      let tinyPlanner = FAST_PLANNER
+        ? createTinyDrawPlanner({
+            loadLiteRT: async () => import('@litert-lm/core'),
+            onFail: (message) => log(`[fast-planner] ${message}`),
+          })
+        : null;
 
       function ensureEditor() {
         if (editor) return editor;
@@ -62,6 +72,25 @@
               lastPlan: window.__vdlAiDraw.lastPlan,
             }),
           });
+          return;
+        }
+        if (phase === 'answering') {
+          // Read-only analyst preface; no tools in this phase.
+          chat.registerTools([]);
+          chat.setSystemPromptOptions({
+            product: 'AI Draw',
+            extra: composeDrawQaExtra({
+              editor,
+              canvasWidth: CANVAS.width,
+              canvasHeight: CANVAS.height,
+              selectedTool: 'draw',
+              selectedColor: '#000000',
+            }),
+          });
+          return;
+        }
+        if (phase === 'executing') {
+          // Host-executed plans never touch the model conversation.
           return;
         }
         chat.registerTools([...DRAW_TOOL_DEFS]);
@@ -144,8 +173,26 @@
           onPhase: (phase) => {
             log(`[phase] ${phase}`);
             applyPhase(phase);
+            if (phase === 'planning' || phase === 'answering') {
+              // Fresh conversation so the preface picks up the phase extra.
+              chat.reset();
+            }
           },
-          generatePlan: (prompt) => chat.generate(prompt),
+          generatePlan: async (prompt, extras) => {
+            if (tinyPlanner && !tinyPlanner.disabled) {
+              const planned = await tinyPlanner.generatePlan(
+                compactPlannerUserPrompt(
+                  extras?.intent?.raw ?? prompt,
+                  extras?.lastPlan ?? window.__vdlAiDraw.lastPlan,
+                  CANVAS,
+                ),
+              );
+              if (planned != null) return planned;
+              log('[fast-planner] fell back to Gemma planning');
+            }
+            return chat.generate(prompt);
+          },
+          generateAnswer: (qaPrompt) => chat.generate(qaPrompt),
           generateWithTools: (modelText) =>
             chat.generateWithTools(modelText, {
               execute,
@@ -162,8 +209,8 @@
           modelText: result.intent.modelText,
           simplified: Boolean(
             result.intent.stacked.simplified ||
-              result.intent.math.simplified ||
-              result.intent.recipe?.simplified,
+            result.intent.math.simplified ||
+            result.intent.recipe?.simplified,
           ),
           kind: result.intent.kind,
           planSource: result.planSource,

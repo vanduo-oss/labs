@@ -17,12 +17,6 @@ The Labs site shell MUST expose `@vanduo-oss/vd3`'s `VdThemeCustomizer` in a dis
 - **WHEN** a user opens the theme customizer while on a demos or widgets route
 - **THEN** the hash route remains unchanged and the customizer panel can be used to adjust theme preferences
 
-#### Scenario: Palette selector is not shown
-
-- **WHEN** a user opens the Labs theme customizer
-- **THEN** the Palette segmented control (Open Color / Fibonacci) is not shown
-- **AND** the site remains on the Open Color palette
-
 ### Requirement: Theme preferences use vdl- localStorage keys
 
 Labs MUST persist and restore vd3 theme preferences using `vdl-` prefixed localStorage keys. Labs MUST NOT write theme preferences to the default `vanduo-` keys used by Vanduo docs.
@@ -47,12 +41,12 @@ Labs MUST persist and restore vd3 theme preferences using `vdl-` prefixed localS
 
 ### Requirement: Labs global theme defaults for unset preferences
 
-Labs MUST configure vd3 `themeDefaults` so new visitors (no stored `vdl-*` preference) get Open Sans, Neutral, and radius `0.5` on the Open Color palette. Labs MUST NOT overwrite existing `vdl-*` preferences with these defaults.
+Labs MUST configure vd3 `themeDefaults` so new visitors (no stored `vdl-*` preference) get Open Sans, Neutral, radius `0.5`, and sky primary on the Open Color palette. Labs MUST NOT overwrite existing `vdl-*` preferences with these defaults.
 
 #### Scenario: Defaults apply when no preference is stored
 
-- **WHEN** a visitor loads the Labs site with no `vdl-font-preference`, `vdl-neutral-color`, or `vdl-radius` keys
-- **THEN** the effective theme uses font `open-sans`, neutral `neutral`, and radius `0.5`
+- **WHEN** a visitor loads the Labs site with no `vdl-font-preference`, `vdl-neutral-color`, `vdl-radius`, or `vdl-primary-color` keys
+- **THEN** the effective theme uses font `open-sans`, neutral `neutral`, radius `0.5`, and primary `sky`
 
 #### Scenario: Stored preferences override defaults
 
@@ -60,13 +54,24 @@ Labs MUST configure vd3 `themeDefaults` so new visitors (no stored `vdl-*` prefe
 - **AND** the Labs site loads
 - **THEN** those stored values are applied instead of the corresponding Labs `themeDefaults`
 
-### Requirement: Font and radius are locked in the customizer UI
+### Requirement: Primary-only swatches fan in the dock
 
-The Labs theme customizer MUST hide the Border Radius and Font Family sections (CSS lock when package props are unavailable). Palette remains hidden via `show-palette=false`.
+The Labs theme customizer MUST use the package `variant="swatches"` fan (same interaction model as vd3-docs). Users MAY change primary color only. Palette, Neutral, Border Radius, and Font Family MUST NOT be exposed in the customizer UI. Fan direction MUST follow `html[data-labs-dock]` (bottom→up, top→down, left→right, right→left), not viewport-edge `auto`.
 
-#### Scenario: Customizer hides font and radius controls
+#### Scenario: Customizer opens as a primary fan
 
-- **WHEN** a user opens the Labs theme customizer
-- **THEN** Border Radius and Font Family controls are not shown
-- **AND** the Palette segmented control is not shown
+- **WHEN** a user activates the theme customizer trigger in the site dock
+- **THEN** a hinged primary swatches fan opens (not the full panel editor)
+- **AND** Palette, Neutral, Border Radius, and Font Family controls are not shown
 
+#### Scenario: Fan direction tracks dock edge
+
+- **WHEN** `html[data-labs-dock]` is `bottom`, `top`, `left`, or `right`
+- **AND** the user opens the theme customizer fan
+- **THEN** the fan opens away from the dock (`up`, `down`, `right`, or `left` respectively)
+
+#### Scenario: Primary pick persists under vdl-
+
+- **WHEN** a user selects a primary swatch from the fan
+- **THEN** the site primary updates
+- **AND** the choice is stored under `vdl-primary-color` (not `vanduo-primary-color`)
