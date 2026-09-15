@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request:
 
+# Labs dogfoods sibling vdl-* repos via link:../vdl-*. Check them out beside
+# labs/ and build dist/ (gitignored) before install/test/build.
+
 permissions:
   contents: read
 
@@ -15,10 +18,33 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: labs
     steps:
-      - name: Checkout
+      - name: Checkout Labs
         uses: actions/checkout@v4
+        with:
+          path: labs
+
+      - name: Checkout vdl-cbun
+        uses: actions/checkout@v4
+        with:
+          repository: vanduo-oss/vdl-cbun
+          path: vdl-cbun
+
+      - name: Checkout vdl-hybrid-search
+        uses: actions/checkout@v4
+        with:
+          repository: vanduo-oss/vdl-hybrid-search
+          path: vdl-hybrid-search
+
+      - name: Checkout vdl-ai-chat
+        uses: actions/checkout@v4
+        with:
+          repository: vanduo-oss/vdl-ai-chat
+          path: vdl-ai-chat
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,6 +56,21 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: |
+            labs/pnpm-lock.yaml
+            vdl-cbun/pnpm-lock.yaml
+            vdl-hybrid-search/pnpm-lock.yaml
+            vdl-ai-chat/pnpm-lock.yaml
+
+      - name: Install and build Labs siblings
+        working-directory: ${{ github.workspace }}
+        run: |
+          for pkg in vdl-cbun vdl-hybrid-search vdl-ai-chat; do
+            echo "::group::Build $pkg"
+            pnpm install --frozen-lockfile --dir "$pkg"
+            pnpm run --dir "$pkg" build
+            echo "::endgroup::"
+          done
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
