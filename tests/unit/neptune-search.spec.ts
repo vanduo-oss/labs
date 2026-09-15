@@ -95,7 +95,8 @@ test.describe('HybridSearch Unit', () => {
 
   test('mergeResults is deterministic at equal scores (sorts by id)', async ({ page }) => {
     const results = await page.evaluate(async () => {
-      const search = await window.createSearch({ maxResults: 10 });
+      // confidence:false — assert raw merge order, not adaptive display cutoff
+      const search = await window.createSearch({ maxResults: 10, confidence: false });
       const fuzzy = [
         { item: { ...window.mockDocs[0], id: 'aaa' }, score: 0.5 },
         { item: { ...window.mockDocs[1], id: 'bbb' }, score: 0.5 },
@@ -113,7 +114,7 @@ test.describe('HybridSearch Unit', () => {
 
   test('mergeResults ranks by score across semantic and fuzzy', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const search = await window.createSearch({ maxResults: 10 });
+      const search = await window.createSearch({ maxResults: 10, confidence: false });
       const fuzzy = [
         { item: { ...window.mockDocs[0], id: 'fuzzy-only' }, score: 0.05 },
       ];
@@ -129,7 +130,11 @@ test.describe('HybridSearch Unit', () => {
 
   test('mergeResults respects semanticBoost multiplier', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const search = await window.createSearch({ maxResults: 10, semanticBoost: 2.0 });
+      const search = await window.createSearch({
+        maxResults: 10,
+        semanticBoost: 2.0,
+        confidence: false,
+      });
       const fuzzy = [{ item: { ...window.mockDocs[0], id: 'fuzzy-only' }, score: 0.5 }];
       const semantic = [{ id: 'buttons', score: 0.3 }];
       return search.mergeResults(fuzzy, semantic);
